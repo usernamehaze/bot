@@ -209,6 +209,11 @@
       cursor: pointer;
     }
     .page-ask-btn:hover { background: #000; }
+    /* Ask Cassie about your screen: the box with its mic beside it, both easy to hit */
+    .page-ask-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
+    .page-ask-row .page-input { flex: 1; min-width: 0; min-height: 48px; margin-bottom: 0; font-size: 14px; }
+    .page-ask-row + .page-ask-btn { min-height: 44px; font-size: 14px; }
+    .body p.page-note { margin: 12px 0 0; font-size: 12px; line-height: 1.4; opacity: .82; white-space: normal; }
     .answer-actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(127,127,127,.25); }
     .copy-btn { background: none; border: 1px solid rgba(127,127,127,.4); color: inherit; border-radius: 6px; padding: 3px 9px; font-size: 11px; font-weight: 600; cursor: pointer; font-family: inherit; }
     .copy-btn:hover { background: rgba(127,127,127,.12); }
@@ -437,7 +442,7 @@
     fab = document.createElement('button');
     fab.className = 'fab';
     fab.type = 'button';
-    fab.title = 'Ask Cassie about this page';
+    fab.title = 'Ask Cassie about your screen';
     fab.innerHTML = '<svg viewBox="0 0 32 32"><path d="M6 2 L27 15 L17 17 L22 27 L17 29 L12 19 L6 24 Z"/></svg>';
     fab.addEventListener('click', () => { const r = dock.getBoundingClientRect(); closeDock(); showPageAsk({ left: r.left - 8, top: r.top, right: r.left - 8, bottom: r.bottom, width: 0, height: r.height }); });
 
@@ -1002,6 +1007,7 @@
       const q = input.value.trim();
       if (!q) return;
       if (careFirst(q, rect)) return;
+      if (window.CassieLive && window.CassieLive.wants(q) && window.CassieTeach && window.CassieTeach.run) { liveHere(q, rect); return; } // ("draw it": she draws)
       convo.push({ role: 'user', content: q });
       convoLabel = q;
       runConversation(rect);
@@ -1095,9 +1101,10 @@
     body.classList.remove('muted');
     setEmotion('curious');
     body.innerHTML = `
-      <div class="question">Ask about this page</div>
-      <input type="text" class="page-input" placeholder="e.g. Summarize this page">
+      <div class="question">Ask Cassie about your screen</div>
+      <div class="page-ask-row"><input type="text" class="page-input" placeholder="e.g. How does this work?" aria-label="Ask Cassie about your screen" maxlength="300" enterkeyhint="send"></div>
       <button type="button" class="page-ask-btn">Ask</button>
+      <p class="page-note">Type it or say it. Cassie looks at your screen once, when you ask. Leave it empty for a lesson on this page.</p>
       <div class="hint-key">Tip: double-tap <kbd>Ctrl</kbd> anywhere to summon me</div>
     `;
     popover.hidden = false;
@@ -1108,6 +1115,8 @@
     const run = () => runPageAsk(input.value.trim(), rect);
     askBtn.addEventListener('click', run);
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') run(); });
+    // say it instead of typing: when the student stops talking, the question is asked
+    if (window.CassieMic) { window.CassieMic.attach(input, { send: run, row: input.parentElement }); positionPopover(rect); }
   }
 
   // Teach me and Ask: she reads the page only now, then points at it and draws on it, step by step
@@ -1142,9 +1151,47 @@
     }
   }
 
+  // A question about the screen (live.js): she looks once, now, and answers by drawing on her card beside the
+  // page, or by pointing at the page when the answer is on it. Her drawing has its own card; her words when she
+  // points stay in this one.
+  async function liveHere(q, rect) {
+    const L = window.CassieLive, T = window.CassieTeach;
+    rect = rect || bottomRightRect();
+    try { chrome.storage.local.get(['teachCursor'], (o) => { if (o.teachCursor == null) chrome.storage.local.set({ teachCursor: 'on' }); }); } catch (e) { /* ignore */ } // (her cursor comes on with the first lesson)
+    manualOpen = true;
+    popover.hidden = false;
+    setContent(window.CassieErrors.say('live_looking'), { muted: true });
+    positionPopover(rect);
+    const myGen = ++gen;
+    try {
+      const out = await L.ask({ q, from: T.follow.on ? T.follow.at() : null, hideUi: teachUi, again: () => liveHere(q, rect) });
+      if (myGen !== gen) return;
+      if (out.kind === 'card') { hidePopover(); return; }
+      // (follow-ups go on as a normal chat about the page's words)
+      const pageText = ((document.body && document.body.innerText) || '').replace(/\n{3,}/g, '\n\n').trim().slice(0, 8000);
+      const answer = out.answer + (out.noDraw ? '\n\n' + window.CassieErrors.say('live_no_drawing') : '');
+      convo = [{ role: 'user', content: `Here is the text of the web page the user is currently viewing:\n\n"""\n${pageText}\n"""\n\nUsing that page, answer: ${q}` }, { role: 'assistant', content: out.answer }];
+      convoLabel = q; codeRun = null; renderAnswerView(answer, rect);
+    } catch (e) {
+      if (myGen !== gen) return;
+      setContent(L.problem(e), { muted: true });
+      const again = document.createElement('button');
+      again.type = 'button'; again.className = 'teach-again'; again.textContent = 'Try again';
+      again.addEventListener('click', () => liveHere(q, rect));
+      body.appendChild(again);
+      positionPopover(rect);
+    }
+  }
+  // what live.js borrows from this page's Cassie: opening the board, and hiding her buttons for the picture
+  window.CassieLiveHost = {
+    hideUi: teachUi,
+    board: (canvas, told) => { if (window.CassieSketch) openSnipBoard(canvas, { headline: told.title, steps: told.steps }); },
+  };
+
   function runPageAsk(question, rect) {
     rect = rect || bottomRightRect();
     if (question && careFirst(question, rect)) return;
+    if (question && window.CassieLive && window.CassieTeach && window.CassieTeach.run) { liveHere(question, rect); return; }
     if (window.CassieTeach && window.CassieTeach.run) { teachHere(question || 'Summarize this page and list the key points.', rect); return; }
     const q = question || 'Summarize this page and list the key points.';
     setContent('Reading the page…', { muted: true });
@@ -2066,7 +2113,7 @@ If the picture has nothing you can read, say what it shows and ask ONE specific 
 
   function checkSelection() {
     if (!hlOn) return;
-    // a deliberately-summoned HUD isn't driven by the selection, except an untouched "Ask about this page" box
+    // a deliberately-summoned HUD isn't driven by the selection, except an untouched "Ask Cassie about your screen" box
     // (Ctrl tapped twice with nothing highlighted, then a highlight): the highlight takes over
     const askBox = body.querySelector('.page-input');
     if (manualOpen && !(askBox && !askBox.value.trim())) return;

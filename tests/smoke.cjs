@@ -4516,7 +4516,7 @@ test('care in the Chrome extension: a typed question gets care and the lines bef
 test('Teach me and Ask Cassie in the extension: she speaks, points at the right part and draws on the page; voice off never speaks and Next moves on; a canvas page is taught from a picture; a snip is taught inside the snip; a page she can’t draw on is taught in the panel with the reason; Escape leaves no trace; Ask answers in the panel and points', async () => {
   for (const f of ['errors.js', 'sketch.js']) expect(fs.readFileSync(path.join(ROOT, 'extension', f), 'utf8') === fs.readFileSync(path.join(ROOT, f), 'utf8'), `extension/${f} differs from ${f}: copy it over`);
   const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'extension/manifest.json'), 'utf8'));
-  expect(manifest.content_scripts[0].js.join() === 'sketch.js,board.js,care.js,mic.js,content.js,errors.js,teach.js', 'teach.js runs after the board on every page: ' + manifest.content_scripts[0].js.join());
+  expect(manifest.content_scripts[0].js.join() === 'sketch.js,board.js,care.js,mic.js,content.js,errors.js,teach.js,live.js', 'teach.js runs after the board on every page, then live.js: ' + manifest.content_scripts[0].js.join());
   expect(manifest.permissions.slice().sort().join() === 'activeTab,contextMenus,scripting,sidePanel,storage', 'no new permissions: ' + manifest.permissions.join());
   const ext = path.join(ROOT, 'extension');
   const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));
@@ -8695,7 +8695,8 @@ test('Cursor Cassie lessons: only the lesson is numbered (not Drive’s toolbar,
     await page.waitForTimeout(900);
     L = await lessonNow();
     let P = await prompts();
-    expect(P.length === 1 && /The student asks: "Why is there an Euler circuit\?"/.test(P[0]) && /Again\./.test(P[0]) && /never add facts/.test(P[0]), 'the question goes with the step and the accuracy rules: ' + (P[0] || '').slice(0, 300));
+    // (v276: a question gets the rule for questions: the page's words stay the page's, and beyond the page she answers from what she knows)
+    expect(P.length === 1 && /The student asks: "Why is there an Euler circuit\?"/.test(P[0]) && /Again\./.test(P[0]) && /quote its own words correctly/.test(P[0]) && /answer from what you know/.test(P[0]) && !/never add facts/.test(P[0]), 'the question goes with the step and the rule for questions: ' + (P[0] || '').slice(0, 300));
     if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/teach-followup.png' });
     expect(L.drawn === 'underline' && /You asked: Why is there an Euler circuit\?/.test(L.text), 'the answer shows in the card, and she points and draws: ' + JSON.stringify(L));
     // said, with the mic (the extension's own page script hears the faked speech)
@@ -8745,6 +8746,508 @@ test('Cursor Cassie lessons: only the lesson is numbered (not Drive’s toolbar,
     const ask = await inWorld('CassieTeach.prompt({ q: "", page: { title: "t", items: [] } })');
     expect(/Teach only what this page or picture shows/.test(ask) && /never add facts/.test(ask) && /say so in that step instead of guessing/.test(ask) && /never on the app's or browser's own toolbars/.test(ask), 'the lesson request asks for accuracy');
   } finally { await ctx.close(); }
+});
+
+// Cassie's live drawing in the extension: what its tests share (the real extension in a real browser; the AI,
+// her voice and the picture counter are faked or watched in the background)
+async function liveExt({ viewport = { width: 1280, height: 800 } } = {}) {
+  const ext = path.join(ROOT, 'extension');
+  const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));
+  const ctx = await chromium.launchPersistentContext(profile, {
+    headless: true, viewport, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : { channel: 'chromium' }),
+    args: ['--headless=new', `--disable-extensions-except=${ext}`, `--load-extension=${ext}`, '--autoplay-policy=no-user-gesture-required'],
+  });
+  await ctx.route(/api\.groq\.com|workers\.dev|fonts\.(googleapis|gstatic)\.com|askcassie\.pages\.dev/, (r) => r.abort());
+  let sw = null;
+  for (let i = 0; i < 80 && !sw; i++) {
+    for (const w of ctx.serviceWorkers()) if (/\/background\.js$/.test(w.url()) && await w.evaluate(() => typeof readPicture === 'function').catch(() => false)) { sw = w; break; }
+    if (!sw) await new Promise((r) => setTimeout(r, 250));
+  }
+  expect(sw, 'the Cassie extension did not start');
+  // each call to the AI takes the next reply in line ('THROW' fails it); every prompt is kept; every picture of the tab is counted
+  await sw.evaluate(() => {
+    self.__prompts = []; self.__replies = []; self.__shots = 0; self.__wait = 0; self.__clips = [];
+    const cap = chrome.tabs.captureVisibleTab.bind(chrome.tabs);
+    chrome.tabs.captureVisibleTab = (...a) => { self.__shots++; return cap(...a); };
+    self.readPicture = async (keys, msg) => {
+      self.__prompts.push(String(msg.prompt || ''));
+      if (self.__wait) await new Promise((r) => setTimeout(r, self.__wait));
+      const next = self.__replies.length ? self.__replies.shift() : '{"answer":"(none)","steps":[]}';
+      if (next === 'THROW') throw new Error('boom');
+      return next;
+    };
+    self.speakLeft = async () => ({ on: false, left: 0 });
+    self.teachFail = async () => {};
+    return chrome.storage.local.set({ teachVoice: 'on', teachAuto: 'off' });
+  });
+  const replies = (list) => sw.evaluate((l) => { self.__replies = l.map((x) => (typeof x === 'string' ? x : JSON.stringify(x))); self.__prompts = []; }, list);
+  const prompts = () => sw.evaluate(() => self.__prompts.slice());
+  const shots = () => sw.evaluate(() => self.__shots);
+  const page = ctx.pages()[0] || await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  const LIVE = '#cassie-live-host-92f1', LESSON = '#cassie-teach-host-92f1', EXT = '#cassie-ext-host-92f1';
+  // the extension's own script world on the page (its CassieLive and CassieTeach live there)
+  const world = async () => {
+    const cdp = await ctx.newCDPSession(page), worlds = [];
+    cdp.on('Runtime.executionContextCreated', (e) => worlds.push(e.context));
+    await cdp.send('Runtime.enable'); await page.waitForTimeout(300);
+    const { frameTree } = await cdp.send('Page.getFrameTree');
+    const w = worlds.find((c) => c.auxData && c.auxData.frameId === frameTree.frame.id && c.auxData.type === 'isolated' && /Cassie/.test(c.name));
+    return async (js) => { const r = await cdp.send('Runtime.evaluate', { contextId: w.id, expression: js, returnByValue: true, awaitPromise: true }); if (r.exceptionDetails) throw new Error(JSON.stringify(r.exceptionDetails).slice(0, 400)); return r.result.value; };
+  };
+  const open = async (url) => { await page.goto(url); await page.bringToFront(); await page.waitForFunction((h) => document.querySelector(h), EXT, { timeout: 10000 }); await page.waitForTimeout(400); return world(); };
+  // her card, as the student sees it
+  const card = () => page.evaluate((h) => {
+    const n = document.querySelector(h);
+    if (!n) return null;
+    const r = n.shadowRoot, c = r.querySelector('.lv-card').getBoundingClientRect();
+    const parts = [...r.querySelectorAll('.lv-part')].map((g) => ({ shape: g.dataset.shape, on: +g.style.opacity > 0, text: g.textContent }));
+    const mid = [...r.querySelectorAll('.lv-part path')].some((p) => { const o = parseFloat(p.style.strokeDashoffset); return o > 0.02 && o < 0.98; });
+    const cur = r.querySelector('.lv-cur');
+    return { ...n.dataset, title: r.querySelector('.lv-title').textContent, sub: r.querySelector('.lv-sub').textContent, says: r.querySelector('.lv-status').textContent.trim(),
+      words: [...r.querySelectorAll('.lv-line')].map((x) => x.textContent), now: (r.querySelector('.lv-line.is-now') || {}).textContent || '', text: r.querySelector('.lv-card').innerText,
+      parts, mid, cursor: cur ? +cur.style.opacity > 0 : false, running: r.getAnimations().length, paper: !r.querySelector('.lv-paper').hidden,
+      box: { left: c.left, top: c.top, right: c.right, bottom: c.bottom, width: c.width, height: c.height } };
+  }, LIVE);
+  const tap = (sel) => page.evaluate(([h, s]) => document.querySelector(h).shadowRoot.querySelector(s).click(), [LIVE, sel]);
+  // wait for her card to say so: { beat: '1', status: 'done', … } (drawnMin: at least that many parts drawn)
+  const until = (want, ms = 15000) => page.waitForFunction(([h, w]) => { const n = document.querySelector(h); return !!n && Object.keys(w).every((k) => (k === 'drawnMin' ? +n.dataset.drawn >= w[k] : n.dataset[k] === w[k])); }, [LIVE, want], { timeout: ms });
+  // Ctrl twice, then the question typed and Enter
+  const summon = async () => { await page.mouse.move(300, 300); await page.keyboard.press('Control'); await page.keyboard.press('Control'); await page.waitForSelector('.page-input', { timeout: 5000 }); };
+  const ask = async (q) => { await summon(); await page.fill('.page-input', q); await page.press('.page-input', 'Enter'); };
+  const toEnd = async () => { for (let i = 0; i < 12 && (await card()).status !== 'done'; i++) { await tap('.lv-next'); await page.waitForTimeout(120); } };
+  const gone = async () => { await page.keyboard.press('Escape'); await page.waitForTimeout(150); await page.keyboard.press('Escape'); await page.waitForTimeout(250); };
+  const fixture = (name) => fs.readFileSync(path.join(ROOT, 'tests/fixtures/live', name + '.json'), 'utf8');
+  const close = async () => { await ctx.close(); fs.rmSync(profile, { recursive: true, force: true }); };
+  return { ctx, sw, page, errors, replies, prompts, shots, open, world, card, tap, until, summon, ask, toEnd, gone, fixture, close, LIVE, LESSON, EXT };
+}
+
+test('Cassie’s live drawing in the extension (3.67): Ctrl twice opens “Ask Cassie about your screen” with a mic; she looks once, when asked, and draws beat by beat on her card beside the page, from her own knowledge when the page lacks it (never “I can’t draw that from this page”); Pause, Play, Back, Next, Replay; Clear and Escape remove everything she drew; the card docks off what the question is about; Reduce Motion draws whole; a highlight still gets its choices and an empty question the page lesson; the parser keeps only what makes sense; no new permission', async () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'extension/manifest.json'), 'utf8'));
+  expect(manifest.permissions.slice().sort().join() === 'activeTab,contextMenus,scripting,sidePanel,storage' && manifest.host_permissions.join() === 'https://api.groq.com/*,<all_urls>' && !manifest.optional_permissions && !manifest.optional_host_permissions, 'no new permission: ' + JSON.stringify([manifest.permissions, manifest.host_permissions]));
+  expect(manifest.content_scripts[0].js.join() === 'sketch.js,board.js,care.js,mic.js,content.js,errors.js,teach.js,live.js', 'live.js runs after teach.js on every page: ' + manifest.content_scripts[0].js.join());
+  expect(/<script src="teach\.js"><\/script>\s*<script src="live\.js"><\/script>/.test(fs.readFileSync(path.join(ROOT, 'extension/panel.html'), 'utf8')), 'the side panel loads live.js after teach.js');
+  for (const f of ['errors.js', 'sketch.js', 'mic.js', 'board.js', 'care.js']) expect(fs.readFileSync(path.join(ROOT, 'extension', f), 'utf8') === fs.readFileSync(path.join(ROOT, f), 'utf8'), `extension/${f} is the app’s ${f}`);
+  expect(/It does not read pages on its own/.test(fs.readFileSync(path.join(ROOT, 'privacy.html'), 'utf8')), 'the privacy page still says she does not read pages on her own');
+  const readme = fs.readFileSync(path.join(ROOT, 'extension/README.md'), 'utf8');
+  expect(/Ctrl/.test(readme) && /draws/.test(readme) && /only when you ask/i.test(readme) && /not for use during a test or\s+quiz/.test(readme), 'the README tells of the live drawing, and keeps its line about tests and quizzes');
+  const X = await liveExt();
+  const { page, sw, replies, prompts, shots, card, tap, until, summon, ask, toEnd, gone, fixture, LIVE, LESSON, EXT } = X;
+  try {
+    const PICS = `http://localhost:${APP_PORT}/tests/fixtures/live/pictures.html`;
+    let inWorld = await X.open(PICS);
+    const say = (k) => inWorld(`CassieErrors.say(${JSON.stringify(k)})`);
+    const popText = () => page.evaluate((h) => { const p = document.querySelector(h).shadowRoot.querySelector('.popover'); return p.hidden ? '' : p.innerText; }, EXT);
+
+    // 1. Ctrl twice, nothing highlighted: the new box, with a mic and Ask; nothing is read until she is asked
+    await summon();
+    const box = await page.evaluate((h) => {
+      const r = document.querySelector(h).shadowRoot, i = r.querySelector('.page-input'), m = i.nextElementSibling, b = r.querySelector('.page-ask-btn'), size = (n) => { const q = n.getBoundingClientRect(); return [Math.round(q.width), Math.round(q.height)]; };
+      return { title: r.querySelector('.question').textContent, label: i.getAttribute('aria-label'), mic: !!(m && m.classList.contains('cmic')), micSize: m ? size(m) : null, input: size(i), ask: size(b), focus: r.activeElement === i, text: r.querySelector('.popover').innerText };
+    }, EXT);
+    expect(box.title === 'Ask Cassie about your screen' && box.label === 'Ask Cassie about your screen' && box.focus, 'the box asks about the screen, ready to type: ' + JSON.stringify(box));
+    expect(box.mic && box.micSize[0] >= 44 && box.micSize[1] >= 44 && box.input[1] >= 44 && box.ask[1] >= 44, 'a mic beside the box; box, mic and Ask are 44px: ' + JSON.stringify(box));
+    expect(/looks at your screen once, when you ask/.test(box.text) && !/[–—]/.test(box.text), 'it says she looks once, when asked: ' + box.text);
+    expect((await shots()) === 0 && (await prompts()).length === 0, 'opening the box takes no picture and asks nothing');
+    // said, with the mic: the question is asked when the student stops talking
+    await inWorld(`(${FAKE_EARS})(); 1`);
+    await replies([fixture('leaf')]);
+    const said = await micSay(page, '.page-input', { root: EXT, inWorld });
+    micLooksRight('Ask Cassie about your screen', said);
+    await page.waitForSelector(LIVE, { state: 'attached', timeout: 15000 });
+    let P = await prompts();
+    expect(P.length === 1 && P[0].includes(`The student asks: "${SAID}"`), 'the mic asks what was said: ' + (P[0] || '').slice(0, 200));
+    expect((await shots()) === 1, 'one picture of the tab, taken when she was asked');
+    await tap('.lv-x');
+    await page.waitForTimeout(300);
+    expect(await page.evaluate((h) => !document.querySelector(h), LIVE), 'Close removes her card');
+
+    // 2. a question the page can't answer ("how does a jet work" over a page of pictures): she draws it, beat by beat
+    await sw.evaluate(() => { self.__wait = 500; });
+    await replies([fixture('jet')]);
+    await ask('how does a jet work?');
+    await page.waitForFunction(([h, t]) => document.querySelector(h).shadowRoot.querySelector('.popover').innerText.includes(t), [EXT, await say('live_looking')], { timeout: 5000 });
+    await page.waitForSelector(LIVE, { state: 'attached', timeout: 15000 });
+    await sw.evaluate(() => { self.__wait = 0; });
+    await until({ beat: '0' });
+    P = await prompts();
+    expect(P.length === 1 && P[0].includes('The student asks: "how does a jet work?"') && /answer from what you know/.test(P[0]) && /Never say that you cannot explain or draw something because the page does not show it/.test(P[0]) && /"beats"/.test(P[0]) && !/never add facts|Teach only what this page or picture shows/.test(P[0]), 'she is asked with the rule for questions and the drawing form: ' + P[0].slice(0, 300));
+    expect((await shots()) === 2 && !(await popText()), 'one more picture for this question, and her answer box makes way for the card');
+    // beat 1 draws its own 2 parts, one after the other; the other 14 wait
+    let seen = { moving: false, mid: false, cursor: false, early: false, counts: new Set() };
+    for (let i = 0; i < 40; i++) {
+      const c = await card();
+      if (c.beat !== '0') break;
+      if (c.moving === '1') seen.moving = true;
+      if (c.mid) seen.mid = true;
+      if (c.cursor) seen.cursor = true;
+      if (c.parts.slice(2).some((p) => p.on)) seen.early = true;
+      seen.counts.add(c.drawn);
+      if (c.drawn === '2') break;
+      await page.waitForTimeout(120);
+    }
+    expect(seen.moving && seen.mid && seen.cursor, 'each part strokes itself in, her cursor at the pen: ' + JSON.stringify({ ...seen, counts: [...seen.counts] }));
+    expect(!seen.early && seen.counts.has('0') && seen.counts.has('2'), 'beat 1 draws only its own parts, from none to both: ' + JSON.stringify([...seen.counts]));
+    let c = await card();
+    expect(c.status === 'drawing' && c.says === await say('live_drawing') && c.words.length === 1 && c.now === c.words[0] && /pictures of jets/.test(c.now), 'the line says she is drawing, and her first sentence shows: ' + JSON.stringify([c.says, c.words]));
+    if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/live-half.png' });
+    // Next: the next beat's parts; Pause holds everything; Play goes on; Back goes back
+    await tap('.lv-next');
+    await until({ beat: '1', drawnMin: 3 });
+    c = await card();
+    expect(c.parts.slice(0, 2).every((p) => p.on) && !c.parts.slice(5).some((p) => p.on) && c.words.length === 2 && /big fan/.test(c.now), 'Next: beat 2 draws on top of beat 1, and the later parts still wait: ' + JSON.stringify(c.parts.map((p) => +p.on).join('')));
+    await tap('.lv-play');
+    c = await card();
+    const held = [c.drawn, c.beat, c.parts.map((p) => +p.on).join('')].join();
+    expect(c.status === 'paused' && c.playing === '0' && /Play/.test(c.text) && c.says === await say('live_paused'), 'Pause: ' + JSON.stringify([c.status, c.says]));
+    await page.waitForTimeout(900);
+    c = await card();
+    expect([c.drawn, c.beat, c.parts.map((p) => +p.on).join('')].join() === held && c.moving !== '1', 'paused: nothing moves on: ' + held);
+    await tap('.lv-play');
+    c = await card();
+    expect(c.playing === '1' && c.status === 'drawing', 'Play goes on: ' + JSON.stringify([c.status, c.playing]));
+    await tap('.lv-back');
+    await until({ beat: '0' });
+    // to the end: the whole drawing, every label written out
+    await toEnd();
+    c = await card();
+    const labels = c.parts.filter((p) => p.shape === 'label').map((p) => p.text);
+    expect(c.status === 'done' && c.drawn === '16' && c.parts.length === 16 && c.parts.every((p) => p.on) && c.says === await say('live_done'), 'the whole drawing is there at the end: ' + JSON.stringify([c.status, c.drawn]));
+    expect(labels.join('|') === 'Fan|Compressor|Burn fuel|Turbine|Hot gas out|Thrust' && c.parts.some((p) => p.shape === 'note' && /Push back/.test(p.text)), 'every label is written out, and the sticky note: ' + labels.join('|'));
+    expect(c.title === 'How a jet engine pushes' && c.sub === 'Cut-away · Simplified sketch' && /You asked: how does a jet work\?/.test(c.text) && c.words.length === 6, 'the title, the view, “Simplified sketch”, the question and all six sentences: ' + JSON.stringify([c.title, c.sub, c.words.length]));
+    expect(!/can(no|’|')t draw|couldn’t draw/i.test(c.text) && /so here is how/.test(c.text) && !/[–—]/.test(c.text), 'she never says she can’t draw it: she says the page lacks it and explains: ' + c.text.slice(0, 200));
+    if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/live-done.png' });
+    // every control: 44px, a real button or box (so the keyboard reaches it), named; her words are announced
+    const controls = await page.evaluate((h) => { const r = document.querySelector(h).shadowRoot; return [...r.querySelectorAll('.lv-card button, .lv-card input')].filter((b) => b.offsetParent).map((b) => { const q = b.getBoundingClientRect(); return { name: (b.getAttribute('aria-label') || b.textContent || '').trim(), tag: b.tagName, w: Math.round(q.width), h: Math.round(q.height), tab: b.tabIndex }; }); }, LIVE);
+    expect(controls.length >= 11 && controls.every((b) => b.w >= 44 && b.h >= 44 && b.name && b.tab >= 0), 'every control is 44px, named and reachable by keyboard: ' + JSON.stringify(controls));
+    for (const name of ['Voice on', 'Move this card to the other side', 'Close', 'Back', 'Play', 'Next', 'Replay', 'Clear', 'Open on the board', 'Ask a follow-up', 'Say it instead of typing', 'Ask']) expect(controls.some((b) => b.name === name), 'the card has ' + name + ': ' + controls.map((b) => b.name).join(', '));
+    expect(await page.evaluate((h) => { const r = document.querySelector(h).shadowRoot; return r.querySelector('.lv-words').getAttribute('aria-live') === 'polite' && r.querySelector('.lv-status').getAttribute('aria-live') === 'polite' && r.querySelector('.lv-card').getAttribute('role') === 'dialog' && /How a jet engine pushes/.test(r.querySelector('.lv-svg').getAttribute('aria-label')); }, LIVE), 'her words and what she is doing are announced, and the drawing has a name');
+    // contrast, in light and in dark: words 4.5:1, every line she draws 3:1 on its paper
+    const contrast = () => page.evaluate((h) => {
+      const r = document.querySelector(h).shadowRoot, wrap = r.querySelector('.lv');
+      const rgb = (c) => { const m = String(c).match(/[\d.]+/g).map(Number); return m.length > 3 && m[3] === 0 ? null : m.slice(0, 3); };
+      const lum = (c) => { const [a, b, d] = c.map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * a + 0.7152 * b + 0.0722 * d; };
+      const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+      const bgOf = (n) => { for (let a = n; a; a = a.parentElement) { const c = rgb(getComputedStyle(a).backgroundColor); if (c) return c; } return [255, 255, 255]; };
+      const low = [];
+      r.querySelectorAll('.lv-status span, .lv-title, .lv-sub, .lv-line, .lv-asked, .lv-vnote, .lv-count, .lv-card button:not(:disabled), .lv-ask input').forEach((n) => { if (!n.offsetParent) return; const k = ratio(rgb(getComputedStyle(n).color), bgOf(n)); if (k < 4.5) low.push([n.className || n.tagName, +k.toFixed(2)]); });
+      const probe = document.createElement('i'); wrap.appendChild(probe);
+      const paper = (() => { probe.style.color = 'var(--paper)'; return rgb(getComputedStyle(probe).color); })();
+      ['ink', 'grey', 'blue', 'red', 'green', 'yellow', 'orange', 'purple'].forEach((name) => { probe.style.color = `var(--p-${name})`; const k = ratio(rgb(getComputedStyle(probe).color), paper); if (k < (name === 'ink' || name === 'grey' ? 4.5 : 3)) low.push([name, +k.toFixed(2)]); });
+      probe.remove();
+      return low;
+    }, LIVE);
+    let low = await contrast();
+    expect(!low.length, 'light: low contrast: ' + JSON.stringify(low));
+    await page.emulateMedia({ colorScheme: 'dark' });
+    low = await contrast();
+    expect(!low.length, 'dark: low contrast: ' + JSON.stringify(low));
+    if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/live-done-dark.png' });
+    await page.emulateMedia({ colorScheme: 'light' });
+    // the jets she was asked about are on the left, so the card sits on the right; the button moves it across
+    expect(c.side === 'right' && c.box.right > 1280 - 20 && c.box.left > 640 && c.box.top >= 0 && c.box.bottom <= 800, 'the card docks on the right, inside the window: ' + JSON.stringify(c.box));
+    await tap('.lv-side');
+    c = await card();
+    expect(c.side === 'left' && c.box.left < 20 && c.box.right < 640, 'the button moves it to the other side: ' + JSON.stringify(c.box));
+    // the layer never blocks the page: only her card takes taps
+    expect(await page.evaluate((h) => getComputedStyle(document.querySelector(h)).pointerEvents === 'none', LIVE), 'her layer lets taps through to the page');
+
+    // 3. Replay draws it again from the start; Clear removes everything she drew; Replay brings it back; Escape clears, then closes
+    await tap('.lv-replay');
+    await until({ beat: '0', playing: '1' });
+    c = await card();
+    expect(+c.drawn < 16 && c.words.length === 1, 'Replay starts again from the first beat: ' + JSON.stringify([c.drawn, c.words.length]));
+    await tap('.lv-clear');
+    c = await card();
+    expect(c.status === 'cleared' && c.parts.length === 0 && !c.paper && c.drawn === '0' && c.playing === '0' && c.says === await say('live_cleared') && c.box.height < 280, 'Clear: nothing she drew is left, and a small card stays: ' + JSON.stringify([c.status, c.parts.length, c.paper, Math.round(c.box.height)]));
+    expect(await page.evaluate((h) => { const r = document.querySelector(h).shadowRoot; return !r.querySelector('.lv-svg').childElementCount && r.querySelector('.lv-words').hidden; }, LIVE), 'the drawing and her words are gone from the card');
+    await tap('.lv-replay');
+    await until({ beat: '0', playing: '1' });
+    c = await card();
+    expect(c.parts.length === 16 && c.paper, 'Replay brings the drawing back');
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(200);
+    c = await card();
+    expect(c && c.status === 'cleared' && c.parts.length === 0, 'Escape clears everything she drew: ' + JSON.stringify(c && [c.status, c.parts.length]));
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+    expect(await page.evaluate((h) => !document.querySelector(h) && !document.querySelector('[id^="cassie-live"]'), LIVE), 'Escape again leaves nothing of her card on the page');
+    expect((await shots()) === 2, 'no more pictures were taken along the way');
+
+    // 4. “show me how”: she always draws; the thing is on the right, so the card sits on the left; it plays to the end by itself
+    await replies([fixture('leaf')]);
+    await ask('what is in a leaf? show me how it makes food');
+    await page.waitForSelector(LIVE, { state: 'attached', timeout: 15000 });
+    P = await prompts();
+    expect(P.length === 1 && /always draw one/.test(P[0]) && !/POINT at their screen/.test(P[0]), 'a question that asks for a drawing gets the drawing form only: ' + P[0].slice(0, 200));
+    await until({ status: 'done' }, 20000);
+    c = await card();
+    expect(c.side === 'left' && c.box.left < 20 && c.drawn === '5' && c.words.join('|') === 'This is a leaf.|Light comes in.|Sugar is made.', 'it docks on the left and plays every beat by itself: ' + JSON.stringify([c.side, c.drawn, c.words]));
+    await gone();
+
+    // 5. Reduce Motion: each beat's parts appear whole; nothing strokes in, her cursor stays away
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await replies([fixture('leaf')]);
+    await ask('draw a leaf');
+    await page.waitForSelector(LIVE, { state: 'attached', timeout: 15000 });
+    await until({ beat: '0' });
+    seen = { moving: false, mid: false, cursor: false, running: 0, first: (await card()).drawn };
+    for (let i = 0; i < 30; i++) {
+      c = await card();
+      if (c.moving === '1') seen.moving = true;
+      if (c.mid) seen.mid = true;
+      if (c.cursor) seen.cursor = true;
+      seen.running = Math.max(seen.running, c.running);
+      if (c.beat === '2') break;
+      await page.waitForTimeout(150);
+    }
+    expect(seen.first === '1' && !seen.moving && !seen.mid && !seen.cursor && seen.running === 0, 'Reduce Motion: parts appear whole, no stroke animation, no cursor: ' + JSON.stringify(seen));
+    await until({ status: 'done' }, 15000);
+    expect((await card()).drawn === '5', 'and every beat still comes, one by one');
+    await gone();
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+
+    // 6. a highlight, then Ctrl twice: the choices for the highlight, as before
+    inWorld = await X.open(`http://localhost:${APP_PORT}/tests/fixtures/teach/page.html`);
+    await page.evaluate(() => { const r = document.createRange(); r.selectNodeContents(document.querySelector('p')); const g = getSelection(); g.removeAllRanges(); g.addRange(r); });
+    await page.mouse.move(300, 300);
+    await page.keyboard.press('Control'); await page.keyboard.press('Control');
+    await page.waitForTimeout(400);
+    let pop = await popText();
+    expect(/What should I do with this/.test(pop) && !/Ask Cassie about your screen/.test(pop), 'a highlight still gets its choices: ' + pop.slice(0, 120));
+    await page.evaluate(() => getSelection().removeAllRanges());
+    // an empty question: the page lesson, true to the page, as before
+    await replies([{ steps: [{ say: 'This page is about photosynthesis.', point: null, draw: [] }] }]);
+    await summon();
+    await page.press('.page-input', 'Enter');
+    await page.waitForSelector(LESSON, { state: 'attached', timeout: 15000 });
+    P = await prompts();
+    expect(P.length === 1 && /Summarize this page and list the key points/.test(P[0]) && /Teach only what this page or picture shows/.test(P[0]) && /never add facts/.test(P[0]) && !/"beats"/.test(P[0]), 'an empty question keeps the page lesson and its accuracy rule: ' + P[0].slice(0, 200));
+    expect(await page.evaluate((h) => !document.querySelector(h), LIVE), 'no drawing card for the page lesson');
+    await inWorld('CassieTeach.stop(), 1');
+
+    // 7. the parser on its own: only what makes sense is kept; it never throws
+    const jet = fixture('jet');
+    const parsed = await inWorld(`(() => {
+      const L = CassieLive, jet = ${JSON.stringify(jet)}, out = {};
+      const g = L.parse(jet);
+      out.good = [g.kind, g.scene.beats.length, g.scene.beats.reduce((n, b) => n + b.parts.length, 0), g.scene.title, JSON.stringify(g.scene.about), g.answer.slice(0, 12)];
+      const cut = L.parse(jet.slice(0, jet.indexOf('Turbine') + 4));
+      out.cut = [cut.kind, cut.scene.beats.length, cut.scene.beats.map((b) => b.parts.length).join()];
+      out.words = [L.parse('{"answer":"Paris.","steps":[]}').kind, L.parse('{"answer":"Paris.","steps":[]}').answer];
+      out.page = L.parse('{"answer":"Here.","steps":[{"say":"Look here.","point":{"x":0.5,"y":0.5}}]}').kind;
+      out.none = ['Sorry, I cannot help.', '', null, '{', '[]', '{"beats":"x"}', '{"beats":[1,null,"a",{}]}', '{"beats":[{"say":5,"draw":7}]}'].map((r) => L.parse(r).kind || 'none').join();
+      const bad = L.parse(JSON.stringify({ answer: 'ok', title: 'T', beats: [
+        { say: 'One.', draw: [{ shape: 'explode', x: 1, y: 1 }, { shape: 'curve', points: [[1, 1]] }, { shape: 'outline', points: [[1, 1], [2, 2]] }, { shape: 'box', x: 10, y: 10 }, { shape: 'circle', x: 'a', y: 3, r: 2 }, { shape: 'label', x: 5, y: 5, text: '' }, { shape: 'graph', fn: 'alert(1)', x: 10, y: 10, w: 40, h: 40 }, { shape: 'arrow', points: [[900, 900], [10, 10]] }, 'junk', null, { shape: 'curve', points: [[10, 10], [30, 30]], color: 'gold' }] },
+        { draw: [{ shape: 'circle', x: 50, y: 40, r: 5, fill: 1, color: 'pink' }] }, { say: '', draw: [] }, { say: 'Three.', draw: [] },
+      ] }));
+      out.bad = [bad.kind, bad.scene.beats.length, bad.scene.beats.map((b) => b.parts.map((p) => p.shape + ':' + p.color + (p.fill ? '/' + p.fill : '')).join('+')).join('|')];
+      const shares = L.parse(JSON.stringify({ beats: [{ say: 'S.', draw: [{ shape: 'curve', points: [[0.1, 0.2], [0.5, 0.8]] }, { shape: 'label', x: 0.5, y: 0.5, text: 'Mid' }] }] }));
+      out.shares = JSON.stringify(shares.scene.beats[0].parts.map((p) => p.points || [p.x, p.y]));
+      const crowd = L.parse(JSON.stringify({ beats: [{ say: 'L.', draw: [{ shape: 'box', x: 20, y: 20, w: 30, h: 20 }, { shape: 'label', x: 99, y: 1, text: 'Far corner' }, { shape: 'label', x: 50, y: 40, text: 'One' }, { shape: 'label', x: 50, y: 40, text: 'Two' }] }] })).scene.beats[0].parts.filter((p) => p.shape === 'label');
+      out.tidy = [crowd[0].x < 99 && crowd[0].x > 80 && crowd[0].y > 1, Math.abs(crowd[1].y - crowd[2].y) >= 4.6];
+      const many = L.parse(JSON.stringify({ beats: Array.from({ length: 12 }, (_, i) => ({ say: 'Beat ' + i + '.', draw: Array.from({ length: 12 }, () => ({ shape: 'curve', points: [[10, 10], [30, 30]] })) })) }));
+      out.many = [many.scene.beats.length, Math.max(...many.scene.beats.map((b) => b.parts.length)), many.scene.beats.reduce((n, b) => n + b.parts.length, 0)];
+      out.wants = ['draw how the jet works', 'can you sketch it?', 'make a diagram of this', 'Can you show me exactly how?', 'iguhit mo ito', 'what is this page about?', 'explain this diagram', 'what does this drawing show?', 'how does a jet work?'].map((q) => +L.wants(q)).join('');
+      out.prompts = [/The student asks: "q1"/.test(L.prompt({ q: 'q1' })), /kettle/.test(L.prompt({ q: 'q1' })), /POINT at their screen/.test(L.prompt({ q: 'q1' })) && /DRAW it on a card/.test(L.prompt({ q: 'q1' })), /answer from what you know/.test(L.prompt({ q: 'q1', draw: true })), /Teach only what this page or picture shows/.test(CassieTeach.prompt({ q: '', page: { title: 't', items: [] } })), !/answer from what you know/.test(CassieTeach.prompt({ q: '', page: { title: 't', items: [] } }))];
+      return out;
+    })()`);
+    expect(parsed.good.join() === ['card', 6, 16, 'How a jet engine pushes', '{"x":0.02,"y":0.2,"w":0.24,"h":0.42}', 'A jet engine'].join(), 'a good reply is read whole: ' + JSON.stringify(parsed.good));
+    expect(parsed.cut.join() === 'card,4,2,3,2,2', 'a cut-off reply plays its whole beats (the cut one is left out): ' + JSON.stringify(parsed.cut));
+    expect(parsed.words.join() === 'words,Paris.' && parsed.page === 'page' && parsed.none === 'none,none,none,none,none,none,none,none', 'only an answer, steps for the page, and replies that can’t be used: ' + JSON.stringify([parsed.words, parsed.page, parsed.none]));
+    expect(parsed.bad.join() === 'card,2,curve:yellow+oval:red/red|', 'bad parts are dropped, a wordless beat joins the one before, an empty one is skipped: ' + JSON.stringify(parsed.bad));
+    expect(parsed.shares === '[[[10,15],[50,60]],[50,37.5]]', 'a reply in shares of the card is read on her grid: ' + parsed.shares);
+    expect(parsed.tidy.every(Boolean), 'labels stay on the card and off each other: ' + JSON.stringify(parsed.tidy));
+    expect(parsed.many.join() === '8,8,40', 'at most 8 beats, 8 parts in a beat and 40 in all: ' + JSON.stringify(parsed.many));
+    expect(parsed.wants === '111110000', 'what counts as asking for a drawing: ' + parsed.wants);
+    expect(parsed.prompts.every(Boolean), 'the question form allows her own knowledge and carries the drawing form; the page lesson keeps its rule: ' + JSON.stringify(parsed.prompts));
+    expect(!X.errors.length, 'page errors: ' + X.errors.join('; '));
+  } finally { await X.close(); }
+});
+
+test('Cassie’s live drawing, the rest: a follow-up adds to the drawing or starts a new one, from the same picture (care first, typed or said); Open on the board hands the finished drawing to the board; the drawing is kept in Your lessons without the picture of the screen; “draw it” on a lesson step and in her answer box draws; Bella says each beat when she can, else it is typed; replies that can’t be used say so in plain words with Try again', async () => {
+  const X = await liveExt();
+  const { page, sw, replies, prompts, shots, card, tap, until, ask, toEnd, gone, fixture, LIVE, LESSON, EXT } = X;
+  try {
+    const PICS = `http://localhost:${APP_PORT}/tests/fixtures/live/pictures.html`;
+    let inWorld = await X.open(PICS);
+    const say = (k) => inWorld(`CassieErrors.say(${JSON.stringify(k)})`);
+    const popText = () => page.evaluate((h) => { const p = document.querySelector(h).shadowRoot.querySelector('.popover'); return p.hidden ? '' : p.innerText; }, EXT);
+    const follow = (q) => page.evaluate(([h, q]) => { const r = document.querySelector(h).shadowRoot; r.querySelector('.lv-ask input').value = q; r.querySelector('.lv-ask').requestSubmit(); }, [LIVE, q]);
+    const stored = (k) => sw.evaluate((k) => chrome.storage.local.get(k).then((o) => o[k]), k);
+
+    // 1. a follow-up that adds to the drawing: same picture, the drawing so far goes with the question
+    await replies([fixture('jet')]);
+    await ask('how does a jet work?');
+    await page.waitForSelector(LIVE, { state: 'attached', timeout: 15000 });
+    await until({ beat: '0' });
+    await toEnd();
+    const shots0 = await shots();
+    await replies([fixture('fuel')]);
+    await follow('where does the fuel go in?');
+    await until({ beat: '6' });
+    let P = await prompts();
+    expect(P.length === 1 && P[0].includes('The student asks: "where does the fuel go in?"') && /The drawing on the card now: \{"title":"How a jet engine pushes"/.test(P[0]) && /"text":"Compressor"/.test(P[0]) && /To add to the drawing on the card/.test(P[0]) && /answer from what you know/.test(P[0]), 'the follow-up goes with the drawing so far and the rule for questions: ' + P[0].slice(0, 300));
+    expect((await shots()) === shots0, 'a follow-up takes no new picture');
+    let c = await card();
+    expect(c.parts.length === 18 && c.title === 'How a jet engine pushes' && /You asked: where does the fuel go in\?/.test(c.text) && /Fuel is sprayed in here/.test(c.now) && c.parts.slice(0, 16).every((p) => p.on), 'the new beat is added to the same drawing: ' + JSON.stringify([c.parts.length, c.title, c.now]));
+    await until({ status: 'done' }, 15000);
+    expect((await card()).parts.every((p) => p.on) && (await card()).parts.some((p) => p.text === 'Fuel in'), 'and its parts are drawn too');
+    // a follow-up that starts a new drawing
+    await replies([fixture('leaf')]);
+    await follow('draw a leaf instead');
+    await until({ beat: '0', playing: '1' });
+    c = await card();
+    P = await prompts();
+    expect(c.title === 'A leaf makes food' && c.parts.length === 5 && /You asked: draw a leaf instead/.test(c.text) && c.sub === 'Diagram · Simplified sketch', 'a new drawing takes the card: ' + JSON.stringify([c.title, c.parts.length, c.sub]));
+    expect(P.length === 1 && /To start a new drawing/.test(P[0]), 'she may start a new drawing');
+    // care first: no AI is asked
+    await replies([]);
+    await follow('I want to hurt myself');
+    await page.waitForTimeout(500);
+    c = await card();
+    expect(/1553|Hopeline|NCMH/i.test(c.text) && (await prompts()).length === 0, 'care first, with no AI call: ' + c.now.slice(0, 120));
+    // said: the line says she is listening, then the question is asked
+    await inWorld(`(${FAKE_EARS})(); 1`);
+    await replies([{ keep: true, answer: 'Leaves are green because of chlorophyll.', beats: [{ say: 'Leaves are green because of chlorophyll.', draw: [] }] }]);
+    await page.evaluate((h) => document.querySelector(h).shadowRoot.querySelector('.lv-ask input + .cmic').click(), LIVE);
+    await page.waitForTimeout(120);
+    c = await card();
+    expect(c.status === 'listening' && c.says === await say('live_listening'), 'the line says she is listening: ' + JSON.stringify([c.status, c.says]));
+    await page.waitForFunction((h) => /chlorophyll/.test(document.querySelector(h).shadowRoot.querySelector('.lv-words').textContent), LIVE, { timeout: 10000 });
+    P = await prompts();
+    expect(P.length === 1 && P[0].includes(`The student asks: "${SAID}"`) && (await card()).status !== 'listening', 'what was said is asked: ' + (P[0] || '').slice(-200));
+
+    // 2. Open on the board: the finished drawing opens on Cassie's board, to draw on; her card closes
+    await tap('.lv-board');
+    await page.waitForFunction((h) => { const r = document.querySelector(h).shadowRoot; return r.querySelector('.csk-wrap canvas'); }, EXT, { timeout: 10000 });
+    await page.waitForTimeout(800);
+    const board = await page.evaluate(([h, live]) => {
+      const r = document.querySelector(h).shadowRoot, w = r.querySelector('.csk-wrap'), bg = w.querySelector('canvas.csk-bg'), d = bg.getContext('2d').getImageData(0, 0, bg.width, bg.height).data;
+      let green = 0;
+      for (let i = 0; i < d.length; i += 16) if (d[i + 3] > 200 && d[i + 1] > d[i] + 40 && d[i + 1] > d[i + 2] + 30) green++;
+      return { green, note: (w.querySelector('.csk-note') || {}).innerText || '', title: (w.querySelector('.csk-title') || {}).textContent || '', live: !!document.querySelector(live) };
+    }, [EXT, LIVE]);
+    expect(board.green > 30 && !board.live, 'the board shows her drawing (the green leaf), and the card is closed: ' + JSON.stringify(board));
+    expect(/A leaf makes food/.test(board.title + board.note) && /This is a leaf\./.test(board.note), 'with her title and her words above it: ' + JSON.stringify([board.title, board.note.slice(0, 120)]));
+    await page.evaluate((h) => document.querySelector(h).shadowRoot.querySelector('.csk-wrap [data-act="close"]').click(), EXT);
+    await page.waitForTimeout(400);
+    // kept on this device with her other lessons: the title, her words and her drawing (not the picture of the screen)
+    const kept = (await stored('teachLessons'))[0];
+    expect(kept && kept.title === 'A leaf makes food' && kept.q === 'how does a jet work?' && /^data:image\/jpeg/.test(kept.pic) && kept.steps.length >= 3 && kept.qa.some((x) => x.q === SAID && /chlorophyll/.test(x.a)), 'the drawing is kept in Your lessons: ' + JSON.stringify(kept && [kept.title, kept.q, kept.steps, kept.qa.map((x) => x.q)]));
+    const picSize = await page.evaluate((src) => new Promise((res) => { const i = new Image(); i.onload = () => res([i.naturalWidth, i.naturalHeight]); i.src = src; }), kept.pic);
+    expect(picSize.join() === '480,360', 'its picture is her drawing, 480 by 360 (the card’s shape, not the screen’s): ' + picSize.join());
+
+    // 3. her answer box: “draw it” in Ask a follow-up draws
+    await replies([{ answer: 'A jet is a plane pushed by jet engines.', steps: [] }]);
+    await ask('what is a jet?');
+    await page.waitForFunction((h) => /pushed by jet engines/.test(document.querySelector(h).shadowRoot.querySelector('.popover').innerText), EXT, { timeout: 10000 });
+    expect(await page.evaluate((h) => !document.querySelector(h), LIVE), 'a quick fact is answered in her box, with no card');
+    await replies([fixture('leaf')]);
+    await page.fill('.followup-input', 'ok, draw it for me');
+    await page.press('.followup-input', 'Enter');
+    await page.waitForSelector(LIVE, { state: 'attached', timeout: 15000 });
+    P = await prompts();
+    expect(P.length === 1 && /always draw one/.test(P[0]) && !(await popText()), '“draw it” in her answer box draws: ' + P[0].slice(0, 160));
+    await gone();
+
+    // 4. replies that can't be used: plain words, Try again, exactly two calls
+    await replies(['THROW']);
+    await ask('how does a jet work?');
+    await page.waitForFunction(([h, t]) => document.querySelector(h).shadowRoot.querySelector('.popover').innerText.includes(t), [EXT, await say('live_failed')], { timeout: 10000 });
+    let pop = await popText();
+    expect(/Try again/.test(pop) && !/boom/.test(pop) && !/[–—]/.test(pop) && await page.evaluate((h) => !document.querySelector(h), LIVE), 'a failed question says so in plain words with Try again: ' + pop);
+    await replies(['{', '{"x":1}']);
+    await page.click('.teach-again');
+    await page.waitForTimeout(1500);
+    P = await prompts();
+    expect(P.length === 2 && !/could not be read/.test(P[0]) && /your last reply could not be read/.test(P[1]) && (await popText()).includes(await say('live_failed')), 'Try again asks again; unusable twice: exactly 2 calls, the second stricter, then the plain line');
+    // a drawing was asked for and none came, twice: her words, and the line that she couldn't draw it
+    await replies([{ answer: 'A jet is a plane.', steps: [] }, { answer: 'A jet is a fast plane.', steps: [] }]);
+    await ask('draw a jet');
+    await page.waitForFunction((h) => /fast plane/.test(document.querySelector(h).shadowRoot.querySelector('.popover').innerText), EXT, { timeout: 10000 });
+    P = await prompts(); pop = await popText();
+    expect(P.length === 2 && /asked for a drawing and your last reply had none/.test(P[1]) && pop.includes(await say('live_no_drawing')) && await page.evaluate((h) => !document.querySelector(h), LIVE), 'no drawing twice: her words and the plain line, after 2 calls: ' + pop);
+    // the first reply unusable, the second good: the drawing shows
+    await replies(['Sure! Here is a drawing.', fixture('leaf')]);
+    await ask('draw a leaf');
+    await page.waitForSelector(LIVE, { state: 'attached', timeout: 15000 });
+    expect((await prompts()).length === 2, 'unusable, then good: 2 calls and the drawing');
+    await gone();
+
+    // 5. Bella's studio voice: each beat is said, and lasts as long as she says it; too little left: typed, said once
+    const wav = (() => { const n = 800, buf = Buffer.alloc(44 + n * 2); buf.write('RIFF', 0); buf.writeUInt32LE(36 + n * 2, 4); buf.write('WAVEfmt ', 8); buf.writeUInt32LE(16, 16); buf.writeUInt16LE(1, 20); buf.writeUInt16LE(1, 22); buf.writeUInt32LE(8000, 24); buf.writeUInt32LE(16000, 28); buf.writeUInt16LE(2, 32); buf.writeUInt16LE(16, 34); buf.write('data', 36); buf.writeUInt32LE(n * 2, 40); return buf; })();
+    await sw.evaluate((b64) => {
+      self.__voice = { left: 9000 };
+      self.speakLeft = async () => ({ on: true, left: self.__voice.left, back: '2026-12-01' });
+      self.speakClip = async (text) => { self.__clips.push(text); return { audio: b64 }; };
+    }, wav.toString('base64'));
+    await replies([fixture('leaf')]);
+    await ask('draw a leaf');
+    await page.waitForSelector(LIVE, { state: 'attached', timeout: 15000 });
+    let spoke = false;
+    for (let i = 0; i < 60; i++) { c = await card(); if (c.status === 'speaking' && c.says === await say('live_speaking')) spoke = true; if (c.status === 'done') break; await page.waitForTimeout(60); }
+    c = await card();
+    const clips = await sw.evaluate(() => self.__clips.slice());
+    expect(spoke && c.status === 'done' && c.spoken === '3' && clips.join('|') === 'This is a leaf.|Light comes in.|Sugar is made.' && c.drawn === '5', 'each beat is said in Bella’s voice, and the line says she is speaking: ' + JSON.stringify([spoke, c.status, c.spoken, clips]));
+    expect(await page.evaluate((h) => document.querySelector(h).shadowRoot.querySelector('.lv-vnote').hidden, LIVE), 'no line when she can speak');
+    // the voice switch is the same one as her lessons
+    await tap('.lv-voice');
+    expect(await stored('teachVoice') === 'off' && /Voice off/.test((await card()).text), 'Voice off is remembered');
+    await tap('.lv-voice');
+    expect(await stored('teachVoice') === 'on', 'and back on');
+    await gone();
+    await sw.evaluate(() => { self.__voice.left = 5; self.__clips = []; });
+    await replies([fixture('leaf')]);
+    await ask('draw a leaf');
+    await page.waitForSelector(LIVE, { state: 'attached', timeout: 15000 });
+    await until({ beat: '0' });
+    const line = await page.evaluate((h) => { const n = document.querySelector(h).shadowRoot.querySelector('.lv-vnote'); return n.hidden ? '' : n.textContent; }, LIVE);
+    c = await card();
+    expect(line === await say('voice_typing') && c.status === 'drawing' && c.spoken === '0' && !(await sw.evaluate(() => self.__clips.length)), 'too little voice left: typed, and the card says so once: ' + JSON.stringify([line, c.status]));
+    await gone();
+    await sw.evaluate(() => { self.speakLeft = async () => ({ on: false, left: 0 }); });
+
+    // 6. “draw it” on a lesson step: she draws on her card, the lesson waits behind it and comes back
+    inWorld = await X.open(`http://localhost:${APP_PORT}/tests/fixtures/teach/page.html`);
+    await replies([{ steps: [{ say: 'This page is about photosynthesis.', point: null, draw: [] }, { say: 'The table shows the two stages.', point: null, draw: [] }] }]);
+    expect(await inWorld('CassieTeach.run({}).then((r) => r.steps.length, (e) => "ERR " + e.message)') === 2, 'the lesson starts');
+    await page.waitForTimeout(600);
+    const askStep = (q) => page.evaluate(([h, q]) => { const r = document.querySelector(h).shadowRoot; r.querySelector('.ct-ask input').value = q; r.querySelector('.ct-ask').requestSubmit(); }, [LESSON, q]);
+    const lessonNow = () => page.evaluate((h) => { const n = document.querySelector(h); return n ? { shown: n.style.display !== 'none', step: n.dataset.step, ans: n.shadowRoot.querySelector('.ct-ans').textContent } : null; }, LESSON);
+    await replies([fixture('jet')]);
+    await askStep('draw how the jet works');
+    await page.waitForSelector(LIVE, { state: 'attached', timeout: 15000 });
+    P = await prompts();
+    expect(P.length === 1 && P[0].includes('The student asks: "draw how the jet works"') && /always draw one/.test(P[0]) && /1\. This page is about photosynthesis\./.test(P[0]) && !/never add facts/.test(P[0]), 'the step’s question asks for a drawing, with what she said so far: ' + P[0].slice(0, 300));
+    await until({ beat: '0' });
+    let L = await lessonNow();
+    c = await card();
+    expect(c.parts.length === 16 && !L.shown && /You asked: draw how the jet works/.test(L.ans) && /A jet engine pulls air in/.test(L.ans) && !/can(no|’|')t draw/i.test(L.ans + c.text), '“draw how the jet works” draws, and the lesson waits behind the card: ' + JSON.stringify([c.parts.length, L]));
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(200);
+    L = await lessonNow();
+    expect((await card()).status === 'cleared' && L && !L.shown, 'Escape clears the drawing; the lesson stays behind it');
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+    L = await lessonNow();
+    expect(await page.evaluate((h) => !document.querySelector(h), LIVE) && L && L.shown && L.step === '0', 'closing her card brings the lesson back, where it was: ' + JSON.stringify(L));
+    // a question on a step that the page can't answer: asked with the rule for questions (no more “this page does not explain”)
+    await replies([{ answer: 'This page does not say, so from what I know: a jet engine burns fuel to push hot gas out the back.', point: 0, draw: [] }]);
+    await askStep('how does a jet engine work?');
+    await page.waitForFunction((h) => /burns fuel/.test(document.querySelector(h).shadowRoot.querySelector('.ct-ans').textContent), LESSON, { timeout: 8000 });
+    P = await prompts();
+    expect(P.length === 1 && /answer from what you know/.test(P[0]) && /Never say that you cannot explain or draw/.test(P[0]) && !/never add facts/.test(P[0]) && await page.evaluate((h) => !document.querySelector(h), LIVE), 'a step’s question is asked with the rule for questions: ' + P[0].slice(-400));
+    // a drawing asked for on a step, and none comes: her words and the plain line, in the lesson card
+    await replies([{ answer: 'Just words.', steps: [] }, { answer: 'Still words.', steps: [] }]);
+    await askStep('sketch it');
+    await page.waitForFunction((h) => /Still words/.test(document.querySelector(h).shadowRoot.querySelector('.ct-ans').textContent), LESSON, { timeout: 8000 });
+    L = await lessonNow();
+    expect(L.ans.includes(await say('live_no_drawing')) && L.shown && (await prompts()).length === 2, 'no drawing on a step: her words and the plain line: ' + L.ans);
+    await inWorld('CassieTeach.stop(), 1');
+    expect(!X.errors.length, 'page errors: ' + X.errors.join('; '));
+  } finally { await X.close(); }
 });
 
 test('Talk with Cassie: a voice conversation, and Teach Cassie (she asks questions, no formatting read aloud)', async (b) => {

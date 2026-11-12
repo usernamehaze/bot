@@ -694,7 +694,10 @@
       followPaint(); // (her cursor comes back beside the mouse)
       if (opts.onClose) opts.onClose();
     }
-    const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+    // parked: her drawing card (live.js) is in front, and this lesson waits behind it, out of sight
+    let parked = false;
+    const park = (on) => { parked = !!on; host.style.display = parked ? 'none' : ''; if (parked) hush(); };
+    const onKey = (e) => { if (e.key === 'Escape' && !parked) { e.stopPropagation(); close(); } };
     addEventListener('scroll', onScroll, true); addEventListener('resize', onResize); addEventListener('wheel', onWheel, { capture: true, passive: true });
     addEventListener('keydown', onKey, true);
     $('.ct-again').addEventListener('click', () => { const a = opts.again; close(); if (a) a(); });
@@ -773,6 +776,29 @@
         return;
       }
       ansOut.textContent = 'Cassie is thinking…';
+      // "draw it": she draws on her own card (live.js). The lesson waits behind the card and comes back when it closes.
+      const L = window.CassieLive;
+      if (L && L.wants(q)) {
+        const picture = inPanel ? opts.image : opts.shot;
+        const send = async (ask, maxTokens) => {
+          const r = await chrome.runtime.sendMessage({ type: 'CASSIE_VISION', image: picture, prompt: ask, maxTokens });
+          if (!r || r.error) throw new Error((r && r.error) || 'ask failed');
+          return String(r.reply || '');
+        };
+        let got = null;
+        try { got = await L.from({ send, ask: L.prompt({ q, draw: true, page: { title: lesson.title || document.title }, said: steps.slice(0, at + 1).map((x) => x.say) }), draw: true }); }
+        catch (err) { if (my === asking && alive) ansOut.textContent = L.problem(err); return; }
+        if (my !== asking || !alive) return;
+        ansOut.textContent = (got.answer + (got.kind === 'card' ? '' : ' ' + window.CassieErrors.say('live_no_drawing'))).trim().slice(0, 1500);
+        qa.push({ q, a: ansOut.textContent });
+        host.dataset.answered = String(qa.length);
+        if (got.kind !== 'card') return;
+        let room = null;
+        if (inPanel) { room = document.createElement('div'); host.after(room); }
+        park(true);
+        L.play(got.scene, { q, send, mount: room, image: picture, save: false, onClose: () => { if (room) room.remove(); if (alive) park(false); } });
+        return;
+      }
       const count = numbered ? parts.length : 0;
       let reply = '';
       try {
@@ -880,6 +906,16 @@
   - If you cannot read a part clearly, say so in that step instead of guessing.
   - Point at and draw on the lesson itself only: never on the app's or browser's own toolbars, menus, tabs or page thumbnails, and never on empty space.
   No markdown, no emojis, no symbols that sound odd read aloud.`;
+  // what keeps her true when the student asks something (a question on a step here, and every question in
+  // live.js): the page's own words stay the page's, and what goes beyond the page is her own knowledge, said so once
+  const ASKED = `Be truthful:
+  - Say in a few words what you see on the screen.
+  - What the page says comes only from the page: quote its own words correctly, and never make up words, numbers or names for it.
+  - When the question goes beyond what the page shows, answer from what you know, and say so once in plain words, like "This page does not explain it, so here is how it works."
+  - If you cannot tell what the thing on the screen is, say what you need to see or know. Do not guess.
+  - Never say that you cannot explain or draw something because the page does not show it.
+  - Point only at the lesson itself: never at the app's or browser's own toolbars, menus, tabs or page thumbnails, and never at empty space.
+  Use the language the student asked in. No markdown, no emojis, no symbols that sound odd read aloud.`;
   // a question about the step on screen: answered from the same picture, and she may point and draw
   function followPrompt({ q, steps = [], at = 0, title = '', items = [] }) {
     const list = items.map((p) => `${p.n}. ${p.what} at [${p.box.join(', ')}]`).join('\n');
@@ -887,12 +923,12 @@
   ${steps.slice(0, at + 1).map((x, i) => `${i + 1}. ${x.say}`).join('\n')}
   The step on their screen now: "${(steps[at] || {}).say || ''}"
   ${list ? `Things on the screen you can point at, numbered, each with its box [x, y, w, h] as shares of the picture:\n${list}\n` : ''}The student asks: "${q}"
-  Answer it like a kind tutor, from what the page shows, in under 80 words. Then show them where on the screen.
+  Answer it like a kind tutor in under 80 words. Then show them where on the screen, when the answer is on it.
   Reply with ONLY minified JSON, no other text:
   {"answer":"your answer","point":${list ? '3' : '{"x":0.4,"y":0.3}'},"draw":[{"shape":"circle","x":0.4,"y":0.3,"r":0.05}]}
   "point" is where your arrow goes${list ? ' (a number on the list, a spot on the picture, or 0 for nothing)' : ' (a spot on the picture, or null for nothing)'}.
   ${TEACH_SHAPES(!!list)}
-  ${ACCURATE}`;
+  ${ASKED}`;
   }
   function answer(reply) {
     const d = jsonOf(reply);
@@ -978,7 +1014,7 @@
   // where her cursor sits: beside the pointer, down and to the right, so it never covers what the student points at
   const followAt = () => (lastPointer ? { x: lastPointer.x + 16, y: lastPointer.y + 18 } : null);
 
-  window.CassieTeach = { parse, scan, show, stop, prompt, followPrompt, answer, problem, run, lessonFrom, follow: { set: followSet, hide: followHide, at: followAt, get on() { return followOn; } }, get active() { return !!current; } };
+  window.CassieTeach = { parse, scan, show, stop, prompt, followPrompt, answer, problem, run, lessonFrom, truth: { page: ACCURATE, asked: ASKED }, shapes: TEACH_SHAPES, follow: { set: followSet, hide: followHide, at: followAt, get on() { return followOn; } }, get active() { return !!current; } };
 
   // on a web page: the side panel asks for the parts, then shows the lesson (top frame only)
   const onCassieSite = document.querySelector('meta[name="cassie-app"]') || /(^|\.)askcassie\.pages\.dev$|(^|\.)usernamehaze\.github\.io$/.test(location.hostname);
