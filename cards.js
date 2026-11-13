@@ -339,6 +339,7 @@
     open, close, add, fromText, fromMistakes,
     dueCount: () => (ctx ? dueOf().length : 0),
     count: () => (ctx ? all().length : 0),
+    decks: () => (ctx ? decks() : []), // (each deck: { name, total, due, learned }, most due first)
     _grade: grade,
   };
 })();
