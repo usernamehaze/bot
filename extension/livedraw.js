@@ -184,7 +184,7 @@ export async function render(host, rawSpec, opts = {}) {
     say.textContent = '';
     for (let i = 0; i < text.length; i += 3) { say.textContent = text.slice(0, i + 3); await sleep(16); }
   };
-  const view = spec.mode === '3d' ? await draw3d(stage, spec, { animate, setSay, hint }) : draw2d(stage, spec, { animate, setSay, hint });
+  const view = spec.mode === '3d' ? await draw3d(stage, spec, { animate, setSay, hint, real: true, callout: true }) : draw2d(stage, spec, { animate, setSay, hint });
   if (!view) { // no 3D on this phone: say what it would have shown
     stage.remove();
     say.textContent = `${spec.intro ? spec.intro + ' ' : ''}${spec.parts.map((p, i) => `${i + 1}. ${p.label}: ${p.say}`).join(' ')}`;
