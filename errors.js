@@ -154,6 +154,7 @@
     live_speaking: 'Cassie is speaking.',
     live_paused: 'Cassie is paused. Tap Play to go on.',
     live_done: 'Cassie finished drawing.',
+    live_fixed: 'Cassie checked her drawing and fixed it.',
     live_cleared: 'Cleared. Ask again, or tap Replay.',
     live_failed: 'Cassie couldn’t answer that just now. Tap Try again.',
     live_no_drawing: 'Cassie couldn’t draw that just now. Ask again to try once more.',

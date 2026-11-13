@@ -123,6 +123,14 @@ jet engine works".
   know what you are looking at. It is the same drawer, and the same drawing
   instructions and examples, as in the Cassie app. Every card says
   **Simplified sketch**, because that is what it is.
+- **Drawn from what is on your screen.** If the thing you ask about is in the
+  picture she took (a photo, a figure, a product), she draws that very one:
+  its outline, proportions, the side it is seen from and its real colours.
+  If it isn't there, she draws it the way a good textbook figure looks.
+- **She checks her own work (Plus and Pro).** The first drawing shows at once.
+  Then she looks at a picture of it, name by name and shape by shape; if
+  something is wrong, the corrected drawing takes its place when she has
+  finished speaking, and the card says so.
 - A drawing is asked of Cassie's best model first, on her server. Your own
   keys are used only if her server can't answer.
 - If the page doesn't explain what you asked, she says so once and explains
@@ -134,7 +142,8 @@ jet engine works".
 - Leave the box empty for a step-by-step lesson on the page itself.
 - **In 3D:** ask "in 3D", or ask to be shown how parts go together ("show me
   how to attach the camera"), and she builds a 3D model over the page, part by
-  part, each part named as it is built. It sits on a soft panel of its own beside her card, side on, with
+  part, each part named as it is built. Its parts have their real finish (metal, plastic, rubber, wood) under a soft
+  studio light, with a soft shadow under the model. It sits on a soft panel of its own beside her card, side on, with
   the names in a column on each side. Drag it to turn it, tap a part to read
   about it, **Close the case / Open it up**, **Pull apart**, and **Clear**
   takes it off the page. 3D is for made things with hard parts (machines,
