@@ -781,7 +781,7 @@
       if (L && L.wants(q)) {
         const picture = inPanel ? opts.image : opts.shot;
         const send = async (ask, maxTokens) => {
-          const r = await chrome.runtime.sendMessage({ type: 'CASSIE_VISION', image: picture, prompt: ask, maxTokens });
+          const r = await chrome.runtime.sendMessage({ type: 'CASSIE_VISION', image: picture, prompt: ask, maxTokens, best: true });
           if (!r || r.error) throw new Error((r && r.error) || 'ask failed');
           return String(r.reply || '');
         };

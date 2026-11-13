@@ -8449,7 +8449,7 @@ test('extension: the pop-up is for highlights (a code screenshot opens it too, a
     expect(sw, 'the Cassie extension did not start');
     const fake = () => sw.evaluate(() => {
       self.__prompts = []; self.__images = [];
-      self.readPicture = async (keys, msg) => { self.__prompts.push(String(msg.prompt || '')); self.__images.push(String(msg.image || '').slice(0, 30)); return 'What I read:\n```python\nfor i in range(3):\n    print(i * 2)\n```\nIt counts 0, 1 and 2 and prints each one doubled: 0, 2, 4.'; };
+      self.readPicture = async (keys, msg) => { self.__prompts.push(String(msg.prompt || '')); (self.__bests || (self.__bests = [])).push(!!msg.best); self.__images.push(String(msg.image || '').slice(0, 30)); return 'What I read:\n```python\nfor i in range(3):\n    print(i * 2)\n```\nIt counts 0, 1 and 2 and prints each one doubled: 0, 2, 4.'; };
     });
     await fake();
     await sw.evaluate(() => chrome.storage.local.set({ cassieHighlight: 'on', cassieHideNoted: false }));
@@ -8770,7 +8770,7 @@ async function liveExt({ viewport = { width: 1280, height: 800 } } = {}) {
     const cap = chrome.tabs.captureVisibleTab.bind(chrome.tabs);
     chrome.tabs.captureVisibleTab = (...a) => { self.__shots++; return cap(...a); };
     self.readPicture = async (keys, msg) => {
-      self.__prompts.push(String(msg.prompt || '')); self.__images.push(String(msg.image || '').slice(0, 22) + ':' + String(msg.image || '').length);
+      self.__prompts.push(String(msg.prompt || '')); (self.__bests || (self.__bests = [])).push(!!msg.best); self.__images.push(String(msg.image || '').slice(0, 22) + ':' + String(msg.image || '').length);
       if (self.__wait) await new Promise((r) => setTimeout(r, self.__wait));
       const next = self.__replies.length ? self.__replies.shift() : '{"answer":"(none)","steps":[]}';
       if (next === 'THROW') throw new Error('boom');
@@ -8780,9 +8780,10 @@ async function liveExt({ viewport = { width: 1280, height: 800 } } = {}) {
     self.teachFail = async () => {};
     return chrome.storage.local.set({ teachVoice: 'on', teachAuto: 'off' });
   });
-  const replies = (list) => sw.evaluate((l) => { self.__replies = l.map((x) => (typeof x === 'string' ? x : JSON.stringify(x))); self.__prompts = []; self.__images = []; }, list);
+  const replies = (list) => sw.evaluate((l) => { self.__replies = l.map((x) => (typeof x === 'string' ? x : JSON.stringify(x))); self.__prompts = []; self.__images = []; self.__bests = []; }, list);
   const prompts = () => sw.evaluate(() => self.__prompts.slice());
   const images = () => sw.evaluate(() => self.__images.slice());
+  const bests = () => sw.evaluate(() => (self.__bests || []).slice());
   const shots = () => sw.evaluate(() => self.__shots);
   const page = ctx.pages()[0] || await ctx.newPage();
   const errors = [];
@@ -8825,7 +8826,7 @@ async function liveExt({ viewport = { width: 1280, height: 800 } } = {}) {
   const gone = async () => { await page.keyboard.press('Escape'); await page.waitForTimeout(150); await page.keyboard.press('Escape'); await page.waitForTimeout(250); };
   const fixture = (name) => fs.readFileSync(path.join(ROOT, 'tests/fixtures/live', name + '.json'), 'utf8');
   const close = async () => { await ctx.close(); fs.rmSync(profile, { recursive: true, force: true }); };
-  return { ctx, sw, page, errors, replies, prompts, images, shots, open, world, on, card, tap, until, summon, ask, toEnd, gone, fixture, close, LIVE, LESSON, EXT };
+  return { ctx, sw, page, errors, replies, prompts, images, bests, shots, open, world, on, card, tap, until, summon, ask, toEnd, gone, fixture, close, LIVE, LESSON, EXT };
 }
 
 test('Cassie’s live drawing in the extension (3.67): Ctrl twice opens “Ask Cassie about your screen” with a mic; she looks once, when asked, and draws beat by beat on her card beside the page, from her own knowledge when the page lacks it (never “I can’t draw that from this page”); Pause, Play, Back, Next, Replay; Clear and Escape remove everything she drew; the card docks off what the question is about; Reduce Motion draws whole; a highlight still gets its choices and an empty question the page lesson; the parser keeps only what makes sense; no new permission', async () => {
@@ -8877,7 +8878,7 @@ test('Cassie’s live drawing in the extension (3.67): Ctrl twice opens “Ask C
     await sw.evaluate(() => { self.__wait = 0; });
     await until({ beat: '0' });
     P = await prompts();
-    expect(P.length === 1 && P[0].includes('The student asks: "how does a jet work?"') && /answer from what you know/.test(P[0]) && /Never say that you cannot explain or draw something because the page does not show it/.test(P[0]) && /"beats"/.test(P[0]) && !/never add facts|Teach only what this page or picture shows/.test(P[0]), 'she is asked with the rule for questions and the drawing form: ' + P[0].slice(0, 300));
+    expect(P.length === 1 && P[0].includes('The student asks: "how does a jet work?"') && /answer from what you know/.test(P[0]) && /Never say that you cannot explain or draw something because the page does not show it/.test(P[0]) && /"mode":"2d"/.test(P[0]) && /"anchor"/.test(P[0]) && /Never a plain circle or box for a real object/.test(P[0]) && !/never add facts|Teach only what this page or picture shows/.test(P[0]), 'she is asked with the rule for questions and the drawing form: ' + P[0].slice(0, 300));
     expect((await shots()) === 2 && !(await popText()), 'one more picture for this question, and her answer box makes way for the card');
     // beat 1 draws its own 2 parts, one after the other; the other 14 wait
     let seen = { moving: false, mid: false, cursor: false, early: false, counts: new Set() };
@@ -9055,7 +9056,7 @@ test('Cassie’s live drawing in the extension (3.67): Ctrl twice opens “Ask C
       const many = L.parse(JSON.stringify({ beats: Array.from({ length: 12 }, (_, i) => ({ say: 'Beat ' + i + '.', draw: Array.from({ length: 12 }, () => ({ shape: 'curve', points: [[10, 10], [30, 30]] })) })) }));
       out.many = [many.scene.beats.length, Math.max(...many.scene.beats.map((b) => b.parts.length)), many.scene.beats.reduce((n, b) => n + b.parts.length, 0)];
       out.wants = ['draw how the jet works', 'can you sketch it?', 'make a diagram of this', 'Can you show me exactly how?', 'iguhit mo ito', 'what is this page about?', 'explain this diagram', 'what does this drawing show?', 'how does a jet work?'].map((q) => +L.wants(q)).join('');
-      out.prompts = [/The student asks: "q1"/.test(L.prompt({ q: 'q1' })), /kettle/.test(L.prompt({ q: 'q1' })), /POINT at their screen/.test(L.prompt({ q: 'q1' })) && /DRAW it on a card/.test(L.prompt({ q: 'q1' })), /answer from what you know/.test(L.prompt({ q: 'q1', draw: true })), /Teach only what this page or picture shows/.test(CassieTeach.prompt({ q: '', page: { title: 't', items: [] } })), !/answer from what you know/.test(CassieTeach.prompt({ q: '', page: { title: 't', items: [] } }))];
+      out.prompts = [/The student asks: "q1"/.test(L.prompt({ q: 'q1' })), /"title":"The water cycle"/.test(L.prompt({ q: 'q1' })), /POINT at their screen/.test(L.prompt({ q: 'q1' })) && /DRAW it on a card/.test(L.prompt({ q: 'q1' })), /answer from what you know/.test(L.prompt({ q: 'q1', draw: true })), /Teach only what this page or picture shows/.test(CassieTeach.prompt({ q: '', page: { title: 't', items: [] } })), !/answer from what you know/.test(CassieTeach.prompt({ q: '', page: { title: 't', items: [] } }))];
       return out;
     })()`);
     expect(parsed.good.join() === ['card', 6, 16, 'How a jet engine pushes', '{"x":0.02,"y":0.2,"w":0.24,"h":0.42}', 'A jet engine'].join(), 'a good reply is read whole: ' + JSON.stringify(parsed.good));
@@ -9256,6 +9257,60 @@ test('Cassie’s live drawing, the rest: a follow-up adds to the drawing or star
   } finally { await X.close(); }
 });
 
+test('Cassie’s live drawing, real outlines (3.68): a drawing comes in the Cassie app’s own form with its three examples, is drawn by the app’s drawer part by part, each part named as it is drawn, names never on top of each other; her best model (her server) is asked first; a soft or living thing asked for in 3D is drawn flat and she says so; Clear removes it', async () => {
+  const appSrc = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8'), liveSrc = fs.readFileSync(path.join(ROOT, 'extension/live.js'), 'utf8'), bgSrc = fs.readFileSync(path.join(ROOT, 'extension/background.js'), 'utf8');
+  for (const k of ['PHOTO', 'HOUSE', 'WATER']) { const m = appSrc.match(new RegExp('^const LD_EXAMPLE_' + k + ' = (\\{.*\\});$', 'm')); expect(m && liveSrc.includes(m[1]), 'the ' + k + ' example in the extension is the app’s, word for word'); }
+  expect(/if \(msg\.best\) \{\s*try \{ return await viaServer\(/.test(bgSrc) && bgSrc.indexOf('if (msg.best)') < bgSrc.indexOf('try { return await visionViaGemini'), 'a drawing asks Cassie’s server first, the student’s own keys after');
+  const X = await liveExt();
+  const { page, replies, prompts, bests, card, tap, until, ask, fixture, LIVE } = X;
+  try {
+    const inWorld = await X.open(`http://localhost:${APP_PORT}/tests/fixtures/live/pictures.html`);
+    // what shows of the flat drawing
+    const flat = () => page.evaluate((h) => {
+      const r = document.querySelector(h).shadowRoot, st = r.querySelector('.lv-stage-flat'), sv = st && st.querySelector('svg.ld-svg');
+      if (!sv) return { svg: false };
+      const shown = (g) => [...g.children].some((n) => getComputedStyle(n).visibility !== 'hidden');
+      const names = [...sv.querySelectorAll('.ld-labels > g')].map((g) => { const b = (g.querySelector('.ld-lbg') || g.querySelector('text')).getBoundingClientRect(); return { text: g.textContent, x: b.left, y: b.top, w: b.width, h: b.height }; }); // (the name's own box, without its line to the part)
+      const b = st.getBoundingClientRect();
+      return { svg: true, parts: sv.querySelectorAll('.ld-part').length, shown: [...sv.querySelectorAll('.ld-part')].filter(shown).length, names, old: getComputedStyle(r.querySelector('.lv-svg')).display, box: [Math.round(b.width), Math.round(b.height)], heads: [...sv.querySelectorAll('marker path')].map((n) => n.getAttribute('fill')).filter((v, i, a) => a.indexOf(v) === i).length };
+    }, LIVE);
+    await replies([fixture('heart')]);
+    await ask('how does the heart pump blood?');
+    await until({ beat: '0' });
+    const P = await prompts(), B = await bests();
+    expect(P.length === 1 && /"mode":"2d"/.test(P[0]) && /How photosynthesis works/.test(P[0]) && /A house being built/.test(P[0]) && /never a cartoon symbol/.test(P[0]), 'she is asked in the app’s drawing form, with its examples');
+    expect(B.length === 1 && B[0] === true, 'the drawing asks her best model first: ' + JSON.stringify(B));
+    await tap('.lv-play'); // (paused, so each step is looked at whole)
+    let f = await flat(), c = await card();
+    expect(f.svg && f.parts === 7 && f.shown === 0 && f.names.length === 0 && f.old === 'none' && c.dim === '2d', 'the app’s drawer drew it on her card, nothing shown before its beat: ' + JSON.stringify([f.parts, f.shown, f.names.length, f.old, c.dim, c.parts]));
+    expect(f.box[0] >= 480 && Math.abs(f.box[0] / f.box[1] - 400 / 260) < 0.05, 'the drawing has room on a wider card: ' + JSON.stringify(f.box));
+    for (let i = 1; i <= 7; i++) {
+      await tap('.lv-next'); await page.waitForTimeout(200);
+      f = await flat();
+      expect(f.shown === i && f.names.length === i && f.names[i - 1].text.startsWith(i + ' '), `part ${i} is drawn and named in its beat: ` + JSON.stringify([f.shown, f.names.map((n) => n.text)]));
+    }
+    const over = f.names.some((a, i) => f.names.some((b, j) => j > i && a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h));
+    expect(!over && f.heads >= 2, 'no name sits on another, and arrowheads take their part’s colour: ' + JSON.stringify(f.names.map((n) => n.text)) + ' ' + f.heads);
+    c = await card();
+    expect(/Simplified sketch/.test(c.sub) && c.title === 'How the human heart works', 'it says what it is: ' + c.title + ' / ' + c.sub);
+    // Back takes the last part and its name away again
+    await tap('.lv-back'); await page.waitForTimeout(200);
+    f = await flat();
+    expect(f.shown === 6 && f.names.length === 6, 'Back takes a part and its name away: ' + JSON.stringify([f.shown, f.names.length]));
+    await tap('.lv-clear'); await page.waitForTimeout(200);
+    f = await flat(); c = await card();
+    expect(!f.svg && c.status === 'cleared', 'Clear removes everything she drew: ' + JSON.stringify([f.svg, c.status]));
+    // asked for in 3D, a soft or living thing is drawn flat, and she says so; a machine is still a model
+    const pr = JSON.parse(await inWorld(`JSON.stringify([CassieLive.prompt({ q: 'show me the human heart in 3D', dim: '3d' }), CassieLive.prompt({ q: 'show me a jet engine in 3D', dim: '3d' })])`));
+    expect(/draw it flat, and say that in a few words/.test(pr[0]) && /"mode":"2d"/.test(pr[0]) && !/"mode":"3d"/.test(pr[0]), 'a heart asked for in 3D is drawn flat');
+    expect(/"mode":"3d"/.test(pr[1]) && /Machines, engines, devices/.test(pr[1]), 'a machine asked for in 3D is a model');
+    // a reply cut off mid-part keeps its whole parts
+    const cut = await inWorld(`(() => { const t = ${JSON.stringify(fixture('heart'))}; const g = CassieLive.parse(t.slice(0, Math.floor(t.length * 0.7))); return g.kind + ':' + (g.scene ? g.scene.dim + ':' + g.scene.spec.parts.length : ''); })()`);
+    expect(/^card:flat:[3-6]$/.test(cut), 'a reply cut short keeps its whole parts: ' + cut);
+    expect(!X.errors.length, 'no script errors: ' + X.errors.join(' | '));
+  } finally { await X.close(); }
+});
+
 test('Cassie’s live drawing in the side panel: Ask Cassie draws on the page when it can; on a tab she can’t draw on, she draws on her board in the panel and says why; Look at another window takes one picture, when asked, and stops sharing at once; then she draws or points on that picture; a share that is turned down says so', async () => {
   const X = await liveExt();
   const { ctx, sw, page, replies, prompts, images, shots, fixture, LIVE, LESSON } = X;
@@ -9380,7 +9435,7 @@ test('Cassie’s live drawing in the side panel: Ask Cassie draws on the page wh
   } finally { await X.close(); }
 });
 
-test('Cassie’s live drawing in 3D: asked for 3D, or to be shown how parts go together, she builds a model part by part over the page with no background, each part named as it is built; Close the case, Pull apart, a tapped part, a sticky note; Clear and Escape remove it; the model builder and three.js are the app’s own copies and load only then; where 3D can’t show (no WebGL, Reduce Motion) the same answer is a flat drawing; in the side panel the model sits in her card; no new permission', async () => {
+test('Cassie’s live drawing in 3D: asked for 3D, or to be shown how parts go together, she builds a model part by part over the page on a soft backing of its own, each part named as it is built; Close the case, Pull apart, a tapped part, a sticky note; Clear and Escape remove it; the model builder and three.js are the app’s own copies and load only then; where 3D can’t show (no WebGL, Reduce Motion) the same answer is a flat drawing; in the side panel the model sits in her card; no new permission', async () => {
   const same = (a, c) => fs.readFileSync(path.join(ROOT, a)).equals(fs.readFileSync(path.join(ROOT, c)));
   expect(same('livedraw.js', 'extension/livedraw.js'), 'extension/livedraw.js is the app’s livedraw.js: copy it over');
   expect(same('explore/three.module.min.js', 'extension/vendor/three.module.min.js') && same('explore/OrbitControls.js', 'extension/vendor/OrbitControls.js') && same('explore/THREE-LICENSE.txt', 'extension/vendor/THREE-LICENSE.txt'), 'the extension’s three.js, its controls and its licence are the repo’s own');
@@ -9426,7 +9481,7 @@ test('Cassie’s live drawing in 3D: asked for 3D, or to be shown how parts go t
     expect(await inWorld('CassieLive.has3d') === true, 'the model builder is asked for now');
     let c = await card(), m = await model();
     expect(c.sub === '3D model · Simplified sketch' && c.title === 'How a jet engine works' && c.parts.length === 0 && c['parts'] !== undefined, 'the card names the model and says it is a simplified sketch: ' + JSON.stringify([c.title, c.sub]));
-    expect(m.floats && m.canvas && !m.inCard && !m.svgShown && /rgba\(0, 0, 0, 0\)|transparent/.test(m.floatBg) && m.float[2] >= 380 && m.float[0] >= 0 && m.float[0] + m.float[2] <= c.box.left + 1, 'the model floats over the page beside her card, with no background: ' + JSON.stringify(m.float) + ' ' + m.floatBg);
+    expect(m.floats && m.canvas && !m.inCard && !m.svgShown && !/rgba\(0, 0, 0, 0\)|transparent/.test(m.floatBg) && m.float[2] >= 380 && m.float[0] >= 0 && m.float[0] + m.float[2] <= c.box.left + 1, 'the model floats over the page beside her card, on a backing of its own so the page behind never muddles it: ' + JSON.stringify(m.float) + ' ' + m.floatBg);
     expect(m.tags.length === 0 && /Drag to turn it/.test(m.hint), 'nothing is named before it is built: ' + JSON.stringify(m.tags));
     // beat by beat: the casing, then the fan with its name, and so on
     await tap('.lv-next'); await until({ beat: '1' }); await page.waitForTimeout(900);

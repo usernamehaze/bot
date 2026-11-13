@@ -165,12 +165,12 @@ async function speakClip(text) {
   if (!r.ok) throw Object.assign(new Error('voice ' + r.status), { usedUp: r.status === 429 || r.status === 503 });
   return { audio: bufToBase64(await r.arrayBuffer()) };
 }
-async function viaServer(messages, maxTokens = 2048) {
+async function viaServer(messages, maxTokens = 2048, most = 4000) {
   let res;
   try {
     res = await fetch(CASSIE_SERVER + '/chat', {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ uid: await cassieUid(), model: 'openai/gpt-oss-120b', messages, max_tokens: Math.min(4000, maxTokens), temperature: 0.5, brain: 'claude' }),
+      body: JSON.stringify({ uid: await cassieUid(), model: 'openai/gpt-oss-120b', messages, max_tokens: Math.min(most, maxTokens), temperature: 0.5, brain: 'claude' }),
     });
   } catch (e) { throw new Error('Couldn’t connect to Cassie. Check your internet connection.'); }
   if (!res.ok) {
@@ -734,6 +734,10 @@ async function readPicture(keys, msg) {
   const prep = await prepareVision(msg.image);
   const ask = async (images, prompt) => {
     let firstErr = null;
+    // (a drawing asks Cassie's best model first, on her server; the student's own keys are the fallback)
+    if (msg.best) {
+      try { return await viaServer([...(msg.system ? [{ role: 'system', content: msg.system }] : []), { role: 'user', content: [{ type: 'text', text: prompt }, ...images.map((u) => ({ type: 'image_url', image_url: { url: u } }))] }], Math.max(5000, msg.maxTokens || 0), 6000); } catch (e) { if (!keys.geminiKey && !keys.groqKey) throw new Error(e.message === 'SERVER_OFF' ? 'no-vision' : e.message); }
+    }
     if (keys.geminiKey) {
       try { return await visionViaGemini(keys.geminiKey, { ...msg, images, prompt }); } catch (e) { firstErr = e; }
     }

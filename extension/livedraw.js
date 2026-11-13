@@ -14,7 +14,8 @@ const num = (v, lo, hi, d = 0) => { const n = +v; return Number.isFinite(n) ? Ma
 const color0 = (c, i) => (typeof c === 'string' && /^#[0-9a-f]{3,8}$/i.test(c.trim()) ? c.trim() : PALETTE[i % PALETTE.length]);
 // (a light page: a very pale colour is darkened so a white cloud or a pale part still shows, AA-ish against white)
 const lum = (h) => { let x = h.slice(1); if (x.length < 6) x = x.slice(0, 3).split('').map((c) => c + c).join(''); const [r, g, b] = [0, 2, 4].map((k) => parseInt(x.slice(k, k + 2), 16) / 255); return .2126 * r + .7152 * g + .0722 * b; };
-const lightPage = () => { try { const m = getComputedStyle(document.body).backgroundColor.match(/[\d.]+/g); return m && (.2126 * m[0] + .7152 * m[1] + .0722 * m[2]) / 255 > .6; } catch (e) { return false; } };
+let paperLight = null; // (a drawing on a card with its own paper, like the extension's: its light or dark, not the page's)
+const lightPage = () => { if (paperLight != null) return paperLight; try { const m = getComputedStyle(document.body).backgroundColor.match(/[\d.]+/g); return m && (.2126 * m[0] + .7152 * m[1] + .0722 * m[2]) / 255 > .6; } catch (e) { return false; } };
 const shade = (h, k) => { let x = h.slice(1); if (x.length < 6) x = x.slice(0, 3).split('').map((c) => c + c).join(''); return '#' + [0, 2, 4].map((i) => Math.round(parseInt(x.slice(i, i + 2), 16) * k).toString(16).padStart(2, '0')).join(''); };
 const color = (c, i) => { const h = color0(c, i); return lightPage() && lum(h) > .55 ? shade(h, .55 / lum(h) * .8) : h; };
 const words = (t, max = 400) => String(t == null ? '' : t).replace(/[–—]/g, ',').replace(/[<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, max);
@@ -215,16 +216,19 @@ export async function render(host, rawSpec, opts = {}) {
 
 // ---------- flat drawings: one stroke at a time, like a pen; each part's name writes on after its last stroke ----------
 const LABEL_FONT = 13, LABEL_PAD = 4;
+let drawings = 0;
 function draw2d(stage, spec, { animate, setSay, hint }) {
   const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('viewBox', '0 0 400 260'); svg.setAttribute('class', 'ld-svg');
   stage.prepend(svg);
   const defs = document.createElementNS(NS, 'defs');
-  defs.innerHTML = '<marker id="ld-head" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker>';
+  // (an arrow's head is the colour of its part: one head for each part, named for this drawing alone)
+  const headId = `ld-head-${++drawings}-`;
+  defs.innerHTML = spec.parts.map((p, i) => `<marker id="${headId}${i}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="${/^#[0-9a-f]{3,8}$/i.test(p.color) ? p.color : 'currentColor'}"/></marker>`).join('');
   svg.appendChild(defs);
   const groups = spec.parts.map((p, i) => {
     const g = document.createElementNS(NS, 'g'); g.setAttribute('class', 'ld-part'); g.style.color = p.color; g.dataset.i = i;
-    for (const s of p.shapes) { const n = shape2d(s, p); if (n) g.appendChild(n); }
+    for (const s of p.shapes) { const n = shape2d(s, p); if (!n) continue; if (n.getAttribute('marker-end')) n.setAttribute('marker-end', `url(#${headId}${i})`); g.appendChild(n); }
     svg.appendChild(g);
     return g;
   });
@@ -334,9 +338,45 @@ function draw2d(stage, spec, { animate, setSay, hint }) {
   let labelEls = [];
   const clearLabels = () => { labels.replaceChildren(); taken.length = 0; labelEls = []; obstacles = null; legend.textContent = ''; legend.hidden = true; markers = 0; };
   const placeAll = () => { clearLabels(); labelEls = groups.map((_, i) => placeLabel(i)); labelEls.forEach((l) => { if (l) l.t.textContent = l.txt; }); return labelEls.some(Boolean) || !spec.parts.some((p) => p.label); };
+  const turns = groups.map(() => 0); // (each show or hide of a part ends the one before it)
+  const dropLabel = (i) => { const l = labelEls[i]; if (!l) return; l.g.remove(); const k = taken.indexOf(l.box); if (k >= 0) taken.splice(k, 1); labelEls[i] = null; };
   const view = {
     hintText,
     get strokes() { return groups.flatMap((g) => [...g.children]); },
+    // one part at a time, for a player with its own pace (the extension's card)
+    has: (i) => !!groups[i],
+    hide(i) { if (!groups[i]) return; turns[i]++; dropLabel(i); for (const n of groups[i].children) { n.style.visibility = 'hidden'; n.style.transition = ''; n.style.strokeDasharray = n.getAttribute('stroke-dasharray') ? '' : ''; n.style.strokeDashoffset = ''; n.style.fillOpacity = ''; if (n.dataset.full != null) n.textContent = n.dataset.full; } },
+    async show(i, atOnce, ms = 2400) {
+      if (!groups[i]) return;
+      const my = ++turns[i], kids = [...groups[i].children];
+      dropLabel(i);
+      if (atOnce || still()) {
+        kids.forEach((n) => { n.style.visibility = ''; n.style.transition = ''; n.style.strokeDasharray = ''; n.style.strokeDashoffset = ''; n.style.fillOpacity = ''; if (n.dataset.full != null) n.textContent = n.dataset.full; });
+        const l = placeLabel(i); labelEls[i] = l; if (l) { l.t.textContent = l.txt; l.g.dataset.done = '1'; }
+        return;
+      }
+      kids.forEach((n) => { n.style.visibility = 'hidden'; });
+      const each = Math.min(600, Math.max(140, (ms * 0.8) / Math.max(1, kids.length)));
+      for (const n of kids) {
+        if (my !== turns[i]) return;
+        n.style.visibility = '';
+        if (n.tagName === 'text') { const full = n.dataset.full != null ? n.dataset.full : (n.dataset.full = n.textContent); n.textContent = ''; for (let k = 1; k <= full.length; k++) { if (my !== turns[i]) { n.textContent = full; return; } n.textContent = full.slice(0, k); await sleep(18); } continue; }
+        let L = 200; try { L = Math.max(8, Math.ceil(n.getTotalLength())); } catch (e) { /* */ }
+        const dashed = n.getAttribute('stroke-dasharray');
+        if (!dashed) { n.style.strokeDasharray = L; n.style.strokeDashoffset = L; } else n.style.opacity = '0';
+        n.style.fillOpacity = '0';
+        void n.getBoundingClientRect();
+        n.style.transition = `stroke-dashoffset ${each}ms ease-in-out, opacity ${each}ms ease, fill-opacity .3s ease ${each}ms`;
+        if (!dashed) n.style.strokeDashoffset = '0'; else n.style.opacity = '';
+        n.style.fillOpacity = '';
+        await sleep(each);
+        if (my !== turns[i]) return;
+        n.style.strokeDasharray = ''; n.style.strokeDashoffset = ''; n.style.transition = '';
+      }
+      if (my !== turns[i]) return;
+      const l = placeLabel(i); labelEls[i] = l;
+      if (l) { for (let k = 1; k <= l.txt.length; k++) { if (my !== turns[i]) return; l.t.textContent = l.txt.slice(0, k); await sleep(22); } l.g.dataset.done = '1'; }
+    },
     async play(again) {
       if (!animate && !again) { // (finished: the names go on once the drawing has a size; a hidden chat measures as nothing)
         if (!placeAll()) { let tries = 0; const retry = () => { if (placeAll() || ++tries > 120 || (!svg.isConnected && tries > 5)) return; setTimeout(retry, 250); }; setTimeout(retry, 250); }
@@ -445,14 +485,27 @@ const loadThree = () => (three || (three = threeFrom()));
 export function useThree(from) { threeFrom = from; three = null; }
 // A 3D model on a stage of the caller's own, with no frame and no buttons, for a player that sets its own pace
 // (the extension's card shows one part at a time with view.show). → { spec, view }, or null (no 3D here, or nothing to build)
+// A flat drawing on a stage of the caller's own, with no frame and no buttons, for a player with its own pace:
+// view.show(i, atOnce, ms) draws part i stroke by stroke within about ms and writes its name; view.hide(i) takes it
+// away. opts.light: the paper is light (true) or dark (false), whatever the page is. → { spec, view }, or null
+export function model2d(stage, rawSpec, opts = {}) {
+  const was = paperLight;
+  if (typeof opts.light === 'boolean') paperLight = opts.light;
+  try {
+    const spec = clean(rawSpec);
+    if (!spec || spec.mode !== '2d') return null;
+    const view = draw2d(stage, spec, { animate: false, setSay: async () => {}, hint: opts.hint || el('div') });
+    return { spec, view };
+  } finally { paperLight = was; }
+}
 export async function model3d(stage, rawSpec, opts = {}) {
   const spec = clean(rawSpec);
   if (!spec || spec.mode !== '3d') return null;
-  const view = await draw3d(stage, spec, { animate: false, setSay: async () => {}, hint: opts.hint || el('div'), turn: !!opts.turn, zoom: opts.zoom !== false, matte: !!opts.matte });
+  const view = await draw3d(stage, spec, { animate: false, setSay: async () => {}, hint: opts.hint || el('div'), turn: opts.turn || false, zoom: opts.zoom !== false, matte: !!opts.matte, callout: !!opts.callout });
   return view ? { spec, view } : null;
 }
 const glOk = () => { try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch (e) { return false; } };
-async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom = true, matte = false }) {
+async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom = true, matte = false, callout = false }) {
   if (!glOk()) return null;
   let lib; try { lib = await loadThree(); } catch (e) { return null; }
   const { T, OrbitControls } = lib;
@@ -471,7 +524,10 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
   const controls = new OrbitControls(cam, canvas); controls.enableDamping = true; controls.enablePan = false; controls.minDistance = 2; controls.maxDistance = 40;
   if (!zoom) controls.enableZoom = false; // (a model that floats over a page: the wheel still scrolls the page)
   // (turn: the model turns slowly by itself until the student takes hold of it)
-  if (turn && !still()) { controls.autoRotate = true; controls.autoRotateSpeed = 1.1; controls.addEventListener('start', () => { controls.autoRotate = false; }); }
+  // turn: true goes all the way round; 'sway' rocks gently about the best side, so a long model is never seen end on
+  let sway = turn === 'sway' && !still();
+  if (turn === true && !still()) { controls.autoRotate = true; controls.autoRotateSpeed = 1.1; controls.addEventListener('start', () => { controls.autoRotate = false; }); }
+  if (sway) controls.addEventListener('start', () => { sway = false; });
   const model = new T.Group(); scene.add(model);
   const AX = { x: new T.Vector3(1, 0, 0), y: new T.Vector3(0, 1, 0), z: new T.Vector3(0, 0, 1) };
   const v3 = (a, d = [0, 0, 0]) => (Array.isArray(a) ? new T.Vector3(num(a[0], -20, 20, d[0]), num(a[1], -20, 20, d[1]), num(a[2], -20, 20, d[2])) : new T.Vector3(...d));
@@ -494,7 +550,7 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
   // the nearest distance along a direction at which every corner of the box is inside the frame, with room for the names
   const fitBox = (bx, dir) => {
     const cs = []; for (const x of [bx.min.x, bx.max.x]) for (const y of [bx.min.y, bx.max.y]) for (const z of [bx.min.z, bx.max.z]) cs.push(new T.Vector3(x, y, z));
-    const probe = cam.clone(), fits = (d) => { probe.position.copy(dir).multiplyScalar(d); probe.lookAt(0, 0, 0); probe.updateMatrixWorld(); probe.updateProjectionMatrix(); return cs.every((c) => { if (c.clone().applyMatrix4(probe.matrixWorldInverse).z > -probe.near * 4) return false; const q = c.clone().project(probe); return Math.abs(q.x) <= .78 && Math.abs(q.y) <= .72; }); };
+    const probe = cam.clone(), fits = (d) => { probe.position.copy(dir).multiplyScalar(d); probe.lookAt(0, 0, 0); probe.updateMatrixWorld(); probe.updateProjectionMatrix(); return cs.every((c) => { if (c.clone().applyMatrix4(probe.matrixWorldInverse).z > -probe.near * 4) return false; const q = c.clone().project(probe); return Math.abs(q.x) <= (callout ? .5 : .78) && Math.abs(q.y) <= (callout ? .8 : .72); }); };
     let lo = .5, hi = 400; for (let k = 0; k < 40; k++) { const mid = (lo + hi) / 2; if (fits(mid)) hi = mid; else lo = mid; }
     return hi;
   };
@@ -508,7 +564,7 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
   groups.forEach((g) => { const b = new T.Box3().setFromObject(g); g.userData.center = b.getCenter(new T.Vector3()); g.userData.home = g.position.clone(); });
   const order = groups.filter((g) => !g.userData.part.shell).sort((a, b) => a.userData.center.dot(ax) - b.userData.center.dot(ax));
   const tagEls = groups.map((g, i) => { const p = g.userData.part; if (!p.label) return null; const t = el('button', 'ld-tag', `${spec.parts.indexOf(p) + 1} ${p.label}`); t.type = 'button'; t.hidden = true; t.addEventListener('click', (e) => { e.stopPropagation(); pick(g); }); tags.appendChild(t); return t; });
-  let exploded = false, opened = false, picked = null, raf = 0, last = performance.now(), visible = true;
+  let exploded = false, opened = false, picked = null, raf = 0, last = performance.now(), visible = true, calloutAz = null, calloutApart = false;
   const shells = groups.filter((g) => g.userData.part.shell);
   const fade = (g, o) => g.traverse((m) => { if (m.material) { m.material.opacity = o; m.material.depthWrite = o > .6; } });
   const hintText = 'Drag to turn it. Pinch to zoom. Tap a part';
@@ -538,11 +594,41 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
     groups.forEach((g) => { const to = g.userData.to; if (to) { g.position.lerp(to, Math.min(1, dt * 6)); if (g.position.distanceTo(to) < .002) { g.position.copy(to); g.userData.to = null; } } });
     groups.forEach((g) => { const sl = g.userData.slide; if (sl) { const k = Math.min(1, Math.max(0, (now - sl.t0 - 400) / 1100)), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2; g.position.lerpVectors(sl.from, g.userData.home, e); if (k >= 1) g.userData.slide = null; } }); // (it waits a moment, then slides home)
     if (camTo) { cam.position.lerp(camTo, Math.min(1, dt * 5)); if (cam.position.distanceTo(camTo) < .01) camTo = null; }
+    else if (sway) { const a = Math.sin(now / 2600) * .32, d = cam.position.length(), y = home.y / home.length(), r = Math.sqrt(1 - y * y), a0 = Math.atan2(home.x, home.z); cam.position.set(Math.sin(a0 + a) * r * d, y * d, Math.cos(a0 + a) * r * d); }
     controls.update();
     renderer.render(scene, cam);
     // each name: a spot near its part, clear of the other names, with a thin line to the part
     const spots = [], segs = [], w = W(), h = H();
-    groups.forEach((g, i) => {
+    if (callout) {
+      // (names stand in a column on each side of the model, never on it, each with a line to its part)
+      const shown = [];
+      groups.forEach((g, i) => {
+        const t = tagEls[i]; if (!t) return;
+        if (!g.visible || (g.userData.part.shell && (opened || exploded))) { t.hidden = true; return; }
+        t.hidden = false; tmp.copy(g.userData.center).add(g.position).sub(g.userData.home); tmp.project(cam);
+        shown.push({ t, px: (tmp.x + 1) / 2 * w, py: (1 - tmp.y) / 2 * h, tw: t.offsetWidth || 80, th: t.offsetHeight || 24 });
+      });
+      let x0 = Infinity, x1 = -Infinity;
+      if (!exploded) for (const x of [fullBox.min.x, fullBox.max.x]) for (const y of [fullBox.min.y, fullBox.max.y]) for (const z of [fullBox.min.z, fullBox.max.z]) { tmp.set(x, y, z).project(cam); const sx = (tmp.x + 1) / 2 * w; x0 = Math.min(x0, sx); x1 = Math.max(x1, sx); }
+      else shown.forEach((s) => { x0 = Math.min(x0, s.px - 48); x1 = Math.max(x1, s.px + 48); });
+      const az = Math.atan2(cam.position.x, cam.position.z);
+      if (calloutAz == null || Math.abs(Math.atan2(Math.sin(az - calloutAz), Math.cos(az - calloutAz))) > 1 || calloutApart !== exploded) { calloutAz = az; calloutApart = exploded; tagEls.forEach((t) => { if (t) t._side = 0; }); }
+      const fresh = shown.filter((s) => !s.t._side).sort((a, b) => a.px - b.px), had = { L: shown.filter((s) => s.t._side === -1).length, R: shown.filter((s) => s.t._side === 1).length };
+      fresh.forEach((s) => { const left = s.px < (x0 + x1) / 2 ? had.L <= had.R + 1 : had.L + 1 < had.R; s.t._side = left ? -1 : 1; if (left) had.L++; else had.R++; });
+      for (const side of [-1, 1]) {
+        const col = shown.filter((s) => s.t._side === side).sort((a, b) => a.py - b.py);
+        let y = -Infinity;
+        col.forEach((s) => { s.y = Math.max(s.py, y + s.th + 8, s.th / 2 + 4); y = s.y; });
+        let cap = h - 4;
+        for (let k = col.length - 1; k >= 0; k--) { const s = col[k]; s.y = Math.min(s.y, cap - s.th / 2); cap = s.y - s.th / 2 - 8; }
+        col.forEach((s) => {
+          const x = side < 0 ? Math.max(s.tw / 2 + 4, x0 - 20 - s.tw / 2) : Math.min(w - s.tw / 2 - 4, x1 + 20 + s.tw / 2);
+          s.t.style.left = x + 'px'; s.t.style.top = s.y + 'px'; s.t.dataset.ax = Math.round(s.px); s.t.dataset.ay = Math.round(s.py);
+          const ex = side < 0 ? x + s.tw / 2 : x - s.tw / 2;
+          segs.push(`<line x1="${ex.toFixed(1)}" y1="${s.y.toFixed(1)}" x2="${s.px.toFixed(1)}" y2="${s.py.toFixed(1)}"/><circle cx="${s.px.toFixed(1)}" cy="${s.py.toFixed(1)}" r="2.5"/>`);
+        });
+      }
+    } else groups.forEach((g, i) => {
       const t = tagEls[i]; if (!t) return;
       if (!g.visible || (g.userData.part.shell && (opened || exploded))) { t.hidden = true; return; }
       t.hidden = false; tmp.copy(g.userData.center).add(g.position).sub(g.userData.home); tmp.project(cam);
