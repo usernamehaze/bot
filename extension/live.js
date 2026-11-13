@@ -680,7 +680,7 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
   const LOOK_SYSTEM = 'You check drawings made for students. Be strict and specific. Reply with ONLY one JSON object.';
   const lookAsk = (q, spec) => `This picture is a ${spec.mode === '3d' ? '3D model' : 'drawing'} for a student, meant to show: "${q}" (titled "${spec.title}").
   Its numbered names are: ${spec.parts.map((p, i) => `${i + 1} = ${p.label}`).join('; ')}.
-  For EACH number, check that its line points at that very thing in the picture (not something else). For each part, check that its shape looks like the real thing. Check every fact, arrow direction and count.
+  For EACH number, check that its line points at that very thing in the picture (not something else). For each part, check that its shape looks like the real thing, as in a textbook figure: a part drawn as a symbol or icon (a valentine heart for a real heart, a star, a lightning bolt) is NOT ok. Check every fact, arrow direction and count (blood is never blue: say oxygen poor blood).
   Reply {"labels":[{"n":1,"ok":true or false,"points_at":"what number 1 really points at"}],"shapes":[{"n":1,"ok":true or false,"why":"what is wrong with its shape"}],"facts":[{"ok":false,"fix":"a wrong fact and the right one"}]} with an entry for every number.`;
   function lookFixes(verdict, spec) {
     if (!verdict || typeof verdict !== 'object') return [];

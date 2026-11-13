@@ -3359,6 +3359,59 @@ test('v254: a 3D model is planned and checked for any subject (nothing floats, p
   await ctx.close();
 });
 
+test('v280: what the screen recording showed: “draw it” draws what the chat is about (never a subject she makes up); a heart drawn as a valentine symbol is sent back with how a real heart looks; a spinning wheel turns in place about its own axle; a 3D name points at its part; a drawing from her server’s backup brain is marked simpler', async (b) => {
+  const calls = [];
+  const fake = async (body) => {
+    const all = JSON.stringify(body.messages);
+    if (/You check drawings|check pictures/.test(all)) return { text: '{"labels":[],"shapes":[],"facts":[]}' };
+    calls.push(all);
+    if (/explains by DRAWING/.test(all)) return { text: JSON.stringify(LD_WATER) };
+    return { text: 'Answer in words.' };
+  };
+  const { ctx, page, errors } = await open(b, { server: false, device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off', fakeGroq: fake, state: { groqKey: 'gsk_test', tab: 'chat' } });
+  await page.evaluate(() => createNewChat());
+  // “draw it” after a question answered in words
+  await page.evaluate(() => { state.messages.push({ role: 'user', content: 'how do bicycle works' }, { role: 'assistant', content: 'A bicycle turns your leg power into forward motion through the chain and the rear wheel.' }); save(); });
+  const back = await page.evaluate(() => ['draw it', 'Draw it!', 'can you draw it in 3d', 'sketch that', 'iguhit mo ito', 'draw me how the heart pumps blood', 'draw a cat'].map((t) => LIVE_BACK_RE.test(t)));
+  expect(back.join() === 'true,true,true,true,true,false,false', 'what counts as “draw it”: ' + back.join());
+  await page.evaluate(() => liveDrawReply('draw it', false));
+  await page.waitForSelector('#chat-log .ld .ld-svg', { timeout: 20000 });
+  const asked = calls.find((c) => /explains by DRAWING/.test(c)) || '';
+  const kept = await page.evaluate(() => { const m = state.messages.filter((x) => x.role === 'user'); return { last: m[m.length - 1].content, q: JSON.parse(state.messages[state.messages.length - 1].display.replace(/^```cassie-draw\n|\n```$/g, '')).q }; });
+  expect(/They mean what this chat is about: \\"how do bicycle works\\"/.test(asked) && /forward motion through the chain/.test(asked), 'she is told what “it” is, and what she said about it');
+  expect(kept.last === 'draw it' && kept.q === 'how do bicycle works', 'the student’s words stay as typed, and Draw again redraws the real subject: ' + JSON.stringify(kept));
+  // a fresh question is not changed
+  calls.length = 0;
+  await page.evaluate(() => liveDrawReply('draw me how a volcano erupts', false));
+  await page.waitForFunction(() => document.querySelectorAll('#chat-log .ld .ld-svg').length >= 2, null, { timeout: 20000 });
+  expect(!/They mean what this chat is about/.test(calls.find((c) => /explains by DRAWING/.test(c)) || ''), 'a question of its own is asked as it is');
+  // the valentine heart, the spinning wheel, the names
+  const r = await page.evaluate(async ([v, bike]) => {
+    const m = await liveDrawLoad();
+    const val = m.check(m.clean(v)), sw = new URL('livedraw.js', location.href);
+    return { val, src: await (await fetch(sw)).text() };
+  }, [JSON.parse(fs.readFileSync(path.join(ROOT, 'tests/fixtures/live/valentine.json'), 'utf8')), null]);
+  expect(r.val.some((x) => /drawn as a valentine heart symbol, not a real heart/.test(x) && /apex/.test(x)), 'a valentine heart is sent back with how a real heart looks');
+  const good = await page.evaluate(async (h) => { const m = await liveDrawLoad(); return m.check(m.clean(h)).filter((x) => /valentine/.test(x)).length; }, JSON.parse(fs.readFileSync(path.join(ROOT, 'tests/fixtures/live/heart.json'), 'utf8')));
+  expect(good === 0, 'a real heart passes');
+  expect(/sp\.rotation\[sp\.userData\.axle\] \+= dt \* 3/.test(r.src) && !/g\.rotation\[spec\.axis\] \+= dt \* 3/.test(r.src), 'a spinning piece turns about its own axle, in place');
+  // the bicycle from the recording: built, its wheels upright (taller than they are deep from the front view)
+  const built = await page.evaluate(async (bike) => {
+    const m = await liveDrawLoad(), st = document.createElement('div'); st.style.cssText = 'position:fixed;left:0;top:0;width:360px;height:240px'; document.body.appendChild(st);
+    const made = await m.model3d(st, bike, { real: true, callout: true });
+    if (!made) return null;
+    for (let i = 0; i < made.spec.parts.length; i++) made.view.show(i, true);
+    await new Promise((res) => setTimeout(res, 1600));
+    const tags = [...st.querySelectorAll('.ld-tag')].filter((t) => !t.hidden).map((t) => t.textContent); made.view.stop(); st.remove(); return tags;
+  }, JSON.parse(fs.readFileSync(path.join(ROOT, 'tests/fixtures/live/bicycle3d.json'), 'utf8')));
+  expect(built === null || built.length >= 5, 'the bicycle builds, every part named: ' + JSON.stringify(built));
+  // her server’s backup brain: the drawing is marked simpler, in words that fit
+  const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
+  expect(/serverSource = res\.headers\.get\('x-cassie-source'\)/.test(app) && (app.match(/simple: !!serverSource && serverSource !== 'claude'/g) || []).length === 2 && /wasn’t free for this one \(busy, or today’s share is used up\)/.test(app), 'a drawing from the backup brain is marked simpler');
+  expect(!errors.length, 'no script errors: ' + errors.join(' | '));
+  await ctx.close();
+});
+
 test('v279: the app draws like the extension: a photo sent with “draw this” is drawn live from the photo; a drawing asked for on the board is drawn by the live drawer and put on the board as a named picture (a graph stays the math board’s); a 3D model has real finishes and is asked for with real profiles; a soft or living thing asked for in 3D is drawn flat', async (b) => {
   const calls = [];
   const fake = async (body) => {

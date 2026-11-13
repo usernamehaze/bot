@@ -72,6 +72,18 @@ function shapeOf(p) {
   if (p.anchor) { const hit = boxes.find((b) => b && p.anchor[0] >= b[0] - 6 && p.anchor[0] <= b[2] + 6 && p.anchor[1] >= b[1] - 6 && p.anchor[1] <= b[3] + 6); if (hit) return hit; }
   return boxes.find(Boolean) || null;
 }
+// (v280) a heart drawn as the valentine symbol: an outline with a dip at the top in the middle, a lobe each side, and
+// its lowest point in the middle. A real heart is a muscle shaped like a rounded cone, with its point down and to the left.
+function valentine(sh) {
+  if (String(sh.t || sh.type || '').toLowerCase() !== 'path') return false;
+  const pts = shapePoints(sh).filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y));
+  if (pts.length < 6) return false;
+  const xs = pts.map((q) => q[0]), ys = pts.map((q) => q[1]), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys), w = x1 - x0, h = y1 - y0, cx = (x0 + x1) / 2;
+  if (w < 40 || h < 40) return false;
+  const low = pts.find((q) => q[1] === y1);
+  if (Math.abs(low[0] - cx) > w * .12) return false;
+  return pts.some(([x, y]) => Math.abs(x - cx) < w * .08 && y - y0 > h * .06 && y - y0 < h * .4 && pts.some((q) => q[0] < x - w * .15 && q[1] < y - h * .04) && pts.some((q) => q[0] > x + w * .15 && q[1] < y - h * .04));
+}
 export function check(spec) {
   const out = [];
   if (spec && spec.mode === '3d') return check3d(spec);
@@ -85,6 +97,7 @@ export function check(spec) {
     if (strokes < 2) out.push(`"${p.label || p.id}" is a single line or shape; draw its real outline and inner lines`);
     const kinds = p.shapes.map((x) => String(x.t || x.type).toLowerCase());
     if (strokes >= 2 && !kinds.some((k) => k === 'path' || k === 'poly' || k === 'line' || k === 'arrow') && !ROUND_THINGS.test(p.label || p.id)) out.push(`"${p.label || p.id}" is only plain circles or boxes; draw its real outline with a path (for a leaf: a pointed tip, a midrib and side veins)`);
+    if (/\b(heart|hearts|puso)\b/i.test(`${spec.title} ${p.label || p.id}`) && !/\b(valentine|symbol|emoji|love|card)\b/i.test(spec.title) && p.shapes.some(valentine)) out.push(`"${p.label || p.id}" is drawn as a valentine heart symbol, not a real heart. Draw the real organ: a rounded cone shape with its point (the apex) down and to the left, wider at the top; the aorta arching over the top, the pulmonary trunk in front of it, the vena cava coming in on the right; inside, the two small atria at the top and the two larger ventricles below, the left ventricle with the thickest wall`);
     if (p.anchor) { const sh = shapeOf(p); if (sh) { const [x0, y0, x1, y1] = sh; if (p.anchor[0] < x0 - 6 || p.anchor[0] > x1 + 6 || p.anchor[1] < y0 - 6 || p.anchor[1] > y1 + 6) out.push(`the anchor of "${p.label || p.id}" is not on its own main shape`); } }
     const xs = pts.map((q) => q[0]), ys = pts.map((q) => q[1]);
     const bb = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
@@ -549,8 +562,22 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
     const g = new T.Group(); g.userData = { i, part: p };
     const fin = real ? ({ metal: [.9, .32], plastic: [.02, .42], rubber: [0, .92], wood: [0, .75] })[p.finish] || [.25, .5] : null;
     const mat = new T.MeshStandardMaterial({ color: new T.Color(p.color), metalness: fin ? fin[0] : matte ? .05 : .5, roughness: fin ? fin[1] : matte ? .65 : .4, side: T.DoubleSide, transparent: true, opacity: 1, emissive: p.glow ? new T.Color(p.color) : new T.Color(0x000000), emissiveIntensity: p.glow ? .55 : 0 });
-    for (const s of p.shapes) { const m = shape3d(T, s, mat, along, v3, AX); if (m) g.add(m); }
+    const made = []; // ([shape, its mesh], for the pieces that spin)
+    for (const s of p.shapes) { const m = shape3d(T, s, mat, along, v3, AX); if (m) { g.add(m); made.push([s, m]); } }
     if (real && !p.shell) g.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } });
+    // (v280) a part that spins: each of its round pieces (a wheel, disc, gear, fan, shaft) turns in place about its own
+    // axle, through its own middle; it never swings round the whole model, and a chain or frame in the part stays still
+    if (p.spin) {
+      const spinners = [];
+      made.forEach(([sh, m]) => {
+        const kind = String(sh.t || sh.type || '').toLowerCase();
+        if (!/^(torus|ring|disc|cylinder|blades|cone|lathe)$/.test(kind)) return;
+        const axle = ['x', 'y', 'z'].includes(sh.axis) ? sh.axis : spec.axis, pivot = new T.Group();
+        pivot.position.copy(m.position); m.position.set(0, 0, 0);
+        g.add(pivot); pivot.add(m); pivot.userData.axle = axle; spinners.push(pivot);
+      });
+      g.userData.spinners = spinners;
+    }
     model.add(g);
     return g;
   }).filter((g) => g.children.length);
@@ -579,7 +606,13 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
   cam.position.copy(home); controls.target.set(0, 0, 0); controls.maxDistance = Math.max(40, home.length() * 3); controls.update();
   // where each part sits (for its name tag, and for pulling it apart along the main axis)
   const ax = AX[spec.axis];
-  groups.forEach((g) => { const b = new T.Box3().setFromObject(g); g.userData.center = b.getCenter(new T.Vector3()); g.userData.home = g.position.clone(); });
+  groups.forEach((g) => {
+    const b = new T.Box3().setFromObject(g), mid = b.getCenter(new T.Vector3());
+    // (v280) a name points AT the part: the middle of its piece nearest its middle (a frame of tubes has an empty middle)
+    let at = mid, best = Infinity;
+    g.traverse((m) => { if (!m.isMesh) return; const c = new T.Box3().setFromObject(m).getCenter(new T.Vector3()), d = c.distanceTo(mid); if (d < best) { best = d; at = c; } });
+    g.userData.center = at; g.userData.home = g.position.clone();
+  });
   const order = groups.filter((g) => !g.userData.part.shell).sort((a, b) => a.userData.center.dot(ax) - b.userData.center.dot(ax));
   const tagEls = groups.map((g, i) => { const p = g.userData.part; if (!p.label) return null; const t = el('button', 'ld-tag', `${spec.parts.indexOf(p) + 1} ${p.label}`); t.type = 'button'; t.hidden = true; t.addEventListener('click', (e) => { e.stopPropagation(); pick(g); }); tags.appendChild(t); return t; });
   let exploded = false, opened = false, picked = null, raf = 0, last = performance.now(), visible = true, calloutAz = null, calloutApart = false;
@@ -608,7 +641,7 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
     raf = requestAnimationFrame(tick);
     if (!visible) return;
     const dt = Math.min(.05, (now - last) / 1000); last = now;
-    if (!still()) groups.forEach((g) => { if (g.userData.part.spin && g.visible) g.rotation[spec.axis] += dt * 3; });
+    if (!still()) groups.forEach((g) => { if (g.visible && g.userData.spinners) g.userData.spinners.forEach((sp) => { sp.rotation[sp.userData.axle] += dt * 3; }); });
     groups.forEach((g) => { const to = g.userData.to; if (to) { g.position.lerp(to, Math.min(1, dt * 6)); if (g.position.distanceTo(to) < .002) { g.position.copy(to); g.userData.to = null; } } });
     groups.forEach((g) => { const sl = g.userData.slide; if (sl) { const k = Math.min(1, Math.max(0, (now - sl.t0 - 400) / 1100)), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2; g.position.lerpVectors(sl.from, g.userData.home, e); if (k >= 1) g.userData.slide = null; } }); // (it waits a moment, then slides home)
     if (camTo) { cam.position.lerp(camTo, Math.min(1, dt * 5)); if (cam.position.distanceTo(camTo) < .01) camTo = null; }
