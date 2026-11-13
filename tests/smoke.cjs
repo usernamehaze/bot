@@ -3359,6 +3359,43 @@ test('v254: a 3D model is planned and checked for any subject (nothing floats, p
   await ctx.close();
 });
 
+test('v279: the app draws like the extension: a photo sent with “draw this” is drawn live from the photo; a drawing asked for on the board is drawn by the live drawer and put on the board as a named picture (a graph stays the math board’s); a 3D model has real finishes and is asked for with real profiles; a soft or living thing asked for in 3D is drawn flat', async (b) => {
+  const calls = [];
+  const fake = async (body) => {
+    const all = JSON.stringify(body.messages);
+    if (/You check drawings|check pictures/.test(all)) return { text: '{"labels":[],"shapes":[],"facts":[]}' };
+    calls.push({ all, image: /image_url|inline_data|data:image/.test(all) });
+    if (/explains by DRAWING/.test(all)) return { text: JSON.stringify(LD_WATER) };
+    return { text: 'Answer in words.' };
+  };
+  const { ctx, page, errors } = await open(b, { server: false, device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off', fakeGroq: fake, state: { groqKey: 'gsk_test', tab: 'chat' } });
+  await page.evaluate(() => createNewChat());
+  // what she is asked
+  const pr = await page.evaluate(() => [liveDrawPrompt(false, { picture: true }), liveDrawPrompt(true), liveDrawPrompt(false, { flatNote: true }), liveDrawPrompt(false)]);
+  expect(/The student sent a picture with the question\. Look at it first/.test(pr[0]) && /draw THAT one/.test(pr[0]) && !/The student sent a picture/.test(pr[3]), 'with a picture she draws the very thing in it');
+  expect(/"finish":"metal"\|"plastic"\|"rubber"\|"wood"/.test(pr[1]) && /lathe \{profile/.test(pr[1]) && /pipe \{pts/.test(pr[1]) && /not like toy blocks/.test(pr[1]), 'a model is asked for with real finishes and profiles');
+  expect(/They asked for 3D, but/.test(pr[2]) && /never as a cartoon symbol/.test(pr[3]) && /30 or more strokes/.test(pr[3]), 'flat drawings are asked for like a textbook figure');
+  // a photo and "draw this": drawn live, from the photo
+  const PX = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  await page.evaluate((px) => { attachments = [{ kind: 'image', status: 'ready', name: 'photo.png', image: { mimeType: 'image/png', base64: px, dataUrl: 'data:image/png;base64,' + px } }]; return handleSend('draw this and name its parts'); }, PX);
+  await page.waitForSelector('#chat-log .ld .ld-svg', { timeout: 20000 });
+  const chat = await page.evaluate(() => ({ pop: !!document.querySelector('.ld-pop'), userImg: !!document.querySelector('#chat-log img[src^="data:image/png"]'), left: attachments.length, last: state.messages[state.messages.length - 2] }));
+  const drew = calls.find((c) => /explains by DRAWING/.test(c.all));
+  expect(!chat.pop && chat.userImg && chat.left === 0 && /^\[I sent a picture\.\] draw this/.test(chat.last.content) && chat.last.display === 'draw this and name its parts', 'the photo and the question show as sent, and she draws at once: ' + JSON.stringify(chat));
+  expect(drew && drew.image && /The student sent a picture with the question/.test(drew.all), 'the photo went to her with the drawing form');
+  // on the board: the live drawer draws it, and its finished picture goes on the board
+  const n0 = calls.length;
+  const out = await page.evaluate(async () => { const o = await askBoard('data:image/png;base64,', 'draw how the water cycle works', { strokes: [] }); return { reply: o.reply, pic: String(o.picture || '').slice(0, 22), draw: !!o.draw }; });
+  expect(out.pic.startsWith('data:image/') && /1\. /.test(out.reply) && !out.draw && calls.slice(n0).some((c) => /explains by DRAWING/.test(c.all) && !c.image), 'a drawing asked for on a blank board comes back as a named picture: ' + JSON.stringify(out).slice(0, 200));
+  const g = await page.evaluate(async () => { const o = await askBoard('data:image/png;base64,', 'draw the graph of y = x^2', { strokes: [] }); return { pic: !!o.picture, draw: !!o.draw }; });
+  expect(!g.pic, 'a graph stays the math board’s: ' + JSON.stringify(g));
+  // a model in the chat: real finishes and a floor that catches its shadow, names beside it
+  const src = fs.readFileSync(path.join(ROOT, 'livedraw.js'), 'utf8');
+  expect(/draw3d\(stage, spec, \{ animate, setSay, hint, real: true, callout: true \}\)/.test(src), 'the app’s own 3D view is the realistic one');
+  expect(!errors.length, 'no script errors: ' + errors.join(' | '));
+  await ctx.close();
+});
+
 test('v253: "draw" asks how to show it (Draw it, 3D model, Real photo with Gemini, Just explain; asked every time, the last way first; a 3D ask skips it; Show another way asks again); each name points at its own part from clear space; the drawing starts before the check ends; the check asks about every number and a wrong one is redrawn and swapped in place; plain circles for a real thing are flagged; small actions in one row', async (b) => {
   const calls = []; let lookReply = () => '{"labels":[],"shapes":[],"facts":[]}', lookDone = 0;
   const fake = async (body) => {
@@ -3442,8 +3479,12 @@ test('v253: "draw" asks how to show it (Draw it, 3D model, Real photo with Gemin
   expect(await page.evaluate(() => state.lastShowAs === 'explain'), '8. Show another way asks again, and Just explain answers in words');
   // 9. a 3D ask skips the question; with Gemini, Real photo is offered
   await page.evaluate(() => createNewChat()); const b3 = calls.length;
+  await page.fill('#prompt-input', 'show me a 3D model of a jet engine'); await page.click('#send-btn'); await page.waitForTimeout(800);
+  expect(!(await page.locator('.ld-pop').count()) && calls.slice(b3).some((c) => /"mode": "3d"/.test(c.sys || '') && /"finish":"metal"\|"plastic"\|"rubber"\|"wood"/.test(c.sys || '')), '9. a 3D ask goes straight to a 3D model, asked for with real finishes');
+  // (v279) a soft or living thing asked for in 3D is drawn flat, and she is told to say so
+  await page.evaluate(() => createNewChat()); const b4 = calls.length;
   await page.fill('#prompt-input', 'show me a 3D model of a heart'); await page.click('#send-btn'); await page.waitForTimeout(800);
-  expect(!(await page.locator('.ld-pop').count()) && calls.slice(b3).some((c) => /"mode": "3d"/.test(c.sys || '')), '9. a 3D ask goes straight to a 3D model');
+  expect(!(await page.locator('.ld-pop').count()) && calls.slice(b4).some((c) => /"mode": "2d"/.test(c.sys || '') && /They asked for 3D, but a 3D model here is built from simple solids/.test(c.sys || '') && /never as a cartoon symbol/.test(c.sys || '')), '9b. a heart asked for in 3D is drawn flat');
   await page.waitForFunction(() => !document.querySelector('#chat-log .ld-loading') && !!document.querySelector('#chat-log .ld'), null, { timeout: 30000 });
   const four = await page.evaluate(() => { createNewChat(); state.geminiKey = 't'; geminiImageOff = false; liveShowAsk('draw me a leaf'); const r = [...document.querySelectorAll('.ld-pop .ld-pop-name')].map((x) => x.textContent); liveShowClose(false); state.geminiKey = ''; return r; });
   expect(four.join() === 'Just explain,Draw it,3D model,Real photo', '9. with Gemini there are four ways (the one used last first): ' + four.join());
