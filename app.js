@@ -2611,7 +2611,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=279'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=280'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2633,7 +2633,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=279'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=280'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -2909,7 +2909,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=279').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=280').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -4764,6 +4764,7 @@ const chatHeaders = () => { const t = authToken(); return { 'content-type': 'app
 const waitAtMost = (ms) => (typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(ms) : undefined);
 var SERVER_WAIT = { chat: 90000, picture: 60000, hear: 45000 }; // (chat: the server's own backups can take a while)
 const tooSlow = (e) => !!e && (e.name === 'TimeoutError' || e.name === 'AbortError');
+let serverSource = ''; // (v280) which brain answered the last question on Cassie's server: 'claude', or a backup such as 'groq'
 async function serverChat(messages, { model, maxTokens = 2048, onWait, lean = false, brain, q } = {}) {
   let waits = 0;
   while (true) {
@@ -4779,6 +4780,7 @@ async function serverChat(messages, { model, maxTokens = 2048, onWait, lean = fa
       throw friendlyError(CassieErrors.say(tooSlow(e) ? 'timeout' : 'network'));
     }
     if (res.ok) {
+      serverSource = res.headers.get('x-cassie-source') || '';
       const data = await res.json();
       return (data.choices?.[0]?.message?.content || '').replace(/<think>[\s\S]*?<\/think>\s*/g, '').trim();
     }
@@ -6908,10 +6910,11 @@ async function liveDrawCall(messages, q, image) {
     // (v279) a picture came with the question: her best brain looks at it with the drawing form; else whichever brain reads pictures
     const url = `data:${image.mimeType || 'image/jpeg'};base64,${image.base64}`;
     const seen = messages.map((m, i) => (i === messages.findIndex((x) => x.role === 'user') ? { role: 'user', content: [{ type: 'text', text: String(m.content) }, { type: 'image_url', image_url: { url } }] } : m));
-    if (SERVER && serverClaude) { try { const t = await serverChat(seen, { brain: 'claude', maxTokens: 5000, q }); if (t) return { text: t, simple: false }; } catch (e) { /* the usual picture reader below */ } }
+    if (SERVER && serverClaude) { try { const t = await serverChat(seen, { brain: 'claude', maxTokens: 5000, q }); if (t) return { text: t, simple: !!serverSource && serverSource !== 'claude' }; } catch (e) { /* the usual picture reader below */ } }
     return { text: await askCassie([{ role: 'user', content: messages.map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n\n') }], image, {}), simple: true };
   }
-  if (SERVER && serverClaude) { try { const t = await serverChat(messages, { brain: 'claude', maxTokens: 5000, q }); if (t) return { text: t, simple: false }; } catch (e) { /* the usual brain below */ } }
+  // (v280) her server answers with a backup brain once the day's share of her best one is used: that drawing is marked simpler
+  if (SERVER && serverClaude) { try { const t = await serverChat(messages, { brain: 'claude', maxTokens: 5000, q }); if (t) return { text: t, simple: !!serverSource && serverSource !== 'claude' }; } catch (e) { /* the usual brain below */ } }
   if (state.groqKey || SERVER) { try { const t = await groqChat(messages, { model: state.groqModel, maxTokens: 5000, rotate: true, q }); if (t) return { text: t, simple: true }; } catch (e) { if (!state.geminiKey) throw e; } }
   return { text: await askCassie([{ role: 'user', content: messages.map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n\n') }], null, {}), simple: true };
 }
@@ -6932,7 +6935,7 @@ const ldJson = (t) => { const s = String(t || ''), a = s.indexOf('{'), b = s.las
 function liveDrawLookAsk(question, spec) {
   return `This picture is a ${spec.mode === '3d' ? '3D model' : 'drawing'} for a student, meant to show: "${question}" (titled "${spec.title}").
 Its numbered names are: ${spec.parts.map((p, i) => `${i + 1} = ${p.label}`).join('; ')}.
-For EACH number, check that its line points at that very thing in the picture (not something else). For each part, check that its shape looks like the real thing. Check every fact, arrow direction and count.
+For EACH number, check that its line points at that very thing in the picture (not something else). For each part, check that its shape looks like the real thing, as in a textbook figure: a part drawn as a symbol or icon (a valentine heart for a real heart, a star, a lightning bolt) is NOT ok. Check every fact, arrow direction and count (blood is never blue: say oxygen poor blood).
 Reply {"labels":[{"n":1,"ok":true or false,"points_at":"what number 1 really points at"}],"shapes":[{"n":1,"ok":true or false,"why":"what is wrong with its shape"}],"facts":[{"ok":false,"fix":"a wrong fact and the right one"}]} with an entry for every number.`;
 }
 function liveDrawFixes(verdict, spec) {
@@ -6978,7 +6981,7 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=279')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=280')));
 // a real photo needs Gemini pictures (Cassie's server or the student's key); the free service draws toys and models
 const realPhotoOk = () => !!((SERVER && serverPictures) || (state.geminiKey && !geminiImageOff));
 // a drawing inside a chat bubble (a new one draws itself; one from history shows finished)
@@ -6990,7 +6993,7 @@ function liveDrawInto(container, body) {
   const animate = liveDrawFresh; liveDrawFresh = false;
   liveDrawLoad().then((m) => m.render(box, body, {
     animate,
-    simpleNote: authToken() ? 'A simpler drawing: Cassie’s best drawing brain is busy right now.' : 'A simpler drawing. Sign in for Cassie’s best drawings.',
+    simpleNote: authToken() ? 'A simpler drawing: Cassie’s best drawing brain wasn’t free for this one (busy, or today’s share is used up).' : 'A simpler drawing. Sign in for Cassie’s best drawings.',
     onQuiz: (spec) => handleSend(`Quiz me on ${spec.title}`, { noDraw: true }),
     onAsk: (p, spec) => { promptInput.value = `Tell me more about the ${p.label} in ${spec.title}`; promptInput.dispatchEvent(new Event('input')); promptInput.focus(); },
     canRealistic: realPhotoOk,
@@ -7049,8 +7052,20 @@ function liveShowGo(text, k) {
   if (k === 'explain' || k === 'photo') return handleSend(text, { noDraw: true });
   return liveDrawReply(text, false);
 }
+// (v280) "draw it", "sketch that", "show it in 3D": a drawing of what the chat is about, never a subject she makes up
+const LIVE_BACK_RE = /^(?:(?:please|pls|ok(?:ay)?|now|then|and|can\s+you|could\s+you|pwede|paki)\s+)*(?:draw|sketch|illustrate|diagram|visuali[sz]e|show|build|make|iguhit|ipakita|idrawing)(?:\s+(?:me|us|mo|ko))?(?:\s+(?:it|this|that|these|those|them|this\s+one|that\s+one|ito|iyan|yan|yun|nga))?(?:\s+(?:in\s+3d|in\s+2d|in\s+three[\s-]?d|as\s+a\s+(?:drawing|diagram|model|sketch)|out|again|for\s+me|please|po|naman))*\s*[.!?]*$/i;
+function liveDrawAbout(label) {
+  if (!LIVE_BACK_RE.test(label) || !state.messages.length) return null;
+  const subject = imageSubjectFromChat();
+  if (!subject) return null;
+  const last = [...state.messages].reverse().find((m) => m.role === 'assistant' && !/^\[I (drew|showed)/.test(String(m.content)));
+  const said = last ? noDashes(String(last.content).replace(/```[\s\S]*?```/g, ' ').replace(/[#*_>`]/g, '').replace(/\s+/g, ' ').trim()).slice(0, 900) : '';
+  return { subject, ask: `${label}\n(They mean what this chat is about: "${subject}". Draw that, not anything else.${said ? ` What you told them before, to keep the drawing true to it: "${said}"` : ''})` };
+}
 async function liveDrawReply(text, want3d = LIVE_3D_RE.test(text), image = null) {
   const label = text.trim();
+  const about = image ? null : liveDrawAbout(label); // (worked out before her new message is added)
+  const question = about ? about.ask : label;
   if (!state.messages.length) chatLog.innerHTML = '';
   state.messages.push({ role: 'user', content: image ? `[I sent a picture.] ${label}` : label, ...(image ? { display: label } : {}) });
   touchChat(); save();
@@ -7063,7 +7078,8 @@ async function liveDrawReply(text, want3d = LIVE_3D_RE.test(text), image = null)
   const done = busyButton(sendBtn);
   let first;
   try {
-    first = await liveDrawFirst(label, want3d, image);
+    first = await liveDrawFirst(question, want3d, image);
+    if (first.spec) first.spec.q = (about ? about.subject : label).slice(0, 300); // (Draw again redraws the real subject)
     typing.remove();
     if (!first.spec) { // she answered in words: show them as usual
       const words = noDashes(String(first.text || '').replace(/```[\s\S]*?```/g, '').trim()) || 'I could not draw that one. Try asking it a little differently.';
@@ -7085,7 +7101,7 @@ async function liveDrawReply(text, want3d = LIVE_3D_RE.test(text), image = null)
   // the check starts once she is drawing (or building), so it never holds up her first line; 3D models are checked too
   for (let k = 0; k < 40 && bubble.isConnected && !bubble.querySelector('.ld-part > [data-drawing], .ld-part > [data-drawn], .ld-canvas'); k++) await new Promise((r) => setTimeout(r, 50));
   try {
-    const better = await liveDrawVerify(label, first);
+    const better = await liveDrawVerify(about ? about.subject : label, first);
     if (better && bubble.isConnected) { // swap it in place, and say so
       msg.content = note(better); msg.display = fenced(better); save();
       bubble.replaceChildren(); liveDrawFresh = true; renderFormatted(bubble, fenced(better));
@@ -8236,7 +8252,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=279');
+      exploreMod = await import('./explore/cell3d.js?v=280');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -8286,7 +8302,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=279');
+      labsMod = await import('./labs/labs.js?v=280');
       islandRest();
     }
     labsMod.open({
@@ -10247,10 +10263,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=279').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=280').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=279', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=280', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
