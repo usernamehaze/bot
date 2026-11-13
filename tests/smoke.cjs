@@ -8449,7 +8449,8 @@ test('extension: the pop-up is for highlights (a code screenshot opens it too, a
     expect(sw, 'the Cassie extension did not start');
     const fake = () => sw.evaluate(() => {
       self.__prompts = []; self.__images = [];
-      self.readPicture = async (keys, msg) => { self.__prompts.push(String(msg.prompt || '')); (self.__bests || (self.__bests = [])).push(!!msg.best); self.__images.push(String(msg.image || '').slice(0, 30)); return 'What I read:\n```python\nfor i in range(3):\n    print(i * 2)\n```\nIt counts 0, 1 and 2 and prints each one doubled: 0, 2, 4.'; };
+      self.readPicture = async (keys, msg) => { if (msg.look) { (self.__looks || (self.__looks = [])).push(String(msg.prompt || '')); return self.__look || ''; } // (her own look at her drawing: not one of the replies in line)
+      self.__prompts.push(String(msg.prompt || '')); (self.__bests || (self.__bests = [])).push(!!msg.best); self.__images.push(String(msg.image || '').slice(0, 30)); return 'What I read:\n```python\nfor i in range(3):\n    print(i * 2)\n```\nIt counts 0, 1 and 2 and prints each one doubled: 0, 2, 4.'; };
     });
     await fake();
     await sw.evaluate(() => chrome.storage.local.set({ cassieHighlight: 'on', cassieHideNoted: false }));
@@ -8770,6 +8771,7 @@ async function liveExt({ viewport = { width: 1280, height: 800 } } = {}) {
     const cap = chrome.tabs.captureVisibleTab.bind(chrome.tabs);
     chrome.tabs.captureVisibleTab = (...a) => { self.__shots++; return cap(...a); };
     self.readPicture = async (keys, msg) => {
+      if (msg.look) { (self.__looks || (self.__looks = [])).push(String(msg.prompt || '')); return self.__look || ''; } // (her own look at her drawing: not one of the replies in line)
       self.__prompts.push(String(msg.prompt || '')); (self.__bests || (self.__bests = [])).push(!!msg.best); self.__images.push(String(msg.image || '').slice(0, 22) + ':' + String(msg.image || '').length);
       if (self.__wait) await new Promise((r) => setTimeout(r, self.__wait));
       const next = self.__replies.length ? self.__replies.shift() : '{"answer":"(none)","steps":[]}';
@@ -9307,6 +9309,59 @@ test('Cassie’s live drawing, real outlines (3.68): a drawing comes in the Cass
     // a reply cut off mid-part keeps its whole parts
     const cut = await inWorld(`(() => { const t = ${JSON.stringify(fixture('heart'))}; const g = CassieLive.parse(t.slice(0, Math.floor(t.length * 0.7))); return g.kind + ':' + (g.scene ? g.scene.dim + ':' + g.scene.spec.parts.length : ''); })()`);
     expect(/^card:flat:[3-6]$/.test(cut), 'a reply cut short keeps its whole parts: ' + cut);
+    expect(!X.errors.length, 'no script errors: ' + X.errors.join(' | '));
+  } finally { await X.close(); }
+});
+
+test('Cassie’s live drawing, accurate (3.69): she is told to draw the very thing in the picture of the screen, in its real colours, and to describe it; the first drawing shows at once, then her own look at a picture of it (Plus and Pro, when her best model drew it) swaps in a corrected one with a line that says so, unless the student has moved on; a 3D model has real finishes, a soft shadow and names beside it; a smaller model is asked again without the examples', async () => {
+  const bgSrc = fs.readFileSync(path.join(ROOT, 'extension/background.js'), 'utf8'), ldSrc = fs.readFileSync(path.join(ROOT, 'livedraw.js'), 'utf8');
+  expect(/if \(msg\.look && !\(lastServer\.source === 'claude' && \/\^\(plus\|pro\)\$\/\.test\(lastServer\.plan\)\)\) return '';/.test(bgSrc), 'her look at her own drawing is for Plus and Pro, when her best model drew it');
+  expect(/finish: \['metal', 'plastic', 'rubber', 'wood'\]/.test(ldSrc) && /ShadowMaterial/.test(ldSrc) && /PMREMGenerator/.test(ldSrc), 'a model has real finishes, a studio light and a soft shadow');
+  const X = await liveExt();
+  const { page, sw, replies, prompts, card, tap, until, ask, fixture, LIVE } = X;
+  try {
+    const inWorld = await X.open(`http://localhost:${APP_PORT}/tests/fixtures/live/pictures.html`);
+    const pr = JSON.parse(await inWorld(`JSON.stringify([CassieLive.prompt({ q: 'draw this', draw: true }), CassieLive.prompt({ q: 'show me this in 3D', dim: '3d' })])`));
+    expect(pr.every((t) => /Look at the picture of their screen first/.test(t) && /its real colours/.test(t) && /describe it accurately in plain words/.test(t)), 'flat or 3D, she draws the thing in the picture, in its real colours, and describes it');
+    expect(/"finish":"metal"\|"plastic"\|"rubber"\|"wood"/.test(pr[1]) && /not like toy blocks/.test(pr[1]), 'a model is asked for with real finishes and profiles');
+    // her look finds a wrong shape: the first drawing shows at once, the corrected one takes its place when she is done
+    const fixed = JSON.parse(fixture('heart')); fixed.title = 'The heart, corrected'; fixed.parts = fixed.parts.slice(0, 6);
+    await sw.evaluate(() => { self.__looks = []; self.__look = JSON.stringify({ labels: [], shapes: [{ n: 2, ok: false, why: 'the atria are drawn as flat ovals' }], facts: [] }); });
+    await replies([fixture('heart'), fixed]);
+    await ask('how does the heart pump blood?');
+    await until({ beat: '0' });
+    let c = await card();
+    expect(c.title === 'How the human heart works', 'the first drawing shows at once: ' + c.title);
+    await tap('.lv-play');
+    await page.waitForFunction((h) => document.querySelector(h).dataset.status === 'fixed', LIVE, { timeout: 15000 });
+    c = await card();
+    const looks = await sw.evaluate(() => self.__looks.slice()), P = await prompts();
+    expect(c.title === 'The heart, corrected' && c.says === 'Cassie checked her drawing and fixed it.', 'the corrected drawing takes its place and says so: ' + c.title + ' / ' + c.says);
+    expect(looks.length === 1 && /Its numbered names are: 1 = Heart wall; 2 = Atria/.test(looks[0]) && /meant to show: "how does the heart pump blood\?"/.test(looks[0]), 'she looked once at a picture of her own drawing, name by name');
+    expect(P.length === 2 && /a picture of your drawing was checked/.test(P[1]) && /number 2 \("Atria"\) does not look like a real Atria: the atria are drawn as flat ovals/.test(P[1]) && /kept exactly as it was: \{/.test(P[1]), 'what was wrong went back to her once, with her own drawing to keep');
+    const parts = await page.evaluate((h) => document.querySelector(h).shadowRoot.querySelectorAll('.lv-stage-flat .ld-part').length, LIVE);
+    expect(parts === 6, 'the card shows the corrected drawing: ' + parts);
+    await X.gone();
+    // nothing to fix: the first drawing stays, and no second answer is asked for
+    await sw.evaluate(() => { self.__looks = []; self.__look = JSON.stringify({ labels: [{ n: 1, ok: true }], shapes: [{ n: 1, ok: true }], facts: [] }); });
+    await replies([fixture('heart')]);
+    await ask('how does the heart pump blood?');
+    await until({ beat: '0' }); await tap('.lv-play'); await page.waitForTimeout(1500);
+    c = await card();
+    expect(c.title === 'How the human heart works' && c.status !== 'fixed' && (await prompts()).length === 1, 'a drawing that is right stays as it is: ' + c.title + ' ' + c.status);
+    await X.gone();
+    // the student moved on (Clear) before the corrected one came: it is left alone
+    await sw.evaluate(() => { self.__looks = []; self.__wait = 900; self.__look = JSON.stringify({ shapes: [{ n: 1, ok: false, why: 'x' }] }); });
+    await replies([fixture('heart'), fixed]);
+    await ask('how does the heart pump blood?');
+    await until({ beat: '0' }, 20000); await tap('.lv-clear'); await page.waitForTimeout(2600);
+    c = await card();
+    expect(c.status === 'cleared', 'a cleared card stays cleared: ' + c.status);
+    await sw.evaluate(() => { self.__wait = 0; self.__look = ''; });
+    await X.gone();
+    // a smaller model that can't take the examples is asked once more without them
+    const small = await inWorld(`(async () => { const asks = []; const got = await CassieLive.from({ send: async (a) => { asks.push(a); if (asks.length === 1) throw new Error('Request too large for model x: please reduce your message size'); return ${JSON.stringify(fixture('heart'))}; }, ask: CassieLive.prompt({ q: 'draw a heart', draw: true }), draw: true }); return JSON.stringify([asks.length, /How photosynthesis works/.test(asks[0]), /How photosynthesis works/.test(asks[1]), /"mode":"2d"/.test(asks[1]), got.kind]); })()`);
+    expect(small === '[2,true,false,true,"card"]', 'asked again without the examples: ' + small);
     expect(!X.errors.length, 'no script errors: ' + X.errors.join(' | '));
   } finally { await X.close(); }
 });

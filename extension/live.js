@@ -275,6 +275,8 @@
   }).catch((e) => { lib3d = null; throw e; })));
   // what she is told about building in 3D: the plan-first guide is the Cassie app's own (liveDrawPrompt in app.js)
   const GUIDE_3D = `Students learn from this: every fact, label, direction and count MUST be correct. If you are not sure of something, leave that part out.
+  Look at the picture of their screen first. If the thing they ask about is shown there (a photo, a figure, a diagram, a product), build THAT one: its true outline and proportions, the side it is seen from, its real colours, and the parts you can see, each where it really is. If it is not shown, build it the way the real thing looks, in its real colours. In "answer", describe it accurately in plain words: what it is, what its main parts are and what each one does.
+  Make it look like the real thing, not like toy blocks: give every part its real colour and "finish":"metal"|"plastic"|"rubber"|"wood" (what it is really made of), and its real profile: a lathe for anything turned or rounded (a nozzle, a bottle, a nose cone, a wheel), a plate for a flat cut shape, a pipe for a hose, wire or tube, a capsule for a rounded body. A plain cylinder or box only where the real part is one.
   First think how the real object is built: its real parts, which part holds or contains which, how big each one is against the whole, and how they line up and connect. Then build the model to match that plan:
   - every part touches or sits inside the part it connects to; nothing floats in the air
   - parts that are inside a case are placed inside it, and the case is "shell": true so the student can open it
@@ -290,15 +292,15 @@
     {"title":"A house being built","mode":"2d","layout":"side view; the ground at y 232; the house 60 to 340 wide; the roof peak at y 40","intro":"A house goes up from the ground: foundation, floor, walls, then roof.","summary":"Foundation, floor joists, wall studs, top plate, roof trusses, then sheathing closes it in.","photo":"a real timber frame house under construction on a building site, concrete foundation, exposed wall studs and roof trusses, partly covered with plywood sheathing","parts":[{"id":"found","label":"Foundation","say":"First a concrete foundation is poured into the ground to carry the weight.","color":"#a3a3ad","box":[56,206,288,30],"shapes":[{"t":"line","x1":20,"y1":232,"x2":380,"y2":232},{"t":"rect","x":60,"y":208,"w2":280,"h":24,"fill":true},{"t":"line","x1":60,"y1":220,"x2":340,"y2":220,"dash":true}],"anchor":[200,220]},{"id":"joists","label":"Floor joists","say":"Wooden joists lie across the foundation to hold up the floor.","color":"#ffb067","box":[58,196,284,12],"shapes":[{"t":"line","x1":60,"y1":200,"x2":340,"y2":200},{"t":"line","x1":60,"y1":206,"x2":340,"y2":206},{"t":"line","x1":100,"y1":200,"x2":100,"y2":206},{"t":"line","x1":160,"y1":200,"x2":160,"y2":206},{"t":"line","x1":220,"y1":200,"x2":220,"y2":206},{"t":"line","x1":280,"y1":200,"x2":280,"y2":206}],"anchor":[160,203]},{"id":"studs","label":"Wall studs","say":"Upright studs about 40 cm apart make the wall frame.","color":"#ffd29e","box":[60,118,280,82],"shapes":[{"t":"line","x1":64,"y1":198,"x2":64,"y2":120},{"t":"line","x1":104,"y1":198,"x2":104,"y2":120},{"t":"line","x1":144,"y1":198,"x2":144,"y2":120},{"t":"rect","x":168,"y":150,"w2":44,"h":48},{"t":"line","x1":232,"y1":198,"x2":232,"y2":120},{"t":"line","x1":272,"y1":198,"x2":272,"y2":120},{"t":"line","x1":312,"y1":198,"x2":312,"y2":120},{"t":"line","x1":336,"y1":198,"x2":336,"y2":120}],"anchor":[272,160]},{"id":"plate","label":"Top plate","say":"A top plate ties the studs together and carries the roof.","color":"#c9a7ff","box":[58,112,284,10],"shapes":[{"t":"line","x1":60,"y1":116,"x2":340,"y2":116},{"t":"line","x1":60,"y1":120,"x2":340,"y2":120}],"anchor":[200,118]},{"id":"truss","label":"Roof trusses","say":"Triangle trusses sit on top. Triangles keep the roof strong and stiff.","color":"#7fb0ff","box":[46,38,308,80],"shapes":[{"t":"poly","pts":[[48,116],[200,40],[352,116],[48,116]]},{"t":"line","x1":200,"y1":40,"x2":200,"y2":116},{"t":"line","x1":124,"y1":78,"x2":160,"y2":116},{"t":"line","x1":276,"y1":78,"x2":240,"y2":116}],"anchor":[200,80]},{"id":"sheath","label":"Sheathing","say":"Plywood sheathing is nailed on to close in the walls and roof.","color":"#8fe0b0","box":[60,40,148,160],"shapes":[{"t":"poly","pts":[[48,116],[200,40],[200,52],[72,116]],"fill":true},{"t":"rect","x":64,"y":122,"w2":80,"h":76,"fill":true}],"anchor":[104,160]}]},
     {"title":"The water cycle","mode":"2d","layout":"the sea along the bottom, a hill on the right, the sun top right, a cloud in the middle top","intro":"Water keeps moving between the sea, the sky and the land.","summary":"Evaporate, condense, fall, collect, and it starts again.","photo":"a real landscape with the sea, a hill, clouds and rain falling, on a sunny day","parts":[{"id":"sea","label":"Ocean","say":"Most water is in the oceans, lakes and rivers.","color":"#7fb0ff","box":[10,206,380,46],"shapes":[{"t":"path","d":"M10 222 Q60 210 110 222 T210 222 T310 222 T390 222","fill":false},{"t":"path","d":"M10 222 L10 250 L390 250 L390 222","fill":false}],"anchor":[200,236]},{"id":"sun","label":"Sun","say":"The sun heats the water.","color":"#ffd29e","box":[318,24,64,64],"shapes":[{"t":"circle","cx":350,"cy":56,"r":20,"fill":true},{"t":"line","x1":350,"y1":28,"x2":350,"y2":20},{"t":"line","x1":322,"y1":56,"x2":314,"y2":56},{"t":"line","x1":330,"y1":36,"x2":324,"y2":30}],"anchor":[350,56]},{"id":"evap","label":"Evaporation","say":"Warm water turns into vapour and rises.","color":"#8fe0b0","box":[100,110,70,96],"shapes":[{"t":"arrow","x1":112,"y1":204,"x2":112,"y2":116},{"t":"arrow","x1":136,"y1":204,"x2":136,"y2":116},{"t":"arrow","x1":160,"y1":204,"x2":160,"y2":116}],"anchor":[136,160]},{"id":"cloud","label":"Condensation","say":"High up the vapour cools into tiny drops: clouds.","color":"#a3a3ad","box":[150,40,124,48],"shapes":[{"t":"path","d":"M154 84 Q150 62 172 62 Q178 42 202 48 Q222 36 238 54 Q264 54 266 72 Q272 86 254 86 Z","fill":true},{"t":"path","d":"M182 70 Q194 62 206 70"}],"anchor":[210,66]},{"id":"rain","label":"Precipitation","say":"When the drops get heavy they fall as rain.","color":"#7ee0e0","box":[176,92,80,40],"shapes":[{"t":"line","x1":190,"y1":94,"x2":184,"y2":124,"dash":true},{"t":"line","x1":214,"y1":94,"x2":208,"y2":124,"dash":true},{"t":"line","x1":238,"y1":94,"x2":232,"y2":124,"dash":true}],"anchor":[214,108]},{"id":"runoff","label":"Runoff","say":"Rain runs down the land back to the sea.","color":"#c9a7ff","box":[240,140,140,82],"shapes":[{"t":"path","d":"M244 220 L300 148 L372 220"},{"t":"arrow","x1":326,"y1":190,"x2":272,"y2":216}],"anchor":[330,190]}]},
   ];
+  const EXAMPLES_PART = `  Three good drawings (this level of care, not these subjects; yours also has "answer" and "about"):\n  ${FLAT_EXAMPLES.map((x) => JSON.stringify(x)).join('\n  ')}\n`;
   const FLAT_GUIDE = `"mode":"2d" (a flat pen drawing). Picture: 400 wide, 260 tall, absolute coordinates, x 10 to 390, y 20 to 250.
   Plan: "layout" says how it is arranged; every part has "box":[x,y,w,h] where it sits and "anchor":[x,y], a point ON its main shape (the sun's disc, the leaf's blade); its name's line ends there. Strokes stay inside the box. Spread parts over the picture and leave clear space for the names.
+  Look at the picture of their screen first. If the thing they ask about is shown there (a photo, a figure, a diagram, a product), draw THAT one: its true outline and proportions, the side it is seen from, its real colours, and the parts you can see, each where it really is. If it is not shown, draw it the way a good textbook figure of the real thing looks, in its real colours. In "answer", describe it accurately in plain words: what it is, what its main parts are and what each one does.
   Draw REAL outlines, the way a textbook figure looks: a leaf with a pointed tip, a midrib and side veins; a heart with its curved walls, its four chambers and its vessels; an engine with its real profile. Never a plain circle or box for a real object, and never a cartoon symbol (no valentine heart for a real heart, no lightning zigzag for electricity). The main object is drawn large, about half the picture, with long curved paths (C and Q curves) for its true outline, and each of its inner parts is a part of its own, in its own colour, lightly filled ("fill":true) so the student can tell the parts apart. 5 to 8 parts in drawing order, 3 to 24 strokes each, 30 or more strokes in the whole drawing, each part's strokes in pen order. Arrows show what moves and which way. Each part is drawn, then named, while its "say" is said, so the student always knows what they are looking at.
   {"answer":the direct answer in one or two short sentences,"about":[x,y,w,h] the box around the thing on their screen the question is about, as shares of the picture from 0 to 1, or null,"title":2 to 6 words,"mode":"2d","layout","intro":one sentence,"summary":one sentence,"parts":[{"id","label":1 to 3 words,"say":1 or 2 short, natural spoken sentences,"color":"#hex","box","anchor","shapes":[...]}]}
   2d shapes: {"t":"line","x1","y1","x2","y2"}, {"t":"arrow",...same} for movement, {"t":"path","d":"M L Q C Z, CAPITAL letters only"}, {"t":"poly","pts":[[x,y],...]}, {"t":"rect","x","y","w2","h"}, {"t":"circle","cx","cy","r"}, {"t":"ellipse","cx","cy","rx","ry"}, {"t":"text","x","y","text"} for values only ("H2O"); "fill":true, "dash":true. Never write a part's name as text: the card does.
   Students learn from this: every fact, label, direction and count MUST be correct. If you are not sure of something, leave that part out.
-  Three good drawings (this level of care, not these subjects; yours also has "answer" and "about"):
-  ${FLAT_EXAMPLES.map((x) => JSON.stringify(x)).join('\n  ')}
-  Use the student's language (English, Filipino or Taglish). No dashes in the words. No emojis.`;
+${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No dashes in the words. No emojis.`;
   const CARD_SHAPE = '{"answer":"the direct answer in one or two short sentences","about":[0.3,0.2,0.4,0.5],"title":"2 to 6 words","caption":"what the drawing shows, in under 10 words","view":"Side view","beats":[{"say":"one or two short, natural spoken sentences","draw":[{"shape":"outline","points":[[30,22],[62,22],[68,58],[24,58]]}]}]}';
   const CARD_HELP = `Give 3 to 6 beats. "about" is the box [x, y, w, h] around the thing on their screen that the question is about, as shares of the picture from 0 to 1 (null when it is about nothing on the screen). "view" says how the thing is seen: Side view, Front view, Top view, Cut-away or Diagram.
   The drawing is made on a card ${GW} units wide and ${GH} tall, and (0, 0) is its top left corner. It grows while you talk: each beat adds 1 to 5 new parts ("draw") while its sentence is said. Draw the main outline first, then its parts in colour, then arrows, then labels. The parts you can draw:
@@ -380,7 +382,14 @@
   async function from({ send, ask, count = 0, draw = false, maxTokens = 3600 } = {}) {
     let last = null, nudge = '';
     for (let tries = 0; tries < 2; tries++) {
-      const reply = await send(ask + nudge, maxTokens);
+      let reply = '';
+      try { reply = await send(ask + nudge, maxTokens); }
+      catch (e) {
+        // (a smaller model may not take the three examples: once more without them)
+        const small = ask.replace(EXAMPLES_PART, '');
+        if (small === ask || !/too large|reduce your message|tokens per minute/i.test(String(e && e.message))) throw e;
+        ask = small; reply = await send(ask + nudge, maxTokens);
+      }
       const got = parse(reply, count);
       if (got.kind === 'card' && got.scene.dim === '3d' && !tries) {
         // (as in the Cassie app: the model against her own plan; what is wrong goes back to her once)
@@ -390,6 +399,18 @@
       if (got.kind === 'card' && got.scene.dim === 'flat' && !tries) {
         const m = await load3d().catch(() => null), spec = m && m.clean(got.scene.spec), wrong = !m ? [] : spec ? m.check(spec) : ['the reply was not one valid JSON object in the schema'];
         if (wrong.length) { last = got; nudge = `\n  IMPORTANT: your drawing has these problems:\n  - ${wrong.slice(0, 8).join('\n  - ')}\n  Send the whole corrected JSON object again.`; continue; }
+      }
+      if (got.kind === 'card' && (got.scene.dim === 'flat' || got.scene.dim === '3d') && !tries) {
+        // (as in the Cassie app: she looks at a picture of her own finished drawing; what is wrong goes back to her once)
+        const asked = (String(ask).match(/The student asks: "([^"]*)"/) || [])[1] || got.scene.title;
+        // The first drawing shows at once. scene.better → the corrected scene when the look found something, else null.
+        const first = got.scene, words_ = ask + nudge;
+        first.better = (async () => {
+          const fixes = await lookAt(first, asked);
+          if (!fixes.length) return null;
+          const again = parse(await send(`${words_}\n  IMPORTANT: a picture of your ${first.dim === '3d' ? 'model' : 'drawing'} was checked, and these things are wrong:\n  - ${fixes.join('\n  - ')}\n  Send the whole corrected JSON object again, with these fixed and everything that was right kept exactly as it was: ${JSON.stringify(first.spec)}`, maxTokens), count);
+          return again.kind === 'card' && again.scene.dim === first.dim ? again.scene : null;
+        })().catch(() => null);
       }
       if (got.kind === 'card' || (got.kind && !draw)) return got;
       if (got.kind) { last = got; nudge = DRAW_IT; }
@@ -550,7 +571,7 @@
     .lv-sticky { margin: 0 0 8px; padding: 8px 12px; max-width: 208px; box-sizing: border-box; background: ${NOTE.paper}; color: ${NOTE.ink}; border: 1px solid ${NOTE.edge}; border-radius: 4px;
       font: 600 14px/1.3 ${FONT}; transform: rotate(-2deg); box-shadow: 0 4px 12px rgba(0,0,0,.2); }
     .lv-paper .lv-sticky { display: inline-block; }
-    .lv-float .lv-sticky { position: absolute; left: 16px; top: 16px; z-index: 2; margin: 0; max-width: 200px; }
+    .lv-float .lv-sticky { position: absolute; left: 16px; bottom: 16px; z-index: 2; margin: 0; max-width: 220px; } /* (low in the corner, clear of the names beside the model) */
     .lv .lv-clear3 { position: absolute; top: 16px; right: 16px; z-index: 2; border-color: var(--edge); box-shadow: 0 4px 16px rgba(0,0,0,.25); }
     .ld-canvas { display: block; width: 100% !important; height: 100% !important; cursor: grab; touch-action: none; outline: none; }
     .ld-canvas:active { cursor: grabbing; }
@@ -580,6 +601,104 @@
     get: (k) => new Promise((res) => { try { chrome.storage.local.get(k, (o) => res(o || {})); } catch (e) { res({}); } }),
     set: (o) => { try { chrome.storage.local.set(o); } catch (e) { /* not kept */ } },
   };
+
+  /* ---------- a picture of a drawing (for the board, for Your lessons, and for her own look at her work) ---------- */
+  // a flat drawing's SVG as it stands: every stroke and name that shows
+  function paintSvg(sv, W, bg) {
+    const c = document.createElement('canvas'), k = W / 400;
+    c.width = W; c.height = Math.round(W * 0.65);
+    const x = c.getContext('2d');
+    x.fillStyle = bg; x.fillRect(0, 0, c.width, c.height);
+    x.scale(k, k); x.lineCap = 'round'; x.lineJoin = 'round';
+    const A = (n, a, d = 0) => { const v = parseFloat(n.getAttribute(a)); return Number.isFinite(v) ? v : d; };
+    (sv ? [...sv.querySelectorAll('.ld-part > *, .ld-labels *')] : []).forEach((n) => {
+      const tag = n.tagName.toLowerCase(), cs = getComputedStyle(n);
+      if (tag === 'g' || cs.visibility === 'hidden' || cs.display === 'none') return;
+      if (tag === 'text') { x.fillStyle = cs.fill; x.font = `${cs.fontWeight} ${A(n, 'font-size', 11)}px system-ui, sans-serif`; x.textAlign = cs.textAnchor === 'middle' ? 'center' : cs.textAnchor === 'end' ? 'right' : 'left'; x.textBaseline = cs.dominantBaseline === 'middle' || cs.dominantBaseline === 'central' ? 'middle' : 'alphabetic'; x.fillText(n.textContent, A(n, 'x'), A(n, 'y')); return; }
+      const path = new Path2D();
+      if (tag === 'path') path.addPath(new Path2D(n.getAttribute('d') || ''));
+      else if (tag === 'line') { path.moveTo(A(n, 'x1'), A(n, 'y1')); path.lineTo(A(n, 'x2'), A(n, 'y2')); }
+      else if (tag === 'rect') path.roundRect(A(n, 'x'), A(n, 'y'), A(n, 'width'), A(n, 'height'), A(n, 'rx'));
+      else if (tag === 'circle') path.arc(A(n, 'cx'), A(n, 'cy'), A(n, 'r'), 0, Math.PI * 2);
+      else if (tag === 'ellipse') path.ellipse(A(n, 'cx'), A(n, 'cy'), A(n, 'rx'), A(n, 'ry'), 0, 0, Math.PI * 2);
+      else if (tag === 'polyline' || tag === 'polygon') (n.getAttribute('points') || '').trim().split(/\s+/).forEach((q, i) => { const [px, py] = q.split(',').map(Number); if (i) path.lineTo(px, py); else path.moveTo(px, py); });
+      else return;
+      if (cs.fill && cs.fill !== 'none') { x.save(); x.globalAlpha = parseFloat(cs.fillOpacity) || 1; x.fillStyle = cs.fill; x.fill(path); x.restore(); }
+      if (cs.stroke && cs.stroke !== 'none') {
+        x.strokeStyle = cs.stroke; x.lineWidth = parseFloat(cs.strokeWidth) || 2; x.setLineDash(n.getAttribute('stroke-dasharray') === '6 6' ? [6, 6] : []); x.stroke(path);
+        if (tag === 'line' && n.getAttribute('marker-end')) { const x1 = A(n, 'x1'), y1 = A(n, 'y1'), x2 = A(n, 'x2'), y2 = A(n, 'y2'), a = Math.atan2(y2 - y1, x2 - x1), h = 4 + x.lineWidth * 2; x.setLineDash([]); x.fillStyle = cs.stroke; x.beginPath(); x.moveTo(x2 + Math.cos(a) * 2, y2 + Math.sin(a) * 2); x.lineTo(x2 - Math.cos(a - 0.45) * h, y2 - Math.sin(a - 0.45) * h); x.lineTo(x2 - Math.cos(a + 0.45) * h, y2 - Math.sin(a + 0.45) * h); x.closePath(); x.fill(); }
+      }
+    });
+    return c;
+  }
+  // a 3D model's stage as it stands: the model, and each name with its line to its part
+  function paintModel(stage, W, pal) {
+    const c = document.createElement('canvas'), gl = stage.querySelector('canvas'), r = stage.getBoundingClientRect(), k = W / Math.max(1, r.width);
+    c.width = W; c.height = Math.max(1, Math.round(r.height * k));
+    const x = c.getContext('2d');
+    x.fillStyle = pal.paper; x.fillRect(0, 0, c.width, c.height);
+    if (gl) x.drawImage(gl, 0, 0, c.width, c.height);
+    x.font = `600 ${Math.round(13 * k)}px system-ui, sans-serif`; x.textBaseline = 'middle'; x.textAlign = 'center';
+    stage.querySelectorAll('.ld-tag').forEach((t) => {
+      if (t.hidden) return;
+      const tx = parseFloat(t.style.left) * k, ty = parseFloat(t.style.top) * k, ax = +t.dataset.ax * k, ay = +t.dataset.ay * k, w = x.measureText(t.textContent).width + 24 * k, h = 28 * k;
+      x.strokeStyle = pal.ink; x.lineWidth = 1.5 * k; x.beginPath(); x.moveTo(ax, ay); x.lineTo(tx, ty); x.stroke();
+      x.fillStyle = pal.ink; x.beginPath(); x.arc(ax, ay, 3 * k, 0, Math.PI * 2); x.fill();
+      x.fillStyle = pal.paper; x.strokeStyle = pal.grey; x.beginPath(); x.roundRect(tx - w / 2, ty - h / 2, w, h, h / 2); x.fill(); x.stroke();
+      x.fillStyle = pal.ink; x.fillText(t.textContent, tx, ty);
+    });
+    return c;
+  }
+  // Her own look at her work: the finished drawing is made off the screen (never shown), and a picture of it goes back
+  // to her with each numbered name, to check that every name points at its own part, every shape looks like the real
+  // thing, and every fact is right. → what to fix, in plain words ([] when it is right, or when she could not look)
+  async function pictureOf(scene) {
+    const m = await load3d(), hold = document.createElement('div');
+    hold.style.cssText = 'position:fixed;left:-10000px;top:0;width:800px;height:520px;pointer-events:none;';
+    hold.setAttribute('aria-hidden', 'true');
+    const root = hold.attachShadow({ mode: 'open' }), st = document.createElement('style'), stage = document.createElement('div');
+    st.textContent = '.s{position:relative;width:800px;height:520px;color:#1b1b1d;font-family:system-ui,sans-serif}.ld-svg{display:block;width:100%;height:100%}.ld-canvas{display:block;width:100%!important;height:100%!important}.ld-tags{position:absolute;inset:0}.ld-tag{position:absolute;transform:translate(-50%,-50%);font:600 13px system-ui,sans-serif;white-space:nowrap;padding:4px 12px;border:0;background:none}.ld-tag-lines{position:absolute;inset:0;width:100%;height:100%}.ld-ltext,.ld-word{font-weight:600;fill:#1b1b1d}.ld-lbg{fill:#fff;stroke:#bbb}.ld-lead{stroke:#666}.ld-anchor{fill:#1b1b1d}';
+    stage.className = 's';
+    root.append(st, stage); document.documentElement.appendChild(hold);
+    let made = null;
+    try {
+      if (scene.dim === 'flat') {
+        made = m.model2d(stage, scene.spec, { light: true });
+        if (!made) return null;
+        for (let i = 0; i < made.spec.parts.length; i++) await made.view.show(i, true);
+        return { spec: made.spec, png: paintSvg(stage.querySelector('svg'), 800, '#ffffff').toDataURL('image/jpeg', 0.85) };
+      }
+      if (!can3d()) return null;
+      made = await m.model3d(stage, scene.spec, { turn: false, zoom: false, real: true, callout: true });
+      if (!made) return null;
+      if (made.view.open) made.view.setOpen(true);
+      for (let i = 0; i < made.spec.parts.length; i++) made.view.show(i, true);
+      await new Promise((r) => setTimeout(r, 900));
+      return { spec: made.spec, png: paintModel(stage, 800, PAPER.light).toDataURL('image/jpeg', 0.85) };
+    } catch (e) { return null; } finally { if (made && made.view.stop) { try { made.view.stop(); } catch (e) { /* gone */ } } hold.remove(); }
+  }
+  const LOOK_SYSTEM = 'You check drawings made for students. Be strict and specific. Reply with ONLY one JSON object.';
+  const lookAsk = (q, spec) => `This picture is a ${spec.mode === '3d' ? '3D model' : 'drawing'} for a student, meant to show: "${q}" (titled "${spec.title}").
+  Its numbered names are: ${spec.parts.map((p, i) => `${i + 1} = ${p.label}`).join('; ')}.
+  For EACH number, check that its line points at that very thing in the picture (not something else). For each part, check that its shape looks like the real thing. Check every fact, arrow direction and count.
+  Reply {"labels":[{"n":1,"ok":true or false,"points_at":"what number 1 really points at"}],"shapes":[{"n":1,"ok":true or false,"why":"what is wrong with its shape"}],"facts":[{"ok":false,"fix":"a wrong fact and the right one"}]} with an entry for every number.`;
+  function lookFixes(verdict, spec) {
+    if (!verdict || typeof verdict !== 'object') return [];
+    const name = (n) => (spec.parts[n - 1] || {}).label || `part ${n}`, out = [];
+    for (const l of Array.isArray(verdict.labels) ? verdict.labels : []) if (l && l.ok === false) out.push(`number ${l.n} ("${name(l.n)}") points at ${String(l.points_at || 'the wrong thing').slice(0, 80)}; move its anchor onto the ${name(l.n)} itself`);
+    for (const sh of Array.isArray(verdict.shapes) ? verdict.shapes : []) if (sh && sh.ok === false) out.push(`number ${sh.n} ("${name(sh.n)}") does not look like a real ${name(sh.n)}: ${String(sh.why || 'give it its real outline').slice(0, 120)}`);
+    for (const f of Array.isArray(verdict.facts) ? verdict.facts : []) if (f && f.ok === false && f.fix) out.push(`fact: ${String(f.fix).slice(0, 160)}`);
+    return out.slice(0, 10);
+  }
+  async function lookAt(scene, q) {
+    try {
+      const pic = await pictureOf(scene);
+      if (!pic) return [];
+      const r = await chrome.runtime.sendMessage({ type: 'CASSIE_VISION', image: pic.png, prompt: lookAsk(q, pic.spec), system: LOOK_SYSTEM, maxTokens: 900, best: true, look: true });
+      return r && !r.error ? lookFixes(jsonOf(r.reply), pic.spec) : [];
+    } catch (e) { return []; }
+  }
+
   const tell = (msg) => { try { return chrome.runtime.sendMessage(msg).catch(() => null); } catch (e) { return Promise.resolve(null); } };
   const readPace = (text) => Math.min(9000, 1400 + String(text || '').length * 45); // (typed: time to read it, as in her lessons)
 
@@ -654,6 +773,24 @@
       beats = sc.beats.map((b, i) => ({ say: b.say, parts: (b.parts || []).slice(), part: b.part, asked: i === 0 ? askedNow : '' }));
     };
     adopt(scene, opts.q);
+    // Her own look at her drawing may bring a corrected one (scene.better). It takes the first one's place once she has
+    // finished saying the first, or at once if she is paused, unless the student has moved on (a follow-up, Clear).
+    const later = (ms) => new Promise((r) => setTimeout(r, ms));
+    const watch = (sc) => {
+      if (!sc || !sc.better || typeof sc.better.then !== 'function') return;
+      const n = sc.beats.length;
+      sc.better.then(async (b) => {
+        if (!b) return;
+        while (alive && cur === sc && beats.length === n && !cleared && playing) await later(300);
+        if (!alive || cur !== sc || beats.length !== n || cleared) return;
+        const was = at, end = done;
+        adopt(b, askedNow);
+        if (!(await build())) return;
+        showStill(end ? beats.length - 1 : Math.max(0, Math.min(was, beats.length - 1)));
+        setStatus('fixed');
+      }).catch(() => {});
+    };
+    watch(scene);
     const is3d = () => cur.dim === '3d';
     const isFlat = () => cur.dim === 'flat'; // (a flat drawing in the Cassie app's form, drawn by its own drawer)
     const lightPaper = () => !(window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
@@ -863,7 +1000,7 @@
         (floating ? floatEl : cardStage).hidden = false;
         stage.setAttribute('aria-label', name);
         placeFloat();
-        const made = await m.model3d(stage, cur.spec, { turn: 'sway', zoom: !floating, matte: true, callout: true });
+        const made = await m.model3d(stage, cur.spec, { turn: 'sway', zoom: !floating, real: true, callout: true });
         if (my !== built || !alive) { if (made) made.view.stop(); return true; }
         if (!made) { end3d(); return false; }
         model = made;
@@ -1070,51 +1207,8 @@
     /* the picture of the drawing, for the board and for Your lessons (always on white paper) */
     function toCanvas(W) {
       const c = document.createElement('canvas'), pal = PAPER.light;
-      if (is3d() && model) {
-        const stage = floating ? floatStage : cardStage, gl = stage.querySelector('canvas'), r = stage.getBoundingClientRect(), k = W / Math.max(1, r.width);
-        c.width = W; c.height = Math.max(1, Math.round(r.height * k));
-        const x = c.getContext('2d');
-        x.fillStyle = pal.paper; x.fillRect(0, 0, c.width, c.height);
-        if (gl) x.drawImage(gl, 0, 0, c.width, c.height);
-        x.font = `600 ${Math.round(13 * k)}px system-ui, sans-serif`; x.textBaseline = 'middle'; x.textAlign = 'center';
-        stage.querySelectorAll('.ld-tag').forEach((t) => {
-          if (t.hidden) return;
-          const tx = parseFloat(t.style.left) * k, ty = parseFloat(t.style.top) * k, ax = +t.dataset.ax * k, ay = +t.dataset.ay * k, w = x.measureText(t.textContent).width + 24 * k, h = 28 * k;
-          x.strokeStyle = pal.ink; x.lineWidth = 1.5 * k; x.beginPath(); x.moveTo(ax, ay); x.lineTo(tx, ty); x.stroke();
-          x.fillStyle = pal.ink; x.beginPath(); x.arc(ax, ay, 3 * k, 0, Math.PI * 2); x.fill();
-          x.fillStyle = pal.paper; x.strokeStyle = pal.grey; x.beginPath(); x.roundRect(tx - w / 2, ty - h / 2, w, h, h / 2); x.fill(); x.stroke();
-          x.fillStyle = pal.ink; x.fillText(t.textContent, tx, ty);
-        });
-        return c;
-      }
-      if (isFlat() && model) {
-        // (her flat drawing as it stands on the card: every stroke and name that shows, in the card's own colours)
-        const sv = cardStage.querySelector('svg'), k = W / 400;
-        c.width = W; c.height = Math.round(W * 0.65);
-        const x = c.getContext('2d');
-        x.fillStyle = getComputedStyle(paper).backgroundColor || pal.paper; x.fillRect(0, 0, c.width, c.height);
-        x.scale(k, k); x.lineCap = 'round'; x.lineJoin = 'round';
-        const A = (n, a, d = 0) => { const v = parseFloat(n.getAttribute(a)); return Number.isFinite(v) ? v : d; };
-        (sv ? [...sv.querySelectorAll('.ld-part > *, .ld-labels *')] : []).forEach((n) => {
-          const tag = n.tagName.toLowerCase(), cs = getComputedStyle(n);
-          if (tag === 'g' || cs.visibility === 'hidden' || cs.display === 'none') return;
-          if (tag === 'text') { x.fillStyle = cs.fill; x.font = `${cs.fontWeight} ${A(n, 'font-size', 11)}px system-ui, sans-serif`; x.textAlign = cs.textAnchor === 'middle' ? 'center' : cs.textAnchor === 'end' ? 'right' : 'left'; x.textBaseline = cs.dominantBaseline === 'middle' || cs.dominantBaseline === 'central' ? 'middle' : 'alphabetic'; x.fillText(n.textContent, A(n, 'x'), A(n, 'y')); return; }
-          const path = new Path2D();
-          if (tag === 'path') path.addPath(new Path2D(n.getAttribute('d') || ''));
-          else if (tag === 'line') { path.moveTo(A(n, 'x1'), A(n, 'y1')); path.lineTo(A(n, 'x2'), A(n, 'y2')); }
-          else if (tag === 'rect') path.roundRect(A(n, 'x'), A(n, 'y'), A(n, 'width'), A(n, 'height'), A(n, 'rx'));
-          else if (tag === 'circle') path.arc(A(n, 'cx'), A(n, 'cy'), A(n, 'r'), 0, Math.PI * 2);
-          else if (tag === 'ellipse') path.ellipse(A(n, 'cx'), A(n, 'cy'), A(n, 'rx'), A(n, 'ry'), 0, 0, Math.PI * 2);
-          else if (tag === 'polyline' || tag === 'polygon') (n.getAttribute('points') || '').trim().split(/\s+/).forEach((q, i) => { const [px, py] = q.split(',').map(Number); if (i) path.lineTo(px, py); else path.moveTo(px, py); });
-          else return;
-          if (cs.fill && cs.fill !== 'none') { x.save(); x.globalAlpha = parseFloat(cs.fillOpacity) || 1; x.fillStyle = cs.fill; x.fill(path); x.restore(); }
-          if (cs.stroke && cs.stroke !== 'none') {
-            x.strokeStyle = cs.stroke; x.lineWidth = parseFloat(cs.strokeWidth) || 2; x.setLineDash(n.getAttribute('stroke-dasharray') === '6 6' ? [6, 6] : []); x.stroke(path);
-            if (tag === 'line' && n.getAttribute('marker-end')) { const x1 = A(n, 'x1'), y1 = A(n, 'y1'), x2 = A(n, 'x2'), y2 = A(n, 'y2'), a = Math.atan2(y2 - y1, x2 - x1), h = 4 + x.lineWidth * 2; x.setLineDash([]); x.fillStyle = cs.stroke; x.beginPath(); x.moveTo(x2 + Math.cos(a) * 2, y2 + Math.sin(a) * 2); x.lineTo(x2 - Math.cos(a - 0.45) * h, y2 - Math.sin(a - 0.45) * h); x.lineTo(x2 - Math.cos(a + 0.45) * h, y2 - Math.sin(a + 0.45) * h); x.closePath(); x.fill(); }
-          }
-        });
-        return c;
-      }
+      if (is3d() && model) return paintModel(floating ? floatStage : cardStage, W, pal);
+      if (isFlat() && model) return paintSvg(cardStage.querySelector('svg'), W, getComputedStyle(paper).backgroundColor || pal.paper); // (in the card's own colours)
       c.width = W; c.height = Math.round((W * GH) / GW);
       const x = c.getContext('2d');
       x.fillStyle = pal.paper; x.fillRect(0, 0, c.width, c.height);
@@ -1215,7 +1309,7 @@
           return first;
         };
         // (the drawing it replaces is kept in Your lessons first, with its own question and follow-ups)
-        const newScene = async (sc) => { if (opts.save !== false) saveLesson(); cleared = false; adopt(sc, q); if (!(await build())) await flatInstead(); return 0; };
+        const newScene = async (sc) => { if (opts.save !== false) saveLesson(); cleared = false; adopt(sc, q); watch(sc); if (!(await build())) await flatInstead(); return 0; };
         // a student at risk: care first, and no AI is asked (care.js; counted with no words, no id)
         const hit = window.CassieCare && window.CassieCare.check(q);
         if (hit) {

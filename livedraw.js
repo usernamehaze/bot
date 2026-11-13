@@ -38,6 +38,7 @@ export function clean(raw) {
     box: mode === '2d' ? box4(p && p.box) : null,
     anchor: mode === '2d' && Array.isArray(p && p.anchor) && p.anchor.length === 2 && Number.isFinite(+p.anchor[0]) && Number.isFinite(+p.anchor[1]) ? [num(p.anchor[0], 0, 400), num(p.anchor[1], 0, 260)] : null,
     glow: !!(p && p.glow), spin: !!(p && p.spin), shell: !!(p && p.shell),
+    finish: ['metal', 'plastic', 'rubber', 'wood'].includes(p && p.finish) ? p.finish : null, // (3d) what it is really made of
     // (3d) her plan for the part: what it sits inside, its real size against the whole, what it touches
     inside: mode === '3d' ? words(p && p.inside, 40) || null : null,
     size: mode === '3d' && Number.isFinite(+(p && p.size)) && +p.size > 0 ? Math.min(1, +p.size) : null,
@@ -501,11 +502,11 @@ export function model2d(stage, rawSpec, opts = {}) {
 export async function model3d(stage, rawSpec, opts = {}) {
   const spec = clean(rawSpec);
   if (!spec || spec.mode !== '3d') return null;
-  const view = await draw3d(stage, spec, { animate: false, setSay: async () => {}, hint: opts.hint || el('div'), turn: opts.turn || false, zoom: opts.zoom !== false, matte: !!opts.matte, callout: !!opts.callout });
+  const view = await draw3d(stage, spec, { animate: false, setSay: async () => {}, hint: opts.hint || el('div'), turn: opts.turn || false, zoom: opts.zoom !== false, matte: !!opts.matte, callout: !!opts.callout, real: !!opts.real });
   return view ? { spec, view } : null;
 }
 const glOk = () => { try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch (e) { return false; } };
-async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom = true, matte = false, callout = false }) {
+async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom = true, matte = false, callout = false, real = false }) {
   if (!glOk()) return null;
   let lib; try { lib = await loadThree(); } catch (e) { return null; }
   const { T, OrbitControls } = lib;
@@ -520,6 +521,17 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
   scene.add(new T.HemisphereLight(0xe4ecff, 0x1a1a22, 1.15));
   const sun = new T.DirectionalLight(0xffffff, 1.7); sun.position.set(4, 6, 5); scene.add(sun);
   const rim = new T.DirectionalLight(0x8fb4ff, .6); rim.position.set(-5, -2, -4); scene.add(rim);
+  // (real: the model looks like the thing itself: its finishes catch a soft studio light, and it throws a soft shadow on the floor under it)
+  if (real) {
+    try {
+      renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap; renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.15;
+      sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024); sun.shadow.radius = 6; sun.shadow.bias = -.0005;
+      const room = new T.Scene(), glowBox = (c, x, y, z, w, h, d) => { const m = new T.Mesh(new T.BoxGeometry(w, h, d), new T.MeshBasicMaterial({ color: c })); m.position.set(x, y, z); room.add(m); };
+      room.add(new T.Mesh(new T.BoxGeometry(40, 40, 40), new T.MeshBasicMaterial({ color: 0x8a8f99, side: T.BackSide })));
+      glowBox(0xffffff, 0, 18, 0, 26, 1, 26); glowBox(0xfff2dd, 18, 4, 6, 1, 14, 14); glowBox(0xcfe0ff, -18, 2, -6, 1, 10, 16); glowBox(0x30333a, 0, -18, 0, 40, 1, 40);
+      const pm = new T.PMREMGenerator(renderer); scene.environment = pm.fromScene(room, .04).texture; pm.dispose();
+    } catch (e) { /* plain lights */ }
+  }
   if (matte) scene.add(new T.AmbientLight(0xffffff, .7)); // (matte: plain, bright colours for a model that floats over any page, with no shine to go dark)
   const controls = new OrbitControls(cam, canvas); controls.enableDamping = true; controls.enablePan = false; controls.minDistance = 2; controls.maxDistance = 40;
   if (!zoom) controls.enableZoom = false; // (a model that floats over a page: the wheel still scrolls the page)
@@ -535,8 +547,10 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
   const along = (obj, axis) => { if (axis === 'x') obj.rotation.z = -Math.PI / 2; else if (axis === 'z') obj.rotation.x = Math.PI / 2; return obj; };
   const groups = spec.parts.map((p, i) => {
     const g = new T.Group(); g.userData = { i, part: p };
-    const mat = new T.MeshStandardMaterial({ color: new T.Color(p.color), metalness: matte ? .05 : .5, roughness: matte ? .65 : .4, side: T.DoubleSide, transparent: true, opacity: 1, emissive: p.glow ? new T.Color(p.color) : new T.Color(0x000000), emissiveIntensity: p.glow ? .55 : 0 });
+    const fin = real ? ({ metal: [.9, .32], plastic: [.02, .42], rubber: [0, .92], wood: [0, .75] })[p.finish] || [.25, .5] : null;
+    const mat = new T.MeshStandardMaterial({ color: new T.Color(p.color), metalness: fin ? fin[0] : matte ? .05 : .5, roughness: fin ? fin[1] : matte ? .65 : .4, side: T.DoubleSide, transparent: true, opacity: 1, emissive: p.glow ? new T.Color(p.color) : new T.Color(0x000000), emissiveIntensity: p.glow ? .55 : 0 });
     for (const s of p.shapes) { const m = shape3d(T, s, mat, along, v3, AX); if (m) g.add(m); }
+    if (real && !p.shell) g.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } });
     model.add(g);
     return g;
   }).filter((g) => g.children.length);
@@ -555,6 +569,10 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
     return hi;
   };
   const fullBox = new T.Box3().setFromObject(model); // (its full size, before the build-up animation shrinks the parts)
+  if (real) { // (the floor only catches the shadow; and the sun's shadow reaches round the whole model)
+    const floor = new T.Mesh(new T.PlaneGeometry(R * 6, R * 6), new T.ShadowMaterial({ opacity: .22 })); floor.rotation.x = -Math.PI / 2; floor.position.y = fullBox.min.y - R * .04; floor.receiveShadow = true; scene.add(floor);
+    const sc = sun.shadow.camera; sc.left = sc.bottom = -R * 1.4; sc.right = sc.top = R * 1.4; sc.near = .1; sc.far = R * 8; sun.position.set(R * .7, R * 1.6, R * .9); sc.updateProjectionMatrix();
+  }
   const fitDist = () => fitBox(fullBox, VIEW);
   let camTo = null;
   const home = VIEW.clone().multiplyScalar(fitDist());

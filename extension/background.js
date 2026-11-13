@@ -165,6 +165,7 @@ async function speakClip(text) {
   if (!r.ok) throw Object.assign(new Error('voice ' + r.status), { usedUp: r.status === 429 || r.status === 503 });
   return { audio: bufToBase64(await r.arrayBuffer()) };
 }
+let lastServer = { source: '', plan: '' }; // (who answered the last question on Cassie's server, and the student's plan)
 async function viaServer(messages, maxTokens = 2048, most = 4000) {
   let res;
   try {
@@ -177,6 +178,7 @@ async function viaServer(messages, maxTokens = 2048, most = 4000) {
     let d = ''; try { d = (await res.json()).error?.message || ''; } catch (e) { /* not JSON */ }
     throw new Error(res.status === 403 ? 'SERVER_OFF' : (d || 'Cassie is very busy right now. Try again in a minute.'));
   }
+  lastServer = { source: res.headers.get('x-cassie-source') || '', plan: res.headers.get('x-cassie-plan') || '' };
   const reply = ((await res.json()).choices?.[0]?.message?.content || '').replace(/<think>[\s\S]*?<\/think>\s*/g, '').trim();
   if (!reply) throw new Error('Cassie went blank on that one. Try again.');
   return reply;
@@ -728,6 +730,9 @@ async function composeBoard(b) {
 }
 
 async function readPicture(keys, msg) {
+  // Her own look at a drawing she just made costs one more answer from her best model, so it is for Plus and Pro,
+  // when that model drew it. For everyone else there is no look, and the drawing shows as it is.
+  if (msg.look && !(lastServer.source === 'claude' && /^(plus|pro)$/.test(lastServer.plan))) return '';
   if (msg.board && (msg.board.image || (msg.board.strokes || []).length)) {
     try { msg = { ...msg, image: await composeBoard(msg.board) }; } catch (e) { /* use the page's own snapshot */ }
   }
