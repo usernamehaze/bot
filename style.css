@@ -3891,6 +3891,52 @@ button.dk-day.cal-cell:focus-visible { outline: 2px solid var(--focus); outline-
 .cal-full .cal-cell .cal-ev { font-size: .6rem; padding: 1px var(--sp-1, 4px); }
 .cal-full .cal-cell .cal-ev i { width: 6px; height: 6px; }
 /* the phone's Calendar widget: Small, Medium and Large show different amounts */
+/* (v281) Scratchpad, Due for review, Now playing, Streak tier, Jump back in: Home widgets on the dashboard's card */
+.xw { gap: var(--sp-2, 8px); color: var(--text); }
+.xw-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2, 8px); min-width: 0; }
+.xw-head h2 { margin: 0; font-size: 1rem; font-weight: 700; min-width: 0; }
+.xw-sub { color: var(--muted); font-size: .8rem; white-space: nowrap; }
+.xw-sub:empty { display: none; }
+.xw-none { margin: 0; color: var(--muted); font-size: .9rem; line-height: 1.4; }
+.xw-none[hidden] { display: none; }
+.xw-pad { width: 100%; box-sizing: border-box; min-height: 96px; resize: vertical; padding: var(--sp-2, 8px) var(--sp-3, 12px); border-radius: 14px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font: 500 .95rem/1.45 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+.xw-pad:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.xw-acts { display: flex; justify-content: flex-end; }
+.xw-btn { display: inline-flex; align-items: center; gap: var(--sp-2, 8px); min-height: 44px; padding: 0 var(--sp-4, 16px); border-radius: 999px; border: 1px solid var(--border); background: transparent; color: var(--text); font: inherit; font-size: .9rem; font-weight: 600; cursor: pointer; }
+.xw-btn svg, .xw-icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.xw-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2, 8px); }
+.xw-row { display: flex; align-items: center; gap: var(--sp-3, 12px); width: 100%; min-height: 56px; padding: var(--sp-2, 8px) var(--sp-3, 12px); border-radius: 16px; border: 1px solid var(--border); background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.xw-row i { display: grid; place-items: center; width: 36px; height: 36px; flex: none; border-radius: 50%; background: var(--bg); }
+.xw-row i svg, .xw-row > svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.xw-row > svg { flex: none; color: var(--muted); }
+.xw-row > span { flex: 1 1 auto; min-width: 0; display: grid; }
+.xw-row b { font-size: .95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.xw-row small { color: var(--muted); font-size: .8rem; }
+.xw-bar { height: 8px; border-radius: 999px; background: color-mix(in srgb, var(--text) 14%, transparent); overflow: hidden; }
+.xw-bar i { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--text); transition: width .3s ease; }
+.xw-title { margin: 0; font-weight: 700; font-size: .95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.xw-ctl { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2, 8px); }
+.xw-icon { position: relative; display: grid; place-items: center; width: 44px; height: 44px; flex: none; border-radius: 50%; border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; }
+.xw-icon small { position: absolute; font-size: 8px; font-weight: 700; }
+.xw-icon.xw-main { width: 52px; height: 52px; background: var(--text); color: var(--bg); border-color: var(--text); }
+.xw-icon.xw-main svg { fill: currentColor; }
+.xw :is(.xw-btn, .xw-row, .xw-icon):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+@media (hover: hover) { .xw :is(.xw-btn, .xw-row, .xw-icon):hover { border-color: var(--text); } }
+.xw-player:not(.xw-idle) .xw-none, .xw-player.xw-idle :is(.xw-title, .xw-bar, .xw-ctl) { display: none; }
+html:not(.home-edit) .hw-grid > .xw-player.xw-idle { display: none; } /* (nothing playing: off Home, but still there to arrange in Edit Home) */
+.xw-tierrow { display: flex; align-items: center; gap: var(--sp-3, 12px); min-width: 0; }
+.xw-flame { display: grid; place-items: center; width: 44px; height: 44px; flex: none; }
+.xw-flame svg { max-width: 100%; max-height: 100%; }
+.xw-tierrow > span:last-child { display: grid; min-width: 0; }
+.xw-tierrow b { font-size: 1.05rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.xw-tierrow small { color: var(--muted); font-size: .85rem; }
+/* Small: the count, the first deck or piece of work, the controls; Large: a little more room */
+.hw.ws-s.xw .xw-list li:nth-child(n+2), .hw.ws-s.xw-scratch .xw-none, .hw.ws-s .xw-sub { display: none; }
+.hw.ws-s.xw .xw-none.xw-keep { display: block; }
+.hw.ws-s.xw-player .xw-icon:not(.xw-main):not([data-xw="end"]) { display: none; }
+.hw.ws-s .xw-row { padding: var(--sp-2, 8px); gap: var(--sp-2, 8px); } .hw.ws-s .xw-row > svg { display: none; }
+.hw.ws-l .xw-pad { min-height: 160px; }
+@media (prefers-reduced-motion: reduce) { .xw-bar i { transition: none; } }
 .hub-cal { position: relative; display: grid; gap: var(--sp-2, 8px); padding: var(--sp-4, 16px); border-radius: 22px; background: var(--surface); border: 1px solid var(--border); color: var(--text); cursor: pointer; }
 .hub-cal .cal-open { position: absolute; inset: 0; z-index: 1; border: 0; background: transparent; border-radius: inherit; cursor: pointer; }
 .hub-cal .cal-open:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }

@@ -12211,6 +12211,179 @@ test('every Home box opens from anywhere on it, lifts on hover and keeps its lig
   }
 });
 
+// (v281) the five new Home widgets: open Home with a few chats, decks and a streak; widget(page, id) → what it shows
+async function xwHome(b, { kind = 'phone', state = {}, streak = 9, calls = [], scheme } = {}) {
+  const dev = kind === 'desk' ? ['Desktop Chrome', { width: 1280, height: 800 }] : ['iPhone 13', { width: 390, height: 844 }];
+  const now = Date.now(), day = 864e5;
+  const cards = [
+    ...[1, 2, 3].map((i) => ({ id: 'b' + i, f: 'Bio ' + i, b: 'x', deck: 'Biology', box: 1, due: now - day, at: 0 })),
+    ...[1, 2, 3, 4, 5].map((i) => ({ id: 'c' + i, f: 'Chem ' + i, b: 'x', deck: 'Chemistry', box: 1, due: now - day, at: 0 })),
+    { id: 'p1', f: 'Phys 1', b: 'x', deck: 'Physics', box: 2, due: now + 3 * day, at: 0 },
+  ];
+  const fake = async (body) => { calls.push(JSON.stringify(body.messages)); return { text: '## Notes\n\nClean study notes.' }; };
+  const opened = await open(b, { device: dev[0], viewport: dev[1], server: false, lite: 'off', fakeGroq: fake, ...(scheme ? { setup: async (c) => { await c.emulateMedia({ colorScheme: scheme }); } } : {}),
+    state: { tab: 'home', groqKey: 'gsk_test', chats: [{ id: 'c1', title: 'Photosynthesis', messages: [{ role: 'user', content: 'Explain photosynthesis' }, { role: 'assistant', content: 'Plants make food from light.' }], updatedAt: now - 6e4 }], currentId: 'c1', cards, ...state } });
+  const { page } = opened;
+  await page.evaluate((n) => { const d = new Date(), t = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); localStorage.setItem('cassie.mem.v1', JSON.stringify({ v: 1, topics: {}, facts: [], streak: { count: n, lastDay: t }, focusMinutes: 0 })); }, streak);
+  await page.reload(); await page.waitForTimeout(500);
+  if (kind === 'desk') await page.evaluate(() => deskGo('home')); else await page.evaluate(() => { if (window.CassieNative) window.CassieNative.go('home'); });
+  await page.waitForSelector('.hw-grid > .hw'); await page.waitForTimeout(400);
+  return opened;
+}
+const xwShow = (page, id) => page.evaluate((id) => {
+  const w = document.querySelector(`.hw-grid > .hw[data-w="${id}"]`);
+  if (!w) return null;
+  const r = w.getBoundingClientRect(), vis = (e) => e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden';
+  const spill = [...w.querySelectorAll('h2, b, small, p, button, textarea')].filter((e) => vis(e) && !e.closest('.hw-ctl')).filter((e) => { const q = e.getBoundingClientRect(); return q.left < r.left - 1 || q.right > r.right + 1; }).map((e) => e.textContent.trim().slice(0, 24) || e.tagName);
+  const small = [...w.querySelectorAll('button, textarea')].filter((e) => vis(e) && !e.closest('.hw-ctl')).map((e) => e.getBoundingClientRect()).filter((q) => q.height < 44 || q.width < 44).length;
+  return { shown: vis(w) && r.height > 0, text: w.innerText.replace(/\s+/g, ' ').trim(), spill, small, size: w.dataset.size };
+}, id);
+// add a widget from Edit Home's sheet, and leave edit mode
+async function xwAdd(page, id) {
+  await page.click('.hw-edit'); await page.click('.hw-add'); await page.waitForSelector('.hw-sheet');
+  await page.click(`.hw-sheet .hw-put[data-id="${id}"]`); await page.click('.hw-edit'); await page.waitForTimeout(200);
+}
+// every size: nothing leaves the widget, every control 44px
+async function xwSizes(page, id, where) {
+  for (const z of ['s', 'm', 'l']) {
+    await page.evaluate(([id, z]) => hwSize(document.querySelector(`.hw-grid > .hw[data-w="${id}"]`), z), [id, z]); await page.waitForTimeout(120);
+    const s = await xwShow(page, id);
+    expect(s && !s.spill.length && s.small === 0, `${where}: ${id} at ${z.toUpperCase()}: nothing leaves it and every control is 44px: ` + JSON.stringify(s));
+  }
+  await page.evaluate((id) => hwSize(document.querySelector(`.hw-grid > .hw[data-w="${id}"]`), 'm'), id);
+}
+
+test('v281 Home widget Scratchpad: added from Edit Home (not there by default); kept on this device as it is typed, after a reload; Make a note sends it to Make study notes and clears it; an empty pad says what it is for; every size fits', async (b) => {
+  const calls = [];
+  const { ctx, page, errors } = await xwHome(b, { calls });
+  const first = await xwShow(page, 'scratch');
+  expect(first === null, 'Scratchpad is not on Home until it is added');
+  await xwAdd(page, 'scratch');
+  let s = await xwShow(page, 'scratch');
+  expect(s && s.shown && /Jot down a formula, a quick sum or an idea before it slips away\./.test(s.text) && /Make a note/.test(s.text), 'added, with its one line: ' + (s && s.text));
+  await page.fill('.xw-scratch .xw-pad', 'v = u + at');
+  await page.waitForTimeout(500);
+  s = await xwShow(page, 'scratch');
+  expect(!/Jot down a formula/.test(s.text), 'the line goes once something is written');
+  await page.reload(); await page.evaluate(() => { if (window.CassieNative) window.CassieNative.go('home'); }); await page.waitForSelector('.xw-scratch .xw-pad');
+  const kept = await page.evaluate(() => ({ pad: document.querySelector('.xw-scratch .xw-pad').value, here: localStorage.getItem('cassie.scratch'), inState: JSON.stringify(state).includes('v = u + at') }));
+  expect(kept.pad === 'v = u + at' && kept.here === 'v = u + at' && !kept.inState, 'kept on this device, after a reload, and not in the synced state: ' + JSON.stringify(kept));
+  await xwSizes(page, 'scratch', '390x844');
+  await page.click('.xw-scratch [data-xw="note"]');
+  await page.waitForFunction(() => /Summarize this into clean study notes:/.test(JSON.stringify(state.messages)), null, { timeout: 15000 });
+  const sent = await page.evaluate(() => ({ asked: state.messages.filter((m) => m.role === 'user').pop().content, left: localStorage.getItem('cassie.scratch') }));
+  expect(/^Summarize this into clean study notes:\s+v = u \+ at$/.test(sent.asked) && sent.left === null, 'Make a note sends it to Make study notes, and the pad is cleared: ' + JSON.stringify(sent));
+  expect(!errors.length, 'no script errors: ' + errors.join(' | '));
+  await ctx.close();
+});
+
+test('v281 Home widget Due for review: on Home by default; the decks with cards due today, most due first, with the count; a tap opens that deck; nothing due says so; every size fits (phone and computer)', async (b) => {
+  for (const kind of ['phone', 'desk']) {
+    const where = kind === 'desk' ? '1280x800' : '390x844';
+    const { ctx, page, errors } = await xwHome(b, { kind });
+    const s = await xwShow(page, 'due');
+    expect(s && s.shown && /Due for review 2 decks due today/.test(s.text) && s.text.indexOf('Chemistry') < s.text.indexOf('Biology') && /Chemistry 5 due/.test(s.text) && /Biology 3 due/.test(s.text) && !/Physics/.test(s.text), `${where}: the due decks, most due first: ` + (s && s.text));
+    await xwSizes(page, 'due', where);
+    await page.evaluate(() => { window.__opened = []; const o = window.CassieCards.open; window.CassieCards.open = (d) => { window.__opened.push(d); }; });
+    await page.click('.xw-due .xw-row');
+    expect((await page.evaluate(() => window.__opened)).join() === 'Chemistry', `${where}: a tap opens that deck`);
+    expect(!errors.length, `${where}: no script errors: ` + errors.join(' | '));
+    await ctx.close();
+  }
+  const { ctx, page } = await xwHome(b, { state: { cards: [{ id: 'p1', f: 'Phys', b: 'x', deck: 'Physics', box: 2, due: Date.now() + 864e5, at: 0 }] } });
+  const none = await xwShow(page, 'due');
+  expect(none && /Nothing due today\./.test(none.text) && !/decks due/.test(none.text), 'nothing due says so: ' + (none && none.text));
+  await ctx.close();
+});
+
+test('v281 Home widget Now playing: added from Edit Home; hidden on Home while nothing plays (seen in Edit Home with its line); shows the podcast that is playing or paused, with play or pause, back and forward 15 seconds, a progress bar and Stop; it controls the podcast’s own audio; the podcast keeps playing when its window closes', async (b) => {
+  const { ctx, page, errors } = await xwHome(b);
+  await xwAdd(page, 'player');
+  let s = await xwShow(page, 'player');
+  expect(s && !s.shown, 'nothing playing: off Home');
+  await page.click('.hw-edit');
+  s = await xwShow(page, 'player');
+  expect(s && s.shown && /Shows here while a podcast plays\./.test(s.text), 'in Edit Home it is there to arrange, with its line: ' + (s && s.text));
+  await page.click('.hw-edit');
+  // a podcast as the player sees it
+  await page.evaluate(() => {
+    window.__np = { calls: [], on: true, at: 0.25 };
+    const p = { title: 'Photosynthesis podcast', playing: () => window.__np.on, progress: () => window.__np.at, toggle() { window.__np.calls.push('toggle'); window.__np.on = !window.__np.on; }, seek(s) { window.__np.calls.push('seek' + s); }, stop() { window.__np.calls.push('stop'); } };
+    nowPlaying.set(p);
+  });
+  await page.waitForTimeout(150);
+  s = await xwShow(page, 'player');
+  const bar = await page.evaluate(() => document.querySelector('.xw-player .xw-bar').getAttribute('aria-valuenow'));
+  expect(s && s.shown && /Photosynthesis podcast/.test(s.text) && bar === '25' && !/Shows here while/.test(s.text), 'playing: its title and how far it is: ' + (s && s.text) + ' ' + bar);
+  const labels = await page.evaluate(() => [...document.querySelectorAll('.xw-player .xw-ctl button')].map((x) => x.getAttribute('aria-label')));
+  expect(labels.join('|') === 'Back 15 seconds|Pause|Forward 15 seconds|Stop and close the player', 'its controls: ' + labels.join('|'));
+  await xwSizes(page, 'player', '390x844');
+  await page.click('.xw-player [data-xw="back"]'); await page.click('.xw-player [data-xw="fwd"]'); await page.click('.xw-player [data-xw="toggle"]');
+  const after = await page.evaluate(() => ({ calls: window.__np.calls.join(), label: document.querySelector('.xw-player [data-xw="toggle"]').getAttribute('aria-label') }));
+  expect(after.calls === 'seek-15,seek15,toggle' && after.label === 'Play', 'back, forward and pause control it: ' + JSON.stringify(after));
+  await page.click('.xw-player [data-xw="end"]'); await page.waitForTimeout(120);
+  s = await xwShow(page, 'player');
+  expect(s && !s.shown && (await page.evaluate(() => window.__np.calls.includes('stop') && nowPlaying.cur === null)), 'Stop ends it, and the widget leaves Home');
+  // the podcast player hands its own audio to Now playing, and closing its window while it plays keeps it going
+  const src = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
+  expect(/audio\.addEventListener\('play', \(\) => \{ if \(nowPlaying\.cur !== np && !stopped\) nowPlaying\.set\(np\); \}\);/.test(src) && /if \(player && !player\.playing\(\)\) player\.stop\(\); w\.remove\(\);/.test(src) && /nowPlaying\.clear\(np\); return; \}/.test(src), 'the podcast registers its own audio, keeps playing when its window closes, and leaves at its end');
+  expect(!errors.length, 'no script errors: ' + errors.join(' | '));
+  await ctx.close();
+});
+
+test('v281 Home widget Streak tier: on Home by default; the flame tier and the day (Gold, day 9), the days to the next tier (5 days to Rose) and a bar; no streak yet says so; the top tier says so; every size fits (phone and computer)', async (b) => {
+  for (const kind of ['phone', 'desk']) {
+    const where = kind === 'desk' ? '1280x800' : '390x844';
+    const { ctx, page, errors } = await xwHome(b, { kind, streak: 9 });
+    const s = await xwShow(page, 'tier');
+    const bar = await page.evaluate(() => document.querySelector('.hw[data-w="tier"] .xw-bar').getAttribute('aria-valuenow'));
+    expect(s && s.shown && /Gold, day 9/.test(s.text) && /5 days to Rose/.test(s.text) && bar === '29', `${where}: Gold, day 9, 5 days to Rose: ` + (s && s.text) + ' ' + bar);
+    await xwSizes(page, 'tier', where);
+    expect(!errors.length, `${where}: no script errors: ` + errors.join(' | '));
+    await ctx.close();
+  }
+  for (const [n, want] of [[0, /No streak yet 1 day to Ember/], [120, /Sky, day 120 The top tier/]]) {
+    const { ctx, page } = await xwHome(b, { streak: n });
+    const s = await xwShow(page, 'tier');
+    expect(s && want.test(s.text), `a streak of ${n}: ` + (s && s.text));
+    await ctx.close();
+  }
+  const tiers = fs.readFileSync(path.join(ROOT, 'rewards.js'), 'utf8').match(/\{ at: \d+, name: '\w+'/g).length;
+  expect(tiers === 6, 'the flame’s own six tiers, none added');
+});
+
+test('v281 Home widget Jump back in: added from Edit Home; the last 3 Labs and boards opened, newest first; a lab reopens that lab, a board reopens its picture; a board with nothing on it is not listed; nothing yet says so; every size fits', async (b) => {
+  const { ctx, page, errors } = await xwHome(b);
+  await xwAdd(page, 'resume');
+  let s = await xwShow(page, 'resume');
+  expect(s && /Labs and boards you open show up here\./.test(s.text), 'nothing yet says so: ' + (s && s.text));
+  // what opening keeps: a lab (from Labs), a board with a drawing, and a blank board (not kept)
+  const kept = await page.evaluate(async () => {
+    recentWork({ kind: 'lab', id: 'cell-explorer', title: 'Cell explorer' });
+    const png = (() => { const c = document.createElement('canvas'); c.width = 40; c.height = 30; const x = c.getContext('2d'); x.fillStyle = '#c00'; x.fillRect(0, 0, 40, 30); return c.toDataURL('image/png'); })();
+    boardLeft({ strokeCount: () => 0, pictures: () => [], snapshot: () => png }, {}); // (blank)
+    boardLeft({ strokeCount: () => 3, pictures: () => [], snapshot: () => png }, { title: 'Your board' });
+    for (let i = 0; i < 6; i++) recentWork({ kind: 'lab', id: 'lab' + i, title: 'Lab ' + i });
+    recentWork({ kind: 'board', id: 'board', title: 'Your board' });
+    await new Promise((r) => setTimeout(r, 300));
+    return { list: state.recentWork.map((x) => x.kind + ':' + x.id), pic: (localStorage.getItem('cassie.board.last') || '').slice(0, 15) };
+  }).catch((e) => ({ err: e.message }));
+  expect(kept.list && kept.list.length === 5 && kept.list[0] === 'board:board' && kept.list[1] === 'lab:lab5' && kept.pic === 'data:image/jpeg', 'the last 5 kept, newest first, one entry per lab or board, and the board’s picture on this device: ' + JSON.stringify(kept));
+  await page.evaluate(() => { if (window.CassieNative) window.CassieNative.go('chat'); }); await page.evaluate(() => { if (window.CassieNative) window.CassieNative.go('home'); }); await page.waitForSelector('.xw-resume');
+  s = await xwShow(page, 'resume');
+  expect(s && /Your board Board/.test(s.text) && /Lab 5 Lab/.test(s.text) && /Lab 4 Lab/.test(s.text) && !/Lab 3/.test(s.text), 'the last 3, newest first: ' + s.text);
+  await xwSizes(page, 'resume', '390x844');
+  await page.evaluate(() => { window.__go = []; window.openLabs = (id) => window.__go.push('lab:' + id); window.openSketch = (o) => window.__go.push('board:' + String(o.image || '').slice(0, 15)); });
+  const rows = page.locator('.xw-resume .xw-row');
+  await rows.nth(0).click(); await rows.nth(1).click();
+  expect((await page.evaluate(() => window.__go.join())) === 'board:data:image/jpeg,lab:lab5', 'a board reopens its picture, a lab reopens that lab: ' + await page.evaluate(() => window.__go.join()));
+  // and the real hooks: Labs tells the app which lab opened, a closed board with a drawing is kept
+  const src = fs.readFileSync(path.join(ROOT, 'labs/labs.js'), 'utf8'), app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
+  expect(/if \(opts\.onOpenLab\) \{ try \{ opts\.onOpenLab\(lab\.id, lab\.name\); \}/.test(src) && /onOpenLab: \(id, name\) => recentWork\(\{ kind: 'lab', id, title: name \}\)/.test(app) && /onClose: \(\) => \{ document\.documentElement\.classList\.remove\('board-open'\); boardLeft\(sess, opts\); \}/.test(app), 'Labs and the board record what was opened');
+  expect(!errors.length, 'no script errors: ' + errors.join(' | '));
+  await ctx.close();
+});
+
 test('Home widgets: add, remove, resize, drag, kept after reload (computer 1280x800 and phone 390x844): Edit Home shows a handle, a size and a remove button on every widget; a removed widget comes back from Add widget; Small, Medium and Large change its span; a mouse drag and a finger’s long press move it, a plain swipe scrolls; the arrow keys move it and plus and minus size it, said aloud; the layout survives a reload and Reset puts back the default; outside edit mode a box opens as before; nothing overlaps at Small; AA in light and dark', async (b) => {
   const { contrastIssues } = require('./ui-checks.cjs');
   const order = (page) => page.evaluate(() => [...document.querySelectorAll('.hw-grid > .hw')].map((w) => w.dataset.w));

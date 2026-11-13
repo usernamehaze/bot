@@ -2330,15 +2330,18 @@ document.addEventListener('click', (e) => {
 // Outside edit mode Home works as before (whole-box clicks, the lift, the light).
 const HW_NAME = { lessons: 'Lessons', timer: 'Focus timer', cards: 'Flashcards', exam: 'Exam coming up', tlab: 'Today’s Lab', asked: 'Questions this week',
   learned: 'Cards learned', streak: 'Day streak', readiness: 'Exam readiness', week: 'Study this week', next: 'Next up', plans: 'My exam plans', chats: 'Recent chats',
-  ready: 'Readiness gauge', continue: 'Continue', tools: 'Study tools', quick: 'Quick actions', cal: 'Calendar' };
+  ready: 'Readiness gauge', continue: 'Continue', tools: 'Study tools', quick: 'Quick actions', cal: 'Calendar',
+  scratch: 'Scratchpad', due: 'Due for review', player: 'Now playing', tier: 'Streak tier', resume: 'Jump back in' };
 const HW_ABOUT = { lessons: 'What your level studies', timer: 'Start a focus session', cards: 'Review and make cards', exam: 'A day by day plan for an exam', tlab: 'A lab picked for today',
   asked: 'How many questions this week', learned: 'Cards you know well', streak: 'Days in a row', readiness: 'How ready you are for your exam', week: 'A bar for each day',
   next: 'The next task of your plan', plans: 'Your exam plans', chats: 'Your last chats', ready: 'Your exam readiness, as a gauge', continue: 'Pick up a chat', tools: 'Research, quiz, board and more',
-  quick: 'One tap to start', cal: 'Today, this week or the month' };
+  quick: 'One tap to start', cal: 'Today, this week or the month',
+  scratch: 'Jot formulas and ideas, then make a note', due: 'Decks with cards due today', player: 'Control a podcast while it plays',
+  tier: 'Your flame tier and the next one', resume: 'Your last Labs and boards' };
 const HW_DEFAULT = {
   desk: [['lessons', 's'], ['timer', 'm'], ['cards', 's'], ['exam', 'l'], ['tlab', 'm'], ['asked', 's'], ['learned', 's'], ['streak', 's'], ['readiness', 's'],
-    ['week', 'm'], ['next', 'm'], ['plans', 'm'], ['chats', 'm'], ['ready', 'm']],
-  phone: [['lessons', 's'], ['cards', 's'], ['timer', 'm'], ['exam', 'm'], ['cal', 'm'], ['tlab', 'm'], ['streak', 'm'], ['week', 'm'], ['continue', 'm'], ['tools', 'm'], ['quick', 'm']] };
+    ['week', 'm'], ['next', 'm'], ['plans', 'm'], ['chats', 'm'], ['ready', 'm'], ['due', 'm'], ['tier', 'm']],
+  phone: [['lessons', 's'], ['cards', 's'], ['timer', 'm'], ['exam', 'm'], ['cal', 'm'], ['tlab', 'm'], ['streak', 'm'], ['tier', 'm'], ['due', 'm'], ['week', 'm'], ['continue', 'm'], ['tools', 'm'], ['quick', 'm']] };
 const HW_SIZES = ['s', 'm', 'l'], HW_SIZE_NAME = { s: 'Small', m: 'Medium', l: 'Large' };
 let homeEditing = false;
 const hwStill = () => !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -2611,7 +2614,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=280'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=281'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2633,7 +2636,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=280'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=281'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -2909,7 +2912,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=280').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=281').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -3037,6 +3040,7 @@ function buildHub({ ideas = false, phone = false } = {}) {
   // like the chat's Cassie (v273), and she says hello by the clock
   try { hubBot = window.CassieBot.create(el.querySelector('.hub-bot'), { state: 'idle', pokeable: true, accessory: cassieSeasonal() }); hubHello(el.querySelector('.hub-bot')); } catch (e) { hubBot = null; /* the words still work */ }
   if (phone) el.append(calWidget()); // (v225: the Calendar, as a widget)
+  if (phone && returning) el.append(...homeExtras()); // (v281: Scratchpad, Due for review, Now playing, Streak tier, Jump back in)
   homeWidgets(el, 'phone');
   setTimeout(renderHubTimer, 0);
   return el;
@@ -3249,7 +3253,7 @@ function openPodcast(text, title) {
   w.querySelector('.pod-allow').textContent = `No daily limit: podcasts come out of your monthly voice${max ? ` (${max.toLocaleString('en-PH')} characters on your plan)` : ''}.`;
   const go = w.querySelector('.pod-go'), status = w.querySelector('.pod-status');
   let player = null;
-  const close = () => { if (player) player.stop(); w.remove(); document.removeEventListener('keydown', onKey, true); };
+  const close = () => { if (player && !player.playing()) player.stop(); w.remove(); document.removeEventListener('keydown', onKey, true); }; // (v281: still playing, it goes on, and Now playing on Home controls it)
   const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
   document.addEventListener('keydown', onKey, true);
   w.querySelector('.pod-x').addEventListener('click', close);
@@ -3292,7 +3296,7 @@ function podPlayer(card, lines, title, voiceOk) {
   const rest = (e) => { setPlay(false); note.textContent = e && e.why === 'guest' ? CassieErrors.say('voice_signin') : e && e.why === 'mine' ? CassieErrors.say('voice_mine', { date: 'the 1st' }) : e && e.why === 'day' ? CassieErrors.say('voice_today') : e && e.why === 'month' ? CassieErrors.say('voice_resting', { date: 'next month' }) : CassieErrors.say('voice_typing'); };
   function play(i) {
     if (stopped || i < 0) return;
-    if (i >= lines.length) { setPlay(false); return; }
+    if (i >= lines.length) { setPlay(false); nowPlaying.clear(np); return; }
     at = i; mark();
     const li = ol.querySelector(`[data-i="${i}"]`); if (li) li.scrollIntoView({ block: 'nearest' });
     if (!voiceOk) { rest(null); return; }
@@ -3306,6 +3310,21 @@ function podPlayer(card, lines, title, voiceOk) {
     }, rest);
   }
   audio.addEventListener('ended', () => { if (playing) play(at + 1); });
+  // (v281) Now playing on Home: this podcast, while it plays or is paused
+  const np = {
+    title: `${title} podcast`,
+    playing: () => playing,
+    progress: () => (at + (audio.duration ? Math.min(1, audio.currentTime / audio.duration) : 0)) / lines.length,
+    toggle() { box.querySelector('[data-p="play"]').click(); },
+    seek(sec) {
+      if (sec < 0 && audio.currentTime < 2 && at > 0) { play(at - 1); return; }
+      if (sec > 0 && audio.duration && audio.currentTime + sec >= audio.duration) { if (at + 1 < lines.length) play(at + 1); return; }
+      audio.currentTime = Math.max(0, audio.currentTime + sec);
+    },
+    stop() { stopped = true; audio.pause(); setPlay(false); },
+  };
+  ['play', 'pause', 'timeupdate'].forEach((ev) => audio.addEventListener(ev, () => { if (nowPlaying.cur === np) nowPlaying.tell(); }));
+  audio.addEventListener('play', () => { if (nowPlaying.cur !== np && !stopped) nowPlaying.set(np); });
   box.addEventListener('click', (e) => {
     const li = e.target.closest('.pod-line'); if (li) { play(+li.dataset.i); return; }
     const b = e.target.closest('[data-p]'); if (!b) return;
@@ -3326,7 +3345,7 @@ function podPlayer(card, lines, title, voiceOk) {
   ol.addEventListener('keydown', (e) => { const li = e.target.closest('.pod-line'); if (li && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); play(+li.dataset.i); } });
   mark();
   if (!voiceOk) rest(null);
-  return { stop() { stopped = true; audio.pause(); urls.forEach((u) => URL.revokeObjectURL(u)); } };
+  return { playing: () => playing && !stopped, stop() { stopped = true; audio.pause(); urls.forEach((u) => URL.revokeObjectURL(u)); nowPlaying.clear(np); } };
 }
 
 /* ---------- Home on a computer: a study dashboard ----------
@@ -3450,6 +3469,7 @@ function deskHome() {
   // (v223) the boxes Home shares with the phone (Today's Lab's play button) are data-hub: they open here too
   el.addEventListener('click', (e) => { const h = e.target.closest('[data-hub]'); if (h && el.contains(h)) hubAct(h.dataset.hub); });
   el.querySelector('.dk-ideas').addEventListener('click', () => showTools()); // (where every study tool lives: the sidebar)
+  el.querySelector('.dk-grid').append(...homeExtras()); // (v281)
   homeWidgets(el, 'desk');
   setTimeout(renderDeskTimer, 0);
   return el;
@@ -3840,6 +3860,155 @@ function openCalFull() {
   w.querySelector('.cal-today').focus({ preventScroll: true });
 }
 // the phone's Calendar widget: Small, today and the next item; Medium, this week; Large, the month (tap: the full Calendar)
+/* ---------- (v281) five more Home widgets: Scratchpad, Due for review, Now playing, Streak tier, Jump back in ----------
+   Each is a Home widget like the others (a data-w box: moved, sized, taken off and added back in Edit Home).
+   They only read what the app already keeps: the flashcard decks, the streak and its flame tiers, the podcast that
+   is playing, and the last Labs and boards the student opened (state.recentWork, kept when they are opened). */
+const XW_ICON = {
+  pad: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5z"/><path d="M8.5 9h7M8.5 12.5h7M8.5 16h4"/></svg>',
+  play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>',
+  pause: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg>',
+  back: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.6"/><path d="M4 4v4h4"/></svg>',
+  fwd: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4h-4"/></svg>',
+  x: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  board: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21l4-4 4 4"/><path d="M7 13l3-3 2 2 4-4"/></svg>',
+};
+const xwCard = (id, cls = '') => { const el = document.createElement('section'); el.className = `dk-card xw xw-${id}${cls ? ' ' + cls : ''}`; el.dataset.w = id; el.setAttribute('aria-label', HW_NAME[id]); return el; };
+const xwHead = (id, sub = '') => `<div class="xw-head"><h2>${HW_NAME[id]}</h2><small class="xw-sub">${sub}</small></div>`;
+
+// Scratchpad: kept on this device as it is typed; "Make a note" sends it to the chat's own Make study notes
+const SCRATCH_KEY = 'cassie.scratch';
+const scratchGet = () => { try { return localStorage.getItem(SCRATCH_KEY) || ''; } catch (e) { return ''; } };
+const scratchSet = (t) => { try { if (t) localStorage.setItem(SCRATCH_KEY, t); else localStorage.removeItem(SCRATCH_KEY); } catch (e) { /* this visit only */ } };
+function xwScratch() {
+  const el = xwCard('scratch');
+  el.innerHTML = `${xwHead('scratch')}<p class="xw-none"></p><textarea class="xw-pad" rows="4" spellcheck="false"></textarea><div class="xw-acts"><button type="button" class="xw-btn" data-xw="note">${XW_ICON.pad}<span>Make a note</span></button></div>`;
+  const pad = el.querySelector('.xw-pad'), none = el.querySelector('.xw-none');
+  none.textContent = CassieErrors.say('hw_scratch_empty');
+  pad.setAttribute('aria-label', 'Scratchpad: formulas, sums and ideas'); pad.placeholder = 'x = (-b ± √(b² - 4ac)) / 2a';
+  pad.value = scratchGet();
+  const show = () => { none.hidden = !!pad.value.trim(); };
+  let t = 0;
+  pad.addEventListener('input', () => { show(); clearTimeout(t); t = setTimeout(() => scratchSet(pad.value), 300); });
+  pad.addEventListener('blur', () => { clearTimeout(t); scratchSet(pad.value); });
+  el.querySelector('[data-xw="note"]').addEventListener('click', () => {
+    const text = pad.value.trim();
+    if (!text) { pad.focus(); return; }
+    const ex = HOME_EXAMPLES.find((x) => x.label === 'Make study notes');
+    if (!ex) return;
+    scratchSet(''); pad.value = ''; show();
+    track('feature', 'scratch-note');
+    runTool({ ...ex, text: ex.text + text, send: true }); // (the same way the app already makes notes)
+  });
+  show();
+  return el;
+}
+
+// Due for review: the decks with cards due today, most due first; a tap opens that deck's review
+function xwDue() {
+  const el = xwCard('due'), C = window.CassieCards;
+  const list = C && C.decks ? C.decks().filter((d) => d.due > 0) : [];
+  el.innerHTML = `${xwHead('due', list.length ? `${list.length} ${list.length === 1 ? 'deck' : 'decks'} due today` : '')}<ul class="xw-list"></ul>`;
+  const ul = el.querySelector('.xw-list');
+  if (!list.length) { const p = document.createElement('p'); p.className = 'xw-none xw-keep'; p.textContent = CassieErrors.say('hw_due_none'); ul.replaceWith(p); return el; }
+  list.slice(0, 4).forEach((d) => {
+    const li = document.createElement('li');
+    li.innerHTML = `<button type="button" class="xw-row"><i>${HUB_ICON.cards}</i><span><b></b><small></small></span>${HUB_ICON.go}</button>`;
+    li.querySelector('b').textContent = d.name; li.querySelector('small').textContent = `${d.due} due`;
+    li.querySelector('button').setAttribute('aria-label', `Review ${d.name}: ${d.due} due`);
+    li.querySelector('button').addEventListener('click', () => { track('feature', 'due-widget'); C.open(d.name); });
+    ul.appendChild(li);
+  });
+  return el;
+}
+
+// Now playing: the podcast that is playing or paused (nowPlaying), from anywhere in the app; hidden when there is none
+const nowPlaying = {
+  cur: null,
+  set(p) { if (this.cur && this.cur !== p) { try { this.cur.stop(); } catch (e) { /* gone */ } } this.cur = p; this.tell(); },
+  clear(p) { if (!p || this.cur === p) { this.cur = null; this.tell(); } },
+  tell() { document.dispatchEvent(new CustomEvent('cassie-nowplaying')); },
+};
+function xwPlayer() {
+  const el = xwCard('player');
+  el.innerHTML = `${xwHead('player')}<p class="xw-none"></p><p class="xw-title"></p>
+    <div class="xw-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="How far it has played"><i></i></div>
+    <div class="xw-ctl" role="group" aria-label="Playback">
+      <button type="button" class="xw-icon" data-xw="back" aria-label="Back 15 seconds">${XW_ICON.back}<small>15</small></button>
+      <button type="button" class="xw-icon xw-main" data-xw="toggle"></button>
+      <button type="button" class="xw-icon" data-xw="fwd" aria-label="Forward 15 seconds">${XW_ICON.fwd}<small>15</small></button>
+      <button type="button" class="xw-icon" data-xw="end" aria-label="Stop and close the player">${XW_ICON.x}</button>
+    </div>`;
+  el.querySelector('.xw-none').textContent = CassieErrors.say('hw_player_idle'); // (seen only in Edit Home, while nothing plays)
+  const paint = () => {
+    const p = nowPlaying.cur;
+    el.classList.toggle('xw-idle', !p);
+    if (!p) return;
+    el.querySelector('.xw-title').textContent = p.title;
+    const on = p.playing(), b = el.querySelector('[data-xw="toggle"]');
+    b.innerHTML = on ? XW_ICON.pause : XW_ICON.play; b.setAttribute('aria-label', on ? 'Pause' : 'Play');
+    const pct = Math.round(Math.max(0, Math.min(1, p.progress())) * 100);
+    el.querySelector('.xw-bar i').style.width = pct + '%'; el.querySelector('.xw-bar').setAttribute('aria-valuenow', String(pct));
+  };
+  el.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-xw]'), p = nowPlaying.cur; if (!b || !p) return;
+    const k = b.dataset.xw;
+    if (k === 'toggle') p.toggle(); else if (k === 'back') p.seek(-15); else if (k === 'fwd') p.seek(15); else if (k === 'end') { p.stop(); nowPlaying.clear(p); }
+    paint();
+  });
+  const on = () => { if (!el.isConnected) { document.removeEventListener('cassie-nowplaying', on); return; } paint(); };
+  document.addEventListener('cassie-nowplaying', on);
+  paint();
+  return el;
+}
+
+// Streak tier: the flame's tier (rewards.js) and how far it is to the next one
+function xwTier() {
+  const el = xwCard('tier'), R = window.CassieRewards;
+  const n = window.CassieMemory ? window.CassieMemory.stats().streak : 0;
+  if (!R || !R.tierFor) { el.innerHTML = xwHead('tier'); return el; }
+  const t = n > 0 ? R.tierFor(n) : null, nx = R.nextTier(n);
+  const from = t ? t.at : 0, pct = nx ? Math.round(((n - from) / Math.max(1, nx.at - from)) * 100) : 100;
+  const left = nx ? nx.at - n : 0;
+  el.innerHTML = `${xwHead('tier')}<div class="xw-tierrow"><span class="xw-flame">${R.flameFor ? R.flameFor(n, 36) : ''}</span><span><b></b><small></small></span></div>
+    <div class="xw-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><i style="width:${pct}%"></i></div>`;
+  el.querySelector('.xw-tierrow b').textContent = t ? `${t.name}, day ${n}` : 'No streak yet';
+  el.querySelector('.xw-tierrow small').textContent = nx ? `${left} ${left === 1 ? 'day' : 'days'} to ${nx.name}` : 'The top tier';
+  el.querySelector('.xw-bar').setAttribute('aria-label', nx ? `${left} ${left === 1 ? 'day' : 'days'} to ${nx.name}` : 'The top tier');
+  return el;
+}
+
+// Jump back in: the last Labs and boards opened (recentWork, newest first), each reopened where it was left
+const BOARD_LAST = 'cassie.board.last'; // (the last board's picture, on this device only)
+function recentWork(item) {
+  const list = (Array.isArray(state.recentWork) ? state.recentWork : []).filter((x) => !(x.kind === item.kind && x.id === item.id));
+  state.recentWork = [{ kind: item.kind, id: String(item.id).slice(0, 80), title: String(item.title || '').slice(0, 80), at: Date.now() }, ...list].slice(0, 5);
+  save();
+}
+function xwResume() {
+  const el = xwCard('resume');
+  const list = (Array.isArray(state.recentWork) ? state.recentWork : []).slice(0, 3);
+  el.innerHTML = `${xwHead('resume')}<ul class="xw-list"></ul>`;
+  const ul = el.querySelector('.xw-list');
+  if (!list.length) { const p = document.createElement('p'); p.className = 'xw-none xw-keep'; p.textContent = CassieErrors.say('hw_resume_none'); ul.replaceWith(p); return el; }
+  list.forEach((r) => {
+    const li = document.createElement('li');
+    li.innerHTML = `<button type="button" class="xw-row"><i>${r.kind === 'board' ? XW_ICON.board : HUB_ICON.lab}</i><span><b></b><small></small></span>${HUB_ICON.go}</button>`;
+    li.querySelector('b').textContent = r.title || (r.kind === 'board' ? 'Your board' : 'Lab');
+    li.querySelector('small').textContent = `${r.kind === 'board' ? 'Board' : 'Lab'} · ${hubAgo(r.at)}`;
+    li.querySelector('button').addEventListener('click', () => {
+      track('feature', 'resume-' + r.kind);
+      if (r.kind === 'lab') { openLabs(r.id); return; }
+      let pic = null; try { pic = localStorage.getItem(BOARD_LAST); } catch (e) { pic = null; }
+      openSketch({ title: r.title || 'Your board', image: pic || null });
+    });
+    ul.appendChild(li);
+  });
+  return el;
+}
+// all five, for Home on a phone or a computer (which of them shows is the student's layout)
+const homeExtras = () => [xwScratch(), xwDue(), xwPlayer(), xwTier(), xwResume()];
+
 function calWidget() {
   const today = phDay(), el = document.createElement('section');
   el.className = 'hub-cal'; el.dataset.w = 'cal'; el.setAttribute('aria-label', 'Calendar');
@@ -6981,7 +7150,7 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=280')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=281')));
 // a real photo needs Gemini pictures (Cassie's server or the student's key); the free service draws toys and models
 const realPhotoOk = () => !!((SERVER && serverPictures) || (state.geminiKey && !geminiImageOff));
 // a drawing inside a chat bubble (a new one draws itself; one from history shows finished)
@@ -7514,12 +7683,27 @@ function attachDataUrl(dataUrl, prompt) {
   img.src = dataUrl;
 }
 
+// (v281) a board with something on it, when it closes: its picture stays on this device, and Jump back in lists it
+function boardLeft(sess, opts) {
+  try {
+    if (!sess || !(sess.strokeCount() > 0 || (sess.pictures && sess.pictures().length))) return;
+    const img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, 1100 / Math.max(img.width, img.height)), c = document.createElement('canvas');
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      try { localStorage.setItem(BOARD_LAST, c.toDataURL('image/jpeg', 0.82)); } catch (e) { /* no room: the list still says it */ }
+    };
+    img.src = sess.snapshot();
+    recentWork({ kind: 'board', id: 'board', title: opts.title || 'Your board' });
+  } catch (e) { /* a board that can't be pictured is still closed */ }
+}
 function openSketch(opts = {}) {
   if (!window.CassieSketch) return;
   deskCloseOthers('board');
   document.documentElement.classList.add('board-open'); // (style.css: the cards behind stop blurring while the board is up)
-  window.CassieSketch.open({
-    onClose: () => document.documentElement.classList.remove('board-open'),
+  const sess = window.CassieSketch.open({
+    onClose: () => { document.documentElement.classList.remove('board-open'); boardLeft(sess, opts); },
     title: opts.title || 'Your board',
     dark: opts.dark != null ? opts.dark : prefersDark(),
     image: opts.image || null,
@@ -8252,7 +8436,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=280');
+      exploreMod = await import('./explore/cell3d.js?v=281');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -8302,12 +8486,13 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=280');
+      labsMod = await import('./labs/labs.js?v=281');
       islandRest();
     }
     labsMod.open({
       lab,
       ...more,
+      onOpenLab: (id, name) => recentWork({ kind: 'lab', id, title: name }), // (v281: Jump back in)
       onAsk: (q) => handleSend(q),
       onQuiz: (topic) => startQuizOn(topic),
       // Ask Cassie and Quiz me stay inside the lab
@@ -10263,10 +10448,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=280').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=281').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=280', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=281', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
