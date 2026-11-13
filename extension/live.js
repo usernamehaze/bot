@@ -85,6 +85,7 @@
     };
     const beats = whole('beats'), parts = beats.length ? [] : whole('parts');
     if (parts.length && /"mode"\s*:\s*"3d"/.test(t)) return { answer: wordOf(t, 'answer'), title: wordOf(t, 'title'), intro: wordOf(t, 'intro'), mode: '3d', axis: wordOf(t, 'axis'), parts };
+    if (parts.length && /"mode"\s*:\s*"2d"/.test(t)) return { answer: wordOf(t, 'answer'), title: wordOf(t, 'title'), intro: wordOf(t, 'intro'), mode: '2d', layout: wordOf(t, 'layout'), parts };
     if (!beats.length) return null;
     let about = null;
     const a = t.match(/"about"\s*:\s*(\[[^\]]*\]|\d+)/);
@@ -233,6 +234,17 @@
         return { kind: 'card', answer: answer || intro || beats.map((b) => b.say).join(' '), scene: { dim: '3d', spec: { ...d, parts }, title: words(d.title, 60) || 'How it works', caption: sum, view: '3D model', about: cleanAbout(d.about, count), keep: false, beats }, steps: [] };
       }
     }
+    // a flat drawing in the Cassie app's form: one beat for each part she draws, named as it is drawn
+    if (d && d.mode !== '3d' && Array.isArray(d.parts)) {
+      const parts = d.parts.slice(0, 8).filter((x) => x && typeof x === 'object' && Array.isArray(x.shapes) && x.shapes.some((sh) => sh && typeof sh === 'object'));
+      if (parts.length) {
+        const intro = words(d.intro, 300), sum = words(d.summary, 300), beats = [];
+        if (intro) beats.push({ say: intro, parts: [] });
+        parts.forEach((x, i) => beats.push({ say: words(x.say, 360) || words(x.label, 40), parts: [], part: i }));
+        if (sum) beats.push({ say: sum, parts: [] });
+        return { kind: 'card', answer: answer || intro || beats.map((b) => b.say).join(' '), scene: { dim: 'flat', spec: { ...d, mode: '2d', parts }, title: words(d.title, 60) || 'How it works', caption: sum, view: '', about: cleanAbout(d.about, count), keep: false, beats }, steps: [] };
+      }
+    }
     const scene = d && Array.isArray(d.beats) ? cleanScene(d, count) : null;
     const said = scene ? scene.beats.map((b) => b.say).filter(Boolean).join(' ') : '';
     if (scene && scene.beats.some((b) => b.parts.length)) return { kind: 'card', answer: answer || said, scene, steps: [] };
@@ -249,6 +261,8 @@
   // (no WebGL, or Reduce Motion), the same answer is a flat drawing.
   const WANTS_3D = /\b3d\b|\bthree[\s-]?d\b|\bturn\s+it\s+around\b|\brotate\s+it\b|\bfrom\s+all\s+sides\b/i;
   const FITS = /\b(attach|assembl|connect|install|plug|insert|mount|screw)\w*|\bput\b[^.?!]{0,20}\btogether\b|\bfits?\b[^.?!]{0,12}\b(in|into|onto|together)\b/i;
+  // soft and living things, and processes: her 3D is made of simple solids and would look wrong, so these are drawn flat
+  const SOFT = /\b(heart|lungs?|brain|kidneys?|liver|stomach|intestines?|eyes?|ears?|skin|muscles?|bones?|skeleton|tooth|teeth|tongue|nerves?|neurons?|veins?|arter(y|ies)|blood|organs?|body|digestive|respiratory|circulatory|nervous system|cells?|bacteri\w*|virus\w*|dna|plants?|lea(f|ves)|flowers?|roots?|seeds?|trees?|animals?|insects?|fish|birds?|frogs?|butterfl\w*|puso|baga|utak|halaman|dahon|bulaklak|hayop|cycle|photosynthesis|respiration|digestion|mitosis|meiosis|evaporation|erosion|food (chain|web)|ecosystem)\b/i;
   const glOk = () => { try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch (e) { return false; } };
   const stillNow = () => !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
   const can3d = () => glOk() && !stillNow();
@@ -270,6 +284,21 @@
   3 to 8 parts in building order, 1 to 8 shapes each. Each part is built while its "say" is said. The whole model about 6 units long, centred on 0,0,0. Every shape has "pos":[x,y,z] and, when it has a length, "axis":"x"|"y"|"z".
   Shapes: cylinder {r,r2,len,axis,pos,open,cut}, disc {r,thick,axis,pos}, cone {r,len,axis,pos,dir}, sphere {r,pos,cut}, box {size:[w,h,d],pos}, torus {r,tube,axis,pos}, blades {n,len,width,hub,axis,pos}, capsule {r,len,axis,pos}, pipe {pts:[[x,y,z],...],r} (a tube, hose or cable through 2 to 8 points), arrow {pts:[[x,y,z],...],r} (a flow or a push; its head is at the last point), lathe {profile:[[radius,along],...],axis,pos} (a profile turned round the axis), plate {outline:[[a,b],...],thick,axis,pos} (a flat board; its outline lies across the axis).
   To show how something is put together, give the part that moves "from":[dx,dy,dz], where it starts away from its place: it slides in. "view":"front"|"back"|"left"|"right"|"top" on a part turns the model to that side when it is built.`;
+  // A flat drawing is asked for in the Cassie app's own form, with its three examples (the same ones, word for word).
+  const FLAT_EXAMPLES = [
+    {"title":"How photosynthesis works","mode":"2d","layout":"a leaf in the middle on its stem; the sun top left; CO2 coming in from the left; water rising from the roots; O2 leaving top right; glucose bottom right","intro":"A leaf makes its own food from light, air and water.","summary":"Light, carbon dioxide and water make glucose and release oxygen in the chloroplast.","photo":"a real green leaf on a plant in bright sunlight, close up, showing its veins","parts":[{"id":"sun","label":"Sunlight","say":"Sunlight gives the leaf the energy it needs.","color":"#ffd29e","box":[30,30,126,78],"anchor":[54,54],"shapes":[{"t":"circle","cx":54,"cy":54,"r":18,"fill":true},{"t":"line","x1":54,"y1":28,"x2":54,"y2":20},{"t":"line","x1":28,"y1":54,"x2":20,"y2":54},{"t":"line","x1":36,"y1":36,"x2":30,"y2":30},{"t":"arrow","x1":76,"y1":66,"x2":152,"y2":104}]},{"id":"leaf","label":"Leaf","say":"The leaf is a thin green blade with veins that carry water and food.","color":"#8fe0b0","box":[136,70,200,170],"anchor":[214,170],"shapes":[{"t":"path","d":"M150 190 C170 120 250 70 330 80 C320 150 250 200 150 190 Z","fill":true},{"t":"path","d":"M150 190 Q240 140 330 80"},{"t":"line","x1":200,"y1":160,"x2":204,"y2":132},{"t":"line","x1":200,"y1":160,"x2":226,"y2":178},{"t":"line","x1":250,"y1":128,"x2":252,"y2":100},{"t":"line","x1":250,"y1":128,"x2":282,"y2":146},{"t":"line","x1":150,"y1":190,"x2":140,"y2":236}]},{"id":"chloro","label":"Chloroplast","say":"Inside the leaf cells, chloroplasts catch the light with green chlorophyll.","color":"#7ee0e0","box":[244,108,36,24],"anchor":[262,120],"shapes":[{"t":"ellipse","cx":262,"cy":120,"rx":16,"ry":9,"fill":true},{"t":"path","d":"M251 117 L273 117"},{"t":"path","d":"M251 123 L273 123"}]},{"id":"co2","label":"Carbon dioxide in","say":"Carbon dioxide from the air enters through tiny holes called stomata.","color":"#a3a3ad","box":[16,130,148,40],"anchor":[90,152],"shapes":[{"t":"text","x":20,"y":142,"text":"CO2"},{"t":"arrow","x1":20,"y1":152,"x2":160,"y2":152},{"t":"arrow","x1":20,"y1":164,"x2":154,"y2":164}]},{"id":"water","label":"Water from roots","say":"The roots take in water, and it travels up the stem to the leaf.","color":"#7fb0ff","box":[118,196,48,60],"anchor":[147,216],"shapes":[{"t":"path","d":"M140 236 L124 252"},{"t":"path","d":"M140 236 L156 252"},{"t":"path","d":"M140 236 L140 254"},{"t":"arrow","x1":147,"y1":234,"x2":147,"y2":198},{"t":"text","x":152,"y":230,"text":"H2O"}]},{"id":"o2","label":"Oxygen out","say":"Oxygen is made and leaves the leaf into the air.","color":"#c9a7ff","box":[296,20,92,80],"anchor":[360,34],"shapes":[{"t":"arrow","x1":300,"y1":96,"x2":352,"y2":44},{"t":"circle","cx":360,"cy":34,"r":6},{"t":"circle","cx":374,"cy":30,"r":6},{"t":"text","x":352,"y":58,"text":"O2"}]},{"id":"gluc","label":"Glucose","say":"Glucose, a sugar, is the food the plant makes and uses to grow.","color":"#ffb067","box":[268,126,100,104],"anchor":[330,193],"shapes":[{"t":"arrow","x1":270,"y1":128,"x2":318,"y2":182},{"t":"poly","pts":[[318,186],[330,180],[342,186],[342,200],[330,206],[318,200],[318,186]],"fill":true},{"t":"text","x":296,"y":226,"text":"C6H12O6"}]}]},
+    {"title":"A house being built","mode":"2d","layout":"side view; the ground at y 232; the house 60 to 340 wide; the roof peak at y 40","intro":"A house goes up from the ground: foundation, floor, walls, then roof.","summary":"Foundation, floor joists, wall studs, top plate, roof trusses, then sheathing closes it in.","photo":"a real timber frame house under construction on a building site, concrete foundation, exposed wall studs and roof trusses, partly covered with plywood sheathing","parts":[{"id":"found","label":"Foundation","say":"First a concrete foundation is poured into the ground to carry the weight.","color":"#a3a3ad","box":[56,206,288,30],"shapes":[{"t":"line","x1":20,"y1":232,"x2":380,"y2":232},{"t":"rect","x":60,"y":208,"w2":280,"h":24,"fill":true},{"t":"line","x1":60,"y1":220,"x2":340,"y2":220,"dash":true}],"anchor":[200,220]},{"id":"joists","label":"Floor joists","say":"Wooden joists lie across the foundation to hold up the floor.","color":"#ffb067","box":[58,196,284,12],"shapes":[{"t":"line","x1":60,"y1":200,"x2":340,"y2":200},{"t":"line","x1":60,"y1":206,"x2":340,"y2":206},{"t":"line","x1":100,"y1":200,"x2":100,"y2":206},{"t":"line","x1":160,"y1":200,"x2":160,"y2":206},{"t":"line","x1":220,"y1":200,"x2":220,"y2":206},{"t":"line","x1":280,"y1":200,"x2":280,"y2":206}],"anchor":[160,203]},{"id":"studs","label":"Wall studs","say":"Upright studs about 40 cm apart make the wall frame.","color":"#ffd29e","box":[60,118,280,82],"shapes":[{"t":"line","x1":64,"y1":198,"x2":64,"y2":120},{"t":"line","x1":104,"y1":198,"x2":104,"y2":120},{"t":"line","x1":144,"y1":198,"x2":144,"y2":120},{"t":"rect","x":168,"y":150,"w2":44,"h":48},{"t":"line","x1":232,"y1":198,"x2":232,"y2":120},{"t":"line","x1":272,"y1":198,"x2":272,"y2":120},{"t":"line","x1":312,"y1":198,"x2":312,"y2":120},{"t":"line","x1":336,"y1":198,"x2":336,"y2":120}],"anchor":[272,160]},{"id":"plate","label":"Top plate","say":"A top plate ties the studs together and carries the roof.","color":"#c9a7ff","box":[58,112,284,10],"shapes":[{"t":"line","x1":60,"y1":116,"x2":340,"y2":116},{"t":"line","x1":60,"y1":120,"x2":340,"y2":120}],"anchor":[200,118]},{"id":"truss","label":"Roof trusses","say":"Triangle trusses sit on top. Triangles keep the roof strong and stiff.","color":"#7fb0ff","box":[46,38,308,80],"shapes":[{"t":"poly","pts":[[48,116],[200,40],[352,116],[48,116]]},{"t":"line","x1":200,"y1":40,"x2":200,"y2":116},{"t":"line","x1":124,"y1":78,"x2":160,"y2":116},{"t":"line","x1":276,"y1":78,"x2":240,"y2":116}],"anchor":[200,80]},{"id":"sheath","label":"Sheathing","say":"Plywood sheathing is nailed on to close in the walls and roof.","color":"#8fe0b0","box":[60,40,148,160],"shapes":[{"t":"poly","pts":[[48,116],[200,40],[200,52],[72,116]],"fill":true},{"t":"rect","x":64,"y":122,"w2":80,"h":76,"fill":true}],"anchor":[104,160]}]},
+    {"title":"The water cycle","mode":"2d","layout":"the sea along the bottom, a hill on the right, the sun top right, a cloud in the middle top","intro":"Water keeps moving between the sea, the sky and the land.","summary":"Evaporate, condense, fall, collect, and it starts again.","photo":"a real landscape with the sea, a hill, clouds and rain falling, on a sunny day","parts":[{"id":"sea","label":"Ocean","say":"Most water is in the oceans, lakes and rivers.","color":"#7fb0ff","box":[10,206,380,46],"shapes":[{"t":"path","d":"M10 222 Q60 210 110 222 T210 222 T310 222 T390 222","fill":false},{"t":"path","d":"M10 222 L10 250 L390 250 L390 222","fill":false}],"anchor":[200,236]},{"id":"sun","label":"Sun","say":"The sun heats the water.","color":"#ffd29e","box":[318,24,64,64],"shapes":[{"t":"circle","cx":350,"cy":56,"r":20,"fill":true},{"t":"line","x1":350,"y1":28,"x2":350,"y2":20},{"t":"line","x1":322,"y1":56,"x2":314,"y2":56},{"t":"line","x1":330,"y1":36,"x2":324,"y2":30}],"anchor":[350,56]},{"id":"evap","label":"Evaporation","say":"Warm water turns into vapour and rises.","color":"#8fe0b0","box":[100,110,70,96],"shapes":[{"t":"arrow","x1":112,"y1":204,"x2":112,"y2":116},{"t":"arrow","x1":136,"y1":204,"x2":136,"y2":116},{"t":"arrow","x1":160,"y1":204,"x2":160,"y2":116}],"anchor":[136,160]},{"id":"cloud","label":"Condensation","say":"High up the vapour cools into tiny drops: clouds.","color":"#a3a3ad","box":[150,40,124,48],"shapes":[{"t":"path","d":"M154 84 Q150 62 172 62 Q178 42 202 48 Q222 36 238 54 Q264 54 266 72 Q272 86 254 86 Z","fill":true},{"t":"path","d":"M182 70 Q194 62 206 70"}],"anchor":[210,66]},{"id":"rain","label":"Precipitation","say":"When the drops get heavy they fall as rain.","color":"#7ee0e0","box":[176,92,80,40],"shapes":[{"t":"line","x1":190,"y1":94,"x2":184,"y2":124,"dash":true},{"t":"line","x1":214,"y1":94,"x2":208,"y2":124,"dash":true},{"t":"line","x1":238,"y1":94,"x2":232,"y2":124,"dash":true}],"anchor":[214,108]},{"id":"runoff","label":"Runoff","say":"Rain runs down the land back to the sea.","color":"#c9a7ff","box":[240,140,140,82],"shapes":[{"t":"path","d":"M244 220 L300 148 L372 220"},{"t":"arrow","x1":326,"y1":190,"x2":272,"y2":216}],"anchor":[330,190]}]},
+  ];
+  const FLAT_GUIDE = `"mode":"2d" (a flat pen drawing). Picture: 400 wide, 260 tall, absolute coordinates, x 10 to 390, y 20 to 250.
+  Plan: "layout" says how it is arranged; every part has "box":[x,y,w,h] where it sits and "anchor":[x,y], a point ON its main shape (the sun's disc, the leaf's blade); its name's line ends there. Strokes stay inside the box. Spread parts over the picture and leave clear space for the names.
+  Draw REAL outlines, the way a textbook figure looks: a leaf with a pointed tip, a midrib and side veins; a heart with its curved walls, its four chambers and its vessels; an engine with its real profile. Never a plain circle or box for a real object, and never a cartoon symbol (no valentine heart for a real heart, no lightning zigzag for electricity). The main object is drawn large, about half the picture, with long curved paths (C and Q curves) for its true outline, and each of its inner parts is a part of its own, in its own colour, lightly filled ("fill":true) so the student can tell the parts apart. 5 to 8 parts in drawing order, 3 to 24 strokes each, 30 or more strokes in the whole drawing, each part's strokes in pen order. Arrows show what moves and which way. Each part is drawn, then named, while its "say" is said, so the student always knows what they are looking at.
+  {"answer":the direct answer in one or two short sentences,"about":[x,y,w,h] the box around the thing on their screen the question is about, as shares of the picture from 0 to 1, or null,"title":2 to 6 words,"mode":"2d","layout","intro":one sentence,"summary":one sentence,"parts":[{"id","label":1 to 3 words,"say":1 or 2 short, natural spoken sentences,"color":"#hex","box","anchor","shapes":[...]}]}
+  2d shapes: {"t":"line","x1","y1","x2","y2"}, {"t":"arrow",...same} for movement, {"t":"path","d":"M L Q C Z, CAPITAL letters only"}, {"t":"poly","pts":[[x,y],...]}, {"t":"rect","x","y","w2","h"}, {"t":"circle","cx","cy","r"}, {"t":"ellipse","cx","cy","rx","ry"}, {"t":"text","x","y","text"} for values only ("H2O"); "fill":true, "dash":true. Never write a part's name as text: the card does.
+  Students learn from this: every fact, label, direction and count MUST be correct. If you are not sure of something, leave that part out.
+  Three good drawings (this level of care, not these subjects; yours also has "answer" and "about"):
+  ${FLAT_EXAMPLES.map((x) => JSON.stringify(x)).join('\n  ')}
+  Use the student's language (English, Filipino or Taglish). No dashes in the words. No emojis.`;
   const CARD_SHAPE = '{"answer":"the direct answer in one or two short sentences","about":[0.3,0.2,0.4,0.5],"title":"2 to 6 words","caption":"what the drawing shows, in under 10 words","view":"Side view","beats":[{"say":"one or two short, natural spoken sentences","draw":[{"shape":"outline","points":[[30,22],[62,22],[68,58],[24,58]]}]}]}';
   const CARD_HELP = `Give 3 to 6 beats. "about" is the box [x, y, w, h] around the thing on their screen that the question is about, as shares of the picture from 0 to 1 (null when it is about nothing on the screen). "view" says how the thing is seen: Side view, Front view, Top view, Cut-away or Diagram.
   The drawing is made on a card ${GW} units wide and ${GH} tall, and (0, 0) is its top left corner. It grows while you talk: each beat adds 1 to 5 new parts ("draw") while its sentence is said. Draw the main outline first, then its parts in colour, then arrows, then labels. The parts you can draw:
@@ -284,14 +313,6 @@
   {"shape":"graph","fn":"x^2 - 4","xrange":[-4,4],"x":20,"y":10,"w":60,"h":50} (the graph of a function with its axes; fn uses * to multiply and ^ for powers)
   Colours for "color" (the line) and "fill" (the inside): ink, grey, blue, red, green, yellow, orange, purple.
   Draw big, so the picture fills the card, and keep every part between 4 and 96 across and 4 and 71 down. Put each label in empty space beside the thing it names, never on top of the drawing or on another label. Use at most 20 parts in all.`;
-  // one worked example (a kettle), so she sees how a drawing grows beat by beat
-  const EXAMPLE = { answer: 'A hot coil at the bottom heats the water until it boils.', about: [0.3, 0.2, 0.3, 0.5], title: 'How a kettle boils water', caption: 'a hot coil heats the water', view: 'Cut-away', beats: [
-    { say: 'I can see an electric kettle on a shop page. The page does not explain how it works, so here is how.', draw: [{ shape: 'outline', points: [[34, 20], [60, 20], [67, 40], [69, 60], [25, 60], [27, 40]] }, { shape: 'curve', points: [[66, 28], [80, 32], [80, 50], [69, 54]] }, { shape: 'curve', points: [[29, 30], [19, 26], [15, 18]] }, { shape: 'box', x: 22, y: 60, w: 50, h: 5, fill: 'grey' }] },
-    { say: 'A metal coil at the bottom gets hot when electricity flows through it.', draw: [{ shape: 'curve', points: [[31, 55], [36, 50], [41, 55], [46, 50], [51, 55], [56, 50], [61, 55]], color: 'red' }, { shape: 'label', x: 84, y: 66, text: 'Heating coil', to: [61, 55] }] },
-    { say: 'The coil warms the water next to it. Warm water rises and cooler water sinks, so all of it heats up.', draw: [{ shape: 'line', points: [[29, 32], [66, 32]], color: 'blue', dash: 1 }, { shape: 'arrow', points: [[40, 47], [40, 36]], color: 'red' }, { shape: 'arrow', points: [[54, 36], [54, 47]], color: 'blue' }, { shape: 'label', x: 12, y: 46, text: 'Warm water rises', to: [39, 42] }, { shape: 'label', x: 88, y: 22, text: 'Cool water sinks', to: [55, 41] }] },
-    { say: 'At 100 degrees Celsius the water boils into steam, and a switch turns the kettle off.', draw: [{ shape: 'curve', points: [[12, 15], [9, 11], [13, 8], [10, 4]], color: 'grey' }, { shape: 'curve', points: [[18, 14], [15, 10], [19, 7], [16, 3]], color: 'grey' }, { shape: 'label', x: 30, y: 7, text: 'Steam', to: [19, 8] }, { shape: 'note', x: 82, y: 9, text: 'Steam burns. Keep hands away.' }] },
-  ] };
-  const EXAMPLE_HELP = `An example. The question was "how does this kettle boil water?", asked over a shop page that shows a kettle:\n  ${JSON.stringify(EXAMPLE)}`;
 
   // prompt({ q, page: { title, text, items, pictureOnly }, draw, scene, said })
   //   draw: the student asked for a drawing, so she draws (no pointing at the page instead)
@@ -317,19 +338,25 @@
   ${truth}`;
     }
     const seen = `A student is looking at their screen right now (the picture)${title}.\n  ${text}${sofar}The student asks: "${q}"`;
+    if (d3 && SOFT.test(q)) {
+      return `${seen}
+  Answer like a kind tutor sitting beside them, and draw it for them while you explain. They asked for 3D, but your 3D models are built from simple solids and would look wrong for something soft, living or a process, so draw it flat, and say that in a few words at the start of "intro".
+  Reply with ONLY one minified JSON object, no other text.
+  ${FLAT_GUIDE}
+  ${truth}`;
+    }
     if (d3) {
       return `${seen}
   Answer like a kind tutor sitting beside them, by building a 3D model for them while you explain. Reply with ONLY one minified JSON object, "mode":"3d".
   ${GUIDE_3D}
+  Machines, engines, devices, tools, buildings, vehicles, molecules and planets are always built as the 3D model above. Only if the subject is soft or living (an organ, a plant, an animal, a cell) or is a process with no object, where simple solids would look wrong, reply with a flat drawing instead ("mode":"2d", "layout", parts with "box", "anchor" and flat "shapes": line, arrow, path, poly, rect, circle, ellipse on a 400 by 260 picture) and say why in a few words at the start of "intro".
   ${truth}`;
     }
     if (draw) {
       return `${seen}
   Answer like a kind tutor sitting beside them, and draw it for them while you explain. The student asked for a drawing, so always draw one.
-  Reply with ONLY minified JSON, no other text:
-  ${CARD_SHAPE}
-  ${CARD_HELP}
-  ${EXAMPLE_HELP}
+  Reply with ONLY one minified JSON object, no other text.
+  ${FLAT_GUIDE}
   ${truth}`;
     }
     const items = page && !page.pictureOnly && Array.isArray(page.items) ? page.items : [];
@@ -341,9 +368,7 @@
   Give 1 to 5 steps. "point" is where your arrow goes: ${list ? 'the number of the thing on the list, or {"x":0.4,"y":0.3} for a spot on the picture, or 0 for nothing.' : 'a spot on the picture, {"x":0.4,"y":0.3}, or null for nothing.'}
   ${T && T.shapes ? T.shapes(!!list) : ''}
   B. DRAW it on a card beside the page, when they ask how something works, what it is made of or looks like inside, why something happens, or how to do something:
-  ${CARD_SHAPE}
-  ${CARD_HELP}${list ? '\n  In B, "about" can also be the number of a thing on the list.' : ''}
-  ${EXAMPLE_HELP}
+  ${FLAT_GUIDE}${list ? '\n  In B, "about" can also be the number of a thing on the list.' : ''}
   For a quick fact that needs neither, reply {"answer":"your answer","steps":[]}.
   ${truth}`;
   }
@@ -361,6 +386,10 @@
         // (as in the Cassie app: the model against her own plan; what is wrong goes back to her once)
         const m = await load3d().catch(() => null), spec = m && m.clean(got.scene.spec), wrong = !m ? [] : spec ? m.check3d(spec) : ['the reply was not one valid JSON object in the schema'];
         if (wrong.length) { last = got; nudge = `\n  IMPORTANT: your model has these problems:\n  - ${wrong.join('\n  - ')}\n  Send the whole corrected JSON object again.`; continue; }
+      }
+      if (got.kind === 'card' && got.scene.dim === 'flat' && !tries) {
+        const m = await load3d().catch(() => null), spec = m && m.clean(got.scene.spec), wrong = !m ? [] : spec ? m.check(spec) : ['the reply was not one valid JSON object in the schema'];
+        if (wrong.length) { last = got; nudge = `\n  IMPORTANT: your drawing has these problems:\n  - ${wrong.slice(0, 8).join('\n  - ')}\n  Send the whole corrected JSON object again.`; continue; }
       }
       if (got.kind === 'card' || (got.kind && !draw)) return got;
       if (got.kind) { last = got; nudge = DRAW_IT; }
@@ -501,13 +530,28 @@
     /* a 3D model: in her card (the side panel, a narrow window), or over the page with no background */
     .lv-hint { margin: 0 0 8px; font-size: 13px; line-height: 1.35; color: var(--p-grey); }
     .lv-stage { position: relative; width: 100%; aspect-ratio: 4 / 3; border-radius: 8px; overflow: hidden; }
-    .lv-float { position: fixed; pointer-events: auto; }
+    .lv-float { position: fixed; pointer-events: auto; box-sizing: border-box; padding: 16px; border-radius: 16px; border: 1px solid var(--line); background: color-mix(in srgb, var(--card) 90%, transparent); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); box-shadow: 0 16px 48px rgba(0,0,0,.24); }
+    /* (a flat drawing has room to be read: a wider card where the window allows) */
+    @media (min-height: 681px) and (min-width: 960px) { .lv-on-page.lv-flat:not(.lv-cleared) .lv-card { width: min(576px, calc(100vw - 32px)); } }
+    /* a flat drawing in the Cassie app's form (livedraw.js draws it; these are its looks on her card) */
+    .lv-stage-flat { aspect-ratio: 400 / 260; overflow: visible; border-radius: 0; color: var(--ink); }
+    .ld-svg { display: block; width: 100%; height: 100%; overflow: visible; }
+    .ld-part { transition: opacity .25s ease; }
+    .ld-part.dim { opacity: .25; }
+    .ld-word { fill: var(--ink); stroke: none; font-weight: 600; font-family: ${FONT}; }
+    .ld-lead { stroke: var(--p-grey); stroke-width: 1; }
+    .ld-ltext { fill: var(--ink); font-weight: 600; font-family: ${FONT}; }
+    .ld-lbg { fill: var(--paper); fill-opacity: .9; stroke: var(--line); stroke-width: 1; }
+    .ld-anchor { fill: var(--ink); stroke: var(--paper); stroke-width: 1; }
+    .ld-marker { stroke-width: 1.5; }
+    .ld-legend { margin: 8px 0 0; font-size: 13px; line-height: 1.35; font-weight: 600; color: var(--p-grey); white-space: pre-wrap; }
+    .ld-legend[hidden] { display: none; }
     .lv-float .lv-stage { height: 100%; aspect-ratio: auto; overflow: visible; }
     .lv-sticky { margin: 0 0 8px; padding: 8px 12px; max-width: 208px; box-sizing: border-box; background: ${NOTE.paper}; color: ${NOTE.ink}; border: 1px solid ${NOTE.edge}; border-radius: 4px;
       font: 600 14px/1.3 ${FONT}; transform: rotate(-2deg); box-shadow: 0 4px 12px rgba(0,0,0,.2); }
     .lv-paper .lv-sticky { display: inline-block; }
-    .lv-float .lv-sticky { position: absolute; left: 0; top: 0; z-index: 2; margin: 0; }
-    .lv .lv-clear3 { position: absolute; top: 0; left: 50%; transform: translateX(-50%); z-index: 2; border-color: var(--edge); box-shadow: 0 4px 16px rgba(0,0,0,.25); }
+    .lv-float .lv-sticky { position: absolute; left: 16px; top: 16px; z-index: 2; margin: 0; max-width: 200px; }
+    .lv .lv-clear3 { position: absolute; top: 16px; right: 16px; z-index: 2; border-color: var(--edge); box-shadow: 0 4px 16px rgba(0,0,0,.25); }
     .ld-canvas { display: block; width: 100% !important; height: 100% !important; cursor: grab; touch-action: none; outline: none; }
     .ld-canvas:active { cursor: grabbing; }
     .ld-tags { position: absolute; inset: 0; pointer-events: none; }
@@ -611,6 +655,8 @@
     };
     adopt(scene, opts.q);
     const is3d = () => cur.dim === '3d';
+    const isFlat = () => cur.dim === 'flat'; // (a flat drawing in the Cassie app's form, drawn by its own drawer)
+    const lightPaper = () => !(window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
     const cardStage = $('.lv-stage-card'), floatEl = $('.lv-float'), floatStage = $('.lv-stage-float');
     let model = null, floating = false, picked = -1, built = 0, lastPic = '';
     let views = [], cursor = null;
@@ -732,9 +778,16 @@
       let on = false;
       return { part: { shape: 'part' }, set(k) { if (k > 0 && !on) { on = true; if (model) model.view.show(i, k >= 1); } else if (k <= 0 && on) { on = false; if (model) model.view.hide(i); } }, tip: () => null, paint() {} };
     }
+    // a part of a flat drawing: its strokes are drawn when its beat starts, then its name is written
+    function partFlat(i) {
+      let on = false;
+      return { part: { shape: 'part' }, set(k) { if (k > 0 && !on) { on = true; if (model) model.view.show(i, k >= 1 || still, 2200); } else if (k >= 1 && on) { /* drawn */ } else if (k <= 0 && on) { on = false; if (model) model.view.hide(i); } }, tip: () => null, paint() {} };
+    }
     const kept = (v) => { const show = v.set; v.k = 0; v.set = (k) => { v.k = k; show(k); }; return v; };
     function end3d() {
       if (model) { try { model.view.stop(); } catch (e) { /* already gone */ } model = null; }
+      paper.querySelectorAll('.ld-legend').forEach((n) => n.remove());
+      cardStage.classList.remove('lv-stage-flat');
       cardStage.replaceChildren(); floatStage.replaceChildren();
       wrapEl.querySelectorAll('.lv-sticky').forEach((n) => n.remove());
       cardStage.hidden = true; floatEl.hidden = true; floating = false; picked = -1;
@@ -743,7 +796,7 @@
     // where the model floats: in the room beside her card, in the middle of it
     function placeFloat() {
       if (!floating) return;
-      const cw = card.offsetWidth, m = 16, free = innerWidth - cw - m * 3, w = Math.max(280, Math.min(760, free)), h = Math.max(240, Math.min(Math.round(w * 0.62), innerHeight - 96));
+      const cw = card.offsetWidth, m = 16, free = innerWidth - cw - m * 3, w = Math.max(280, Math.min(720, free)), h = Math.max(240, Math.min(Math.round(w * 0.66), innerHeight - 96));
       const left = card.dataset.side === 'left' ? cw + m * 2 + (free - w) / 2 : m + (free - w) / 2;
       Object.assign(floatEl.style, { left: Math.round(left) + 'px', top: Math.round((innerHeight - h) / 2) + 'px', width: Math.round(w) + 'px', height: Math.round(h) + 'px' });
     }
@@ -751,20 +804,43 @@
       const v = model && model.view, ob = $('.lv-open'), pb = $('.lv-apart');
       ob.hidden = !(v && v.open) || cleared; pb.hidden = !(v && v.explode) || cleared;
       if (v && v.open) { ob.textContent = v.opened ? 'Close the case' : 'Open it up'; ob.setAttribute('aria-pressed', String(!!v.opened)); }
-      $('.lv-hint').hidden = !v;
+      $('.lv-hint').hidden = !v || !is3d();
     }
     // every part of every beat, built once and hidden: a beat's parts appear when it is played.
     // → false when a 3D model can't be built here (then the same answer is shown flat: flatInstead)
     async function build() {
-      const my = ++built, d3 = is3d();
+      const my = ++built, d3 = is3d(), flat = isFlat();
       end3d();
       svg.replaceChildren(); cursor = null; views = beats.map(() => []);
-      svg.style.display = d3 ? 'none' : '';
+      svg.style.display = d3 || flat ? 'none' : '';
       host.dataset.dim = d3 ? '3d' : '2d';
+      wrapEl.classList.toggle('lv-flat', flat);
       $('.lv-title').textContent = info.title || 'Cassie’s drawing';
       $('.lv-sub').textContent = [info.view, 'Simplified sketch'].filter(Boolean).join(' · ');
       const name = [info.title, info.caption].filter(Boolean).join(': ') || 'Cassie’s drawing';
       svg.setAttribute('aria-label', name);
+      if (flat) {
+        host.dataset.parts = '0';
+        try {
+          const m = await load3d();
+          if (my !== built || !alive) return true;
+          cardStage.classList.add('lv-stage-flat'); cardStage.hidden = false;
+          cardStage.setAttribute('aria-label', name);
+          const made = m.model2d(cardStage, cur.spec, { light: lightPaper() });
+          if (!made) throw new Error('no drawing');
+          model = made;
+          views = beats.map((b) => (b.part >= 0 && made.view.has(b.part) ? [kept(partFlat(b.part))] : []));
+          beats.forEach((b) => { if (b.part >= 0) made.view.hide(b.part); }); // (nothing shows until its beat)
+          host.dataset.parts = String(views.reduce((n, v) => n + v.length, 0));
+          paint3d();
+          return true;
+        } catch (e) {
+          // (the drawer could not load here: her words stay, with no drawing)
+          end3d(); cur = { ...cur, dim: '2d' }; beats.forEach((b) => { b.part = undefined; });
+          svg.style.display = '';
+          return true;
+        }
+      }
       if (!d3) {
         views = beats.map((b) => b.parts.map((p) => { const v = kept(p.shape === 'label' ? labelView(p) : p.shape === 'note' ? noteView(p) : lineView(p)); svg.appendChild(v.g); v.set(0); return v; }));
         cursor = el('g', { class: 'lv-cur' });
@@ -787,14 +863,14 @@
         (floating ? floatEl : cardStage).hidden = false;
         stage.setAttribute('aria-label', name);
         placeFloat();
-        const made = await m.model3d(stage, cur.spec, { turn: true, zoom: !floating, matte: true });
+        const made = await m.model3d(stage, cur.spec, { turn: 'sway', zoom: !floating, matte: true, callout: true });
         if (my !== built || !alive) { if (made) made.view.stop(); return true; }
         if (!made) { end3d(); return false; }
         model = made;
         if (made.view.open) made.view.setOpen(true); // (the case starts open, so the parts inside show as they are built)
         views = beats.map((b) => (b.part >= 0 && made.view.has(b.part) ? [kept(part3d(b.part))] : []));
         beats.forEach((b) => { if (b.part >= 0) made.view.hide(b.part); }); // (nothing shows until its beat)
-        const tip = words(cur.spec.note, 80);
+        const tip = ((t) => (t.length <= 110 ? t : t.slice(0, 110).replace(/\s+\S*$/, '') + '…'))(words(cur.spec.note, 400)); // (a note is cut at a whole word)
         if (tip) { const n = document.createElement('p'); n.className = 'lv-sticky'; n.textContent = tip; (floating ? floatEl : paper).insertBefore(n, floating ? floatStage : cardStage); }
         made.view.onPick = (part) => { picked = part ? beats.findIndex((b) => b.part === made.spec.parts.indexOf(part)) : -1; paintWords(); };
         host.dataset.parts = String(views.reduce((n, v) => n + v.length, 0));
@@ -1011,6 +1087,34 @@
         });
         return c;
       }
+      if (isFlat() && model) {
+        // (her flat drawing as it stands on the card: every stroke and name that shows, in the card's own colours)
+        const sv = cardStage.querySelector('svg'), k = W / 400;
+        c.width = W; c.height = Math.round(W * 0.65);
+        const x = c.getContext('2d');
+        x.fillStyle = getComputedStyle(paper).backgroundColor || pal.paper; x.fillRect(0, 0, c.width, c.height);
+        x.scale(k, k); x.lineCap = 'round'; x.lineJoin = 'round';
+        const A = (n, a, d = 0) => { const v = parseFloat(n.getAttribute(a)); return Number.isFinite(v) ? v : d; };
+        (sv ? [...sv.querySelectorAll('.ld-part > *, .ld-labels *')] : []).forEach((n) => {
+          const tag = n.tagName.toLowerCase(), cs = getComputedStyle(n);
+          if (tag === 'g' || cs.visibility === 'hidden' || cs.display === 'none') return;
+          if (tag === 'text') { x.fillStyle = cs.fill; x.font = `${cs.fontWeight} ${A(n, 'font-size', 11)}px system-ui, sans-serif`; x.textAlign = cs.textAnchor === 'middle' ? 'center' : cs.textAnchor === 'end' ? 'right' : 'left'; x.textBaseline = cs.dominantBaseline === 'middle' || cs.dominantBaseline === 'central' ? 'middle' : 'alphabetic'; x.fillText(n.textContent, A(n, 'x'), A(n, 'y')); return; }
+          const path = new Path2D();
+          if (tag === 'path') path.addPath(new Path2D(n.getAttribute('d') || ''));
+          else if (tag === 'line') { path.moveTo(A(n, 'x1'), A(n, 'y1')); path.lineTo(A(n, 'x2'), A(n, 'y2')); }
+          else if (tag === 'rect') path.roundRect(A(n, 'x'), A(n, 'y'), A(n, 'width'), A(n, 'height'), A(n, 'rx'));
+          else if (tag === 'circle') path.arc(A(n, 'cx'), A(n, 'cy'), A(n, 'r'), 0, Math.PI * 2);
+          else if (tag === 'ellipse') path.ellipse(A(n, 'cx'), A(n, 'cy'), A(n, 'rx'), A(n, 'ry'), 0, 0, Math.PI * 2);
+          else if (tag === 'polyline' || tag === 'polygon') (n.getAttribute('points') || '').trim().split(/\s+/).forEach((q, i) => { const [px, py] = q.split(',').map(Number); if (i) path.lineTo(px, py); else path.moveTo(px, py); });
+          else return;
+          if (cs.fill && cs.fill !== 'none') { x.save(); x.globalAlpha = parseFloat(cs.fillOpacity) || 1; x.fillStyle = cs.fill; x.fill(path); x.restore(); }
+          if (cs.stroke && cs.stroke !== 'none') {
+            x.strokeStyle = cs.stroke; x.lineWidth = parseFloat(cs.strokeWidth) || 2; x.setLineDash(n.getAttribute('stroke-dasharray') === '6 6' ? [6, 6] : []); x.stroke(path);
+            if (tag === 'line' && n.getAttribute('marker-end')) { const x1 = A(n, 'x1'), y1 = A(n, 'y1'), x2 = A(n, 'x2'), y2 = A(n, 'y2'), a = Math.atan2(y2 - y1, x2 - x1), h = 4 + x.lineWidth * 2; x.setLineDash([]); x.fillStyle = cs.stroke; x.beginPath(); x.moveTo(x2 + Math.cos(a) * 2, y2 + Math.sin(a) * 2); x.lineTo(x2 - Math.cos(a - 0.45) * h, y2 - Math.sin(a - 0.45) * h); x.lineTo(x2 - Math.cos(a + 0.45) * h, y2 - Math.sin(a + 0.45) * h); x.closePath(); x.fill(); }
+          }
+        });
+        return c;
+      }
       c.width = W; c.height = Math.round((W * GH) / GW);
       const x = c.getContext('2d');
       x.fillStyle = pal.paper; x.fillRect(0, 0, c.width, c.height);
@@ -1105,8 +1209,9 @@
         const addBeats = async (list) => {
           if (cleared) { cleared = false; if (!(await build())) await flatInstead(); }
           const first = beats.length;
-          list.forEach((b, i) => beats.push({ say: b.say, parts: is3d() ? [] : (b.parts || []).slice(), asked: i === 0 ? q : '' }));
-          if (is3d()) list.forEach(() => views.push([])); else await build();
+          const whole = is3d() || isFlat();
+          list.forEach((b, i) => beats.push({ say: b.say, parts: whole ? [] : (b.parts || []).slice(), asked: i === 0 ? q : '' }));
+          if (whole) list.forEach(() => views.push([])); else await build();
           return first;
         };
         // (the drawing it replaces is kept in Your lessons first, with its own question and follow-ups)
@@ -1122,7 +1227,7 @@
         if (playing) pause();
         setStatus('looking');
         // on a flat drawing she may add to it; a 3D model (there now, or asked for now) is asked about afresh
-        const afresh = is3d() || wants3d(q);
+        const afresh = is3d() || isFlat() || wants3d(q);
         const words_ = afresh ? prompt({ q, page: opts.page || null, draw: wants(q), said: beats.map((b) => b.say).filter(Boolean) }) : prompt({ q, page: opts.page || null, scene: { title: info.title, beats }, said: [] });
         let got = null;
         try { got = await from({ send: opts.send, ask: words_, draw: wants(q) }); }
@@ -1173,7 +1278,7 @@
     if (!image) throw keyed('teach_no_picture');
     const send = async (words_, maxTokens) => {
       let r = null;
-      try { r = await chrome.runtime.sendMessage({ type: 'CASSIE_VISION', image, prompt: words_, maxTokens }); } catch (e) { r = { error: e.message }; }
+      try { r = await chrome.runtime.sendMessage({ type: 'CASSIE_VISION', image, prompt: words_, maxTokens, best: true }); } catch (e) { r = { error: e.message }; }
       if (!r || r.error) throw new Error((r && r.error) || 'ask failed');
       return String(r.reply || '');
     };
@@ -1199,7 +1304,7 @@
       if (!msg) return false;
       if (msg.type === 'CASSIE_LIVE_SHOW') {
         const send = async (ask_, maxTokens) => {
-          const r = await chrome.runtime.sendMessage({ type: 'CASSIE_VISION', image: msg.shot, prompt: ask_, maxTokens });
+          const r = await chrome.runtime.sendMessage({ type: 'CASSIE_VISION', image: msg.shot, prompt: ask_, maxTokens, best: true });
           if (!r || r.error) throw new Error((r && r.error) || 'ask failed');
           return String(r.reply || '');
         };

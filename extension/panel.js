@@ -243,8 +243,8 @@ const withDrawing = (q, reply) => {
   if (!draw && /\b(graph|plot|sketch|draw)\b/i.test(q || '')) { const eq = B.findEquation(q) || B.findEquation(reply); if (eq) draw = B.graphSpec(eq); }
   return draw ? { reply: clean, draw } : clean;
 };
-async function vision(image, prompt, maxTokens = 800, board, log) {
-  const r = await chrome.runtime.sendMessage({ type: 'CASSIE_VISION', image, prompt, maxTokens, board, log });
+async function vision(image, prompt, maxTokens = 800, board, log, best) {
+  const r = await chrome.runtime.sendMessage({ type: 'CASSIE_VISION', image, prompt, maxTokens, board, log, best: !!best });
   if (!r || r.error) throw new Error((r && r.error) || 'Cassie didn’t answer. Try again.');
   return r.reply;
 }
@@ -386,7 +386,7 @@ async function teach({ tab = null, q = '', snip: snipped = null, box = null, onA
   try {
     if (L) {
       const draw = L.wants(q);
-      const got = await L.from({ send: (ask, n) => vision(image, ask, n), ask: L.prompt({ q, page: onPage ? { ...page, title } : { title }, draw }), count: numbered ? page.items.length : 0, draw });
+      const got = await L.from({ send: (ask, n) => vision(image, ask, n, null, null, true), ask: L.prompt({ q, page: onPage ? { ...page, title } : { title }, draw }), count: numbered ? page.items.length : 0, draw });
       steps = got.steps; answer = got.answer; scene = got.kind === 'card' ? got.scene : null; noDraw = !!got.noDraw;
     } else {
       ({ steps, answer } = await window.CassieTeach.lessonFrom({ send: (ask, n) => vision(image, ask, n), prompt: window.CassieTeach.prompt({ q, page: onPage ? { ...page, title } : { title }, snipped: !!snipped }), count: numbered ? page.items.length : 0, q }));
@@ -412,7 +412,7 @@ async function teach({ tab = null, q = '', snip: snipped = null, box = null, onA
     }
     box.innerHTML = '<p class="teach-why" hidden></p><div class="live-mount"></div>';
     if (!picture) { const why = box.querySelector('.teach-why'); why.textContent = say('live_in_panel'); why.hidden = false; }
-    L.play(scene, { mount: box.querySelector('.live-mount'), q, page: { title }, send: (ask, n) => vision(image, ask, n),
+    L.play(scene, { mount: box.querySelector('.live-mount'), q, page: { title }, send: (ask, n) => vision(image, ask, n, null, null, true),
       onBoard: (canvas, told) => { home(); openBoard(canvas, { title: told.title, note: { headline: told.title, steps: told.steps } }); } });
     return;
   }

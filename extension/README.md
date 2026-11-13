@@ -118,9 +118,13 @@ jet engine works".
   of what is showing at that moment and nothing more. She never looks on a
   timer, and the picture is gone when you close her card.
 - She answers in a few short sentences, and while each one is said (or shown)
-  she draws the next pieces of a labelled drawing on a card beside the page:
-  the outline first, then the parts in colour, then arrows and labels. Every
-  card says **Simplified sketch**, because that is what it is.
+  she draws the next part of the drawing on a card beside the page, in its own
+  colour, and writes its name beside it as soon as it is drawn, so you always
+  know what you are looking at. It is the same drawer, and the same drawing
+  instructions and examples, as in the Cassie app. Every card says
+  **Simplified sketch**, because that is what it is.
+- A drawing is asked of Cassie's best model first, on her server. Your own
+  keys are used only if her server can't answer.
 - If the page doesn't explain what you asked, she says so once and explains
   from what she knows. If the answer is already on the page, she points at it
   instead, as in a lesson.
@@ -130,9 +134,12 @@ jet engine works".
 - Leave the box empty for a step-by-step lesson on the page itself.
 - **In 3D:** ask "in 3D", or ask to be shown how parts go together ("show me
   how to attach the camera"), and she builds a 3D model over the page, part by
-  part, each part named as it is built. Drag it to turn it, tap a part to read
+  part, each part named as it is built. It sits on a soft panel of its own beside her card, side on, with
+  the names in a column on each side. Drag it to turn it, tap a part to read
   about it, **Close the case / Open it up**, **Pull apart**, and **Clear**
-  takes it off the page. It is the same model builder as in the Cassie app,
+  takes it off the page. 3D is for made things with hard parts (machines,
+  devices, buildings). A soft or living thing (a heart, a leaf, a cell) or a
+  process is drawn flat instead, and she says so. It is the same model builder as in the Cassie app,
   with the same checks. Where 3D can't show (no WebGL, or Reduce Motion is
   on), she answers with a flat drawing instead.
 - **Where she can't draw on the page** (the browser's own pages, its PDF
@@ -200,7 +207,7 @@ own. Treat the HUD as opt-in polish while it's still being refined.
 - `panel.html` / `panel.js` — the side panel.
 - `teach.js` — Teach me: Cassie points at the page and draws on it, step by step.
 - `live.js` — Cassie's live drawing: reads the scene she replies with and draws it beat by beat.
-- `livedraw.js` — the Cassie app's 3D model builder (identical copy of the web app's `livedraw.js`), loaded only for a 3D drawing.
+- `livedraw.js` — the Cassie app's drawer for flat drawings and 3D models (identical copy of the web app's `livedraw.js`), loaded only when she draws.
 - `vendor/three.module.min.js`, `vendor/OrbitControls.js` — three.js (MIT, see `vendor/THREE-LICENSE.txt`), the same copies as the web app's, loaded only for a 3D drawing.
 - `vendor/html2canvas.min.js` — MIT-licensed page renderer, loaded only when a snip needs it.
 - `bridge.js` — runs only on the Cassie web app; hands it a file from a PDF/Docs tab.
