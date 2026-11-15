@@ -512,13 +512,23 @@ function wantsCursorCassie() {
 // Set Cursor Cassie's mood; with ms, she goes back to idle (or thinking) afterwards.
 // (v231) a mood set for a while (an error's puzzled face, an answer's smile) isn't undone by going idle in the same moment
 let botHoldUntil = 0;
+// (v282) a tool for the job: her pencil while she draws, her glasses while she researches (with what she is wearing today)
+const BOT_TOOL = { drawing: 'pencil', searching: 'glasses' };
+let botTool = '';
+function botToolFor(name) {
+  const want = BOT_TOOL[name] || '';
+  if (!bot2d || want === botTool) return;
+  botTool = want;
+  if (want) { const base = OUTFIT_TO_2D[counselorMode ? 'heart' : quizMode ? 'coder' : (taskOutfit || (workMode() ? 'professor' : 'classic'))] || cassieSeasonal(); bot2d.setAccessory([...String(base || '').split('+').filter((x) => x && x !== want && !(want === 'glasses' && x === 'sunglasses')), want].join('+')); }
+  else dressCassie();
+}
 function botMood(name, ms) {
   if (name && islandBusy && ['reading', 'searching', 'drawing', 'busy', 'highlighting'].includes(name)) islandShow(name);
   if (!bot2d || !name) return;
   clearTimeout(bot2dTimer);
   botHoldUntil = ms ? Date.now() + ms : 0;
-  bot2d.setState(name);
-  if (ms) bot2dTimer = setTimeout(() => bot2d && bot2d.setState(mascot && mascot.classList.contains('thinking') ? 'thinking' : 'idle'), ms);
+  bot2d.setState(name); botToolFor(name);
+  if (ms) bot2dTimer = setTimeout(() => { if (!bot2d) return; const back = mascot && mascot.classList.contains('thinking') ? 'thinking' : 'idle'; bot2d.setState(back); botToolFor(back); }, ms);
 }
 (function startCursorCassie() {
   const root = document.getElementById('cassie-2d-root');
@@ -884,7 +894,10 @@ function dressCassie() {
 function syncAudience() { state.audience = workMode() ? 'pro' : 'student'; } // (the old switch's choice, undone)
 syncAudience();
 
+let botAfter = ''; // (v282) her face once the answer is in: 'wink' after a thank you, 'love' in Talk mode
 function setCursorMode(mode) {
+  if (mode !== 'thinking' && cursorState === 'thinking' && botAfter) { const m = botAfter; botAfter = ''; setTimeout(() => botMood(m, 2600), 1700); }
+  else if (mode === 'thinking' && botTool) botToolFor('thinking');
   cursorState = mode;
   cursorEl.classList.toggle('thinking', mode === 'thinking');
   if (mascot) mascot.classList.toggle('thinking', mode === 'thinking');
@@ -1270,6 +1283,7 @@ function mascotReact(kind, hold) {
 
 // Pick an opinion based on what the student sent.
 function mascotOnSend(text) {
+  botAfter = /^\s*(thank(s| you)|ty|tnx|thx|salamat|maraming salamat)\b/i.test(String(text || '')) ? 'wink' : counselorMode ? 'love' : '';
   // sending is activity; she'll show 'thinking' while the answer is generated
   // (setCursorMode) and 'celebrate' once it arrives (mascotCelebrate).
   resetIdle();
@@ -2511,15 +2525,47 @@ document.addEventListener('pointerdown', (e) => { const c = e.target.closest && 
 ['pointerup', 'pointercancel'].forEach((t) => document.addEventListener(t, () => document.querySelectorAll('.gl-down').forEach((c) => c.classList.remove('gl-down')), true));
 document.addEventListener('focusin', (e) => { const h = e.target.closest && e.target.closest(IC_HOST); if (h && h.matches(':focus-visible')) icGo(h); }, true);
 // an empty screen: a still, flat Cassie above its words
-function cassieEmpty(box) {
+// (v282) each empty state shows Cassie, the 3D one from the chat, in a mood that fits it, with a small drawing of
+// what is missing beside her (plain SVG in the app's colours). cassieEmpty(box, scene): scene is a key of ES_SCENE.
+const ES_PROP = {
+  chat: `<circle class="disc" cx="128" cy="62" r="56"/><path class="soft" d="M98 30h66a10 10 0 0 1 10 10v30a10 10 0 0 1-10 10h-36l-16 14v-14H98a10 10 0 0 1-10-10V40a10 10 0 0 1 10-10z"/><path class="ln dash" d="M108 48h46M108 62h30"/><circle class="acc" cx="176" cy="30" r="9"/><path d="M172 30h8M176 26v8" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>`,
+  cards: `<circle class="disc" cx="128" cy="62" r="56"/><rect class="soft" x="112" y="22" width="62" height="44" rx="8" transform="rotate(10 143 44)"/><rect class="soft" x="104" y="30" width="62" height="44" rx="8" transform="rotate(-6 135 52)"/><rect class="soft" x="98" y="42" width="62" height="44" rx="8"/><path class="ln accl" d="M129 54v20M119 64h20"/>`,
+  plan: `<circle class="disc" cx="128" cy="62" r="56"/><rect class="soft" x="94" y="26" width="72" height="66" rx="10"/><path class="ln" d="M94 44h72M110 20v12M150 20v12"/><g class="mute"><rect x="104" y="52" width="10" height="9" rx="2"/><rect x="120" y="52" width="10" height="9" rx="2"/><rect x="104" y="68" width="10" height="9" rx="2"/><rect x="120" y="68" width="10" height="9" rx="2"/><rect x="136" y="68" width="10" height="9" rx="2"/></g><circle class="ln accl" cx="141" cy="57" r="9"/>`,
+  search: `<circle class="disc" cx="128" cy="62" r="56"/><path class="soft" d="M118 22h22M122 22v20l-20 38a6 6 0 0 0 5 9h42a6 6 0 0 0 5-9l-20-38V22"/><path class="ln dash" d="M108 70h40"/><text x="128" y="66" text-anchor="middle" font-size="22" font-weight="800" fill="var(--primary)">?</text>`,
+  filter: `<circle class="disc" cx="128" cy="62" r="56"/><path class="soft" d="M92 26h76l-28 32v26l-20 10V58z"/><circle class="mute" cx="176" cy="40" r="5"/><circle class="mute" cx="184" cy="58" r="4"/><circle class="acc" cx="172" cy="74" r="5"/>`,
+  gauge: `<circle class="disc" cx="128" cy="62" r="56"/><path class="ln" d="M90 82a40 40 0 0 1 80 0" stroke-width="10" stroke="color-mix(in srgb, var(--text) 16%, transparent)"/><path class="ln accl" d="M90 82a40 40 0 0 1 6-21" stroke-width="10"/><path class="ln" d="M130 82l-22-20"/><circle cx="130" cy="82" r="5" fill="var(--text)"/>`,
+  done: `<circle class="disc" cx="128" cy="62" r="56"/><rect class="soft" x="98" y="30" width="62" height="56" rx="10"/><path class="ln accl" d="M112 58l11 11 22-24" stroke-width="4"/><rect class="teal" x="90" y="16" width="8" height="4" rx="2" transform="rotate(-30 94 18)"/><rect class="gold" x="168" y="22" width="9" height="4" rx="2" transform="rotate(25 172 24)"/><circle class="acc" cx="178" cy="62" r="4"/><rect class="teal" x="172" y="88" width="8" height="4" rx="2" transform="rotate(40 176 90)"/><circle class="gold" cx="148" cy="16" r="3.5"/><path d="M84 46l3 3m0-3l-3 3" stroke="var(--primary)" stroke-width="2" stroke-linecap="round"/>`,
+  loading: `<circle class="disc" cx="128" cy="62" r="56"/><rect class="soft" x="94" y="28" width="80" height="62" rx="10"/><rect class="mute" x="104" y="40" width="44" height="7" rx="3.5"/><rect class="mute" x="104" y="54" width="60" height="7" rx="3.5"/><rect class="mute" x="104" y="68" width="34" height="7" rx="3.5"/>`,
+  failed: `<circle class="disc" cx="128" cy="62" r="56"/><path class="soft" d="M104 80h52a16 16 0 0 0 2-32 24 24 0 0 0-46-4 18 18 0 0 0-8 36z"/><path class="ln accl" d="M118 52l24 20M142 52l-24 20" stroke-width="3"/>`,
+  resume: `<circle class="disc" cx="128" cy="62" r="56"/><rect class="soft dash" x="92" y="30" width="44" height="34" rx="7"/><path class="ln" d="M106 52l6-6 5 5 8-9"/><path class="soft dash" d="M150 40h14M153 40v14l-12 22a4 4 0 0 0 4 6h24a4 4 0 0 0 4-6l-12-22V40"/>`,
+};
+// [her mood, what she wears, the drawing beside her ('' for her on her own)]
+const ES_SCENE = {
+  chats: ['greeting', null, 'chat'], cards: ['writing', 'pencil', 'cards'], plan: ['encourage', 'gradcap', 'plan'],
+  search: ['searching', 'glasses', 'search'], filter: ['puzzled', null, 'filter'], measure: ['thinking', null, 'gauge'],
+  reviewed: ['proud', 'crown', 'done'], caught: ['dance', 'party', 'done'], loading: ['busy', null, 'loading'],
+  failed: ['oops', null, 'failed'], resume: ['sleeping', null, 'resume'], rest: ['wink', null, ''],
+  week: ['highlighting', null, ''], mistakes: ['love', null, ''], memory: ['reading', null, ''], idle: ['idle', null, ''],
+};
+function cassieEmpty(box, scene = 'idle') {
   if (!box || !window.CassieBot || box.querySelector('.es-bot')) return box;
-  const h = document.createElement('div');
-  h.className = 'es-bot'; h.setAttribute('aria-hidden', 'true');
+  const [mood, acc, prop] = ES_SCENE[scene] || ES_SCENE.idle;
+  const wrap = document.createElement('div');
+  wrap.className = 'es-scene' + (prop ? '' : ' es-solo'); wrap.setAttribute('aria-hidden', 'true'); wrap.dataset.scene = scene;
+  wrap.innerHTML = (prop ? `<svg class="es-prop" viewBox="0 0 200 132">${ES_PROP[prop]}</svg>` : '') + '<div class="es-bot"></div>';
   const mark = box.querySelector('.es-mark');
-  if (mark) mark.replaceWith(h); else box.prepend(h);
-  try { window.CassieBot.create(h, { state: 'idle', flat: true }).pause(true); } catch (e) { h.remove(); }
+  if (mark) mark.replaceWith(wrap); else box.prepend(wrap);
+  try { window.CassieBot.create(wrap.querySelector('.es-bot'), { state: mood, accessory: acc }); } catch (e) { wrap.querySelector('.es-bot').remove(); }
   return box;
 }
+// a second way forward on an empty state (the first is CassieErrors.empty's own action), drawn as a quiet button before it
+function esMore(box, label, onClick) {
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'btn btn-sm es-go es-alt'; b.textContent = label; b.addEventListener('click', onClick);
+  const first = box.querySelector('.es-go');
+  if (first) { const row = document.createElement('div'); row.className = 'es-acts'; first.replaceWith(row); row.append(b, first); } else box.appendChild(b);
+  return box;
+}
+window.esMore = esMore;
 window.cassieEmpty = cassieEmpty;
 // the Quick actions the boxes already cover (each feature shows once on Home)
 const HUB_BOXED = /^(Quiz me|Research a topic|Learn: try a simulation|Study together|Flashcards)/;
@@ -2614,7 +2660,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=281'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=282'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2636,7 +2682,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=281'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=282'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -2912,7 +2958,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=281').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=282').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -3436,7 +3482,7 @@ function deskHome() {
     next.insertAdjacentHTML('beforeend', `<p class="dk-next-what"></p><p class="dk-note dk-next-when"></p><button type="button" class="dk-btn dk-solid dk-wide" data-dk="nexttask">${DESK_ICON.play}Start studying</button>`);
     next.querySelector('.dk-next-what').textContent = taskLabel(nx.t);
     next.querySelector('.dk-next-when').textContent = `${left === 0 ? 'Today' : left === 1 ? 'Tomorrow' : dayName(nx.day)} · ${nx.e.name}`;
-  } else next.append(CassieErrors.empty({ title: activeExams().length ? 'All caught up' : 'No plan yet', text: activeExams().length ? 'Every task so far is done. Nice work.' : 'Tell Cassie your exam and she plans it day by day.', action: activeExams().length ? '' : 'Plan an exam', onAction: () => openExamSheet() }));
+  } else next.append(cassieEmpty(CassieErrors.empty({ title: activeExams().length ? 'All caught up' : 'No plan yet', text: activeExams().length ? 'Every task so far is done. Nice work.' : 'Tell Cassie your exam and she plans it day by day.', action: activeExams().length ? '' : 'Plan an exam', onAction: () => openExamSheet() }), activeExams().length ? 'caught' : 'plan'));
   // the exam plans
   const plans = el.querySelector('.dk-plans .dk-list');
   activeExams().forEach((e, i) => {
@@ -3446,7 +3492,7 @@ function deskHome() {
     li.querySelector('small').textContent = `Exam day: ${dayName(e.date)}${r && r.tried ? ` · ${r.pct}% ready` : ''}`;
     plans.appendChild(li);
   });
-  if (!activeExams().length) plans.replaceWith(CassieErrors.empty({ title: 'No exam plans', text: 'Your exam plans show up here.' }));
+  if (!activeExams().length) plans.replaceWith(cassieEmpty(CassieErrors.empty({ title: 'No exam plans', text: 'Tell Cassie your exam and she plans it day by day.', action: 'Plan an exam', onAction: () => openExamSheet() }), 'plan'));
   // recent chats
   const list = el.querySelector('.dk-chats .dk-list');
   chats.slice(0, 4).forEach((c) => {
@@ -3456,7 +3502,7 @@ function deskHome() {
     li.querySelector('small').textContent = `${n} message${n === 1 ? '' : 's'} · ${hubAgo(c.updatedAt)}`;
     list.appendChild(li);
   });
-  if (!chats.length) list.replaceWith(CassieErrors.empty({ title: 'No chats yet', text: 'Your chats with Cassie show up here.' }));
+  if (!chats.length) list.replaceWith(cassieEmpty(CassieErrors.empty({ title: 'No chats yet', text: 'Your chats with Cassie show up here.', action: 'Ask Cassie', onAction: () => deskAct('ask') }), 'chats'));
   // readiness: the nearest exam, as a half circle
   const rd = el.querySelector('.dk-ready');
   if (ex) {
@@ -3464,7 +3510,8 @@ function deskHome() {
     rd.insertAdjacentHTML('beforeend', `<div class="dk-gauge" role="img">${deskGauge(pct)}<b>${pct}%</b></div><p class="dk-note dk-center"></p>`);
     rd.querySelector('.dk-gauge').setAttribute('aria-label', `${pct}% ready for ${ex.name}`);
     rd.querySelector('.dk-center').textContent = ready && ready.tried ? `${ex.name}: ${ready.tried} of ${ready.total} topics practised` : `${ex.name}: take a quiz on a topic to start`;
-  } else rd.append(CassieErrors.empty({ title: 'Nothing to measure yet', text: 'Plan an exam, then practise its topics. Cassie shows how ready you are here.' }));
+    if (!(ready && ready.tried)) { const q = document.createElement('button'); q.type = 'button'; q.className = 'dk-btn dk-solid dk-wide dk-ready-go'; q.textContent = 'Take a quiz'; q.addEventListener('click', () => startQuizOn(ex.name)); rd.append(q); } // (v282: the move that fills it)
+  } else rd.append(cassieEmpty(CassieErrors.empty({ title: 'Nothing to measure yet', text: 'Plan an exam, then practise its topics. Cassie shows how ready you are here.', action: 'Plan an exam', onAction: () => openExamSheet() }), 'measure'));
   el.addEventListener('click', (e) => { const b = e.target.closest('[data-dk]'); if (b) deskAct(b.dataset.dk); });
   // (v223) the boxes Home shares with the phone (Today's Lab's play button) are data-hub: they open here too
   el.addEventListener('click', (e) => { const h = e.target.closest('[data-hub]'); if (h && el.contains(h)) hubAct(h.dataset.hub); });
@@ -3652,7 +3699,7 @@ function deskChats() {
     card.querySelector('.dk-del').addEventListener('click', async () => { if (!(await askSure({ title: `Delete “${card.querySelector('b').textContent}”?`, text: 'The chat and its messages go from this device. This can’t be undone.', yes: 'Delete chat' }))) return; state.chats = state.chats.filter((x) => x.id !== c.id); if (!state.chats.length) state.chats.push(makeChat()); if (!state.chats.some((x) => x.id === state.currentId)) { state.currentId = state.chats[0].id; state.messages = curChat().messages; } save(); renderChatList(); renderHistory(); });
     grid.appendChild(card);
   });
-  if (!list.length) grid.replaceWith(cassieEmpty(CassieErrors.empty({ title: all.length ? 'No chats here' : 'No chats yet', text: all.length ? 'Try another filter.' : 'Ask Cassie anything and your chat shows up here.', action: all.length ? '' : 'Ask Cassie', onAction: () => deskAct('ask') })));
+  if (!list.length) grid.replaceWith(cassieEmpty(CassieErrors.empty({ title: all.length ? 'No chats here' : 'No chats yet', text: all.length ? 'Nothing matches this filter.' : 'Ask Cassie anything and your chat shows up here.', action: all.length ? 'Show all chats' : 'Ask Cassie', onAction: () => { if (all.length) { deskChatsFilter = 'all'; renderHistory(); } else deskAct('ask'); } }), all.length ? 'filter' : 'chats'));
   el.querySelector('.dk-count').textContent = `${list.length} ${list.length === 1 ? 'chat' : 'chats'}`;
   el.querySelector('.dk-chips').addEventListener('click', (e) => { const b = e.target.closest('[data-f]'); if (b) { deskChatsFilter = b.dataset.f; renderHistory(); } });
   el.addEventListener('click', (e) => { const b = e.target.closest('[data-dk="ask"]'); if (b) deskAct('ask'); });
@@ -3703,7 +3750,9 @@ function deskPlan() {
   el.querySelectorAll('.dk-col').forEach((c) => {
     const n = c.querySelectorAll('.dk-task').length;
     c.querySelector('.dk-n').textContent = n;
-    if (!n) c.querySelector('.dk-col-list').replaceWith((!tasks.length && c.dataset.col === 'now' ? cassieEmpty : (x) => x)(CassieErrors.empty({ title: c.dataset.col === 'done' ? 'Nothing done yet' : 'Nothing here', text: c.dataset.col === 'done' ? 'Tick a task when it’s done and it moves here.' : activeExams().length ? 'No tasks for this filter.' : 'Make an exam plan and its tasks show up here.' })));
+    // (v282) a filter that hides every task offers to show them all again
+    const filtered = c.dataset.col !== 'done' && activeExams().length && deskPlanFilter !== 'all';
+    if (!n) c.querySelector('.dk-col-list').replaceWith((!tasks.length && c.dataset.col === 'now' ? (x) => cassieEmpty(x, 'plan') : (x) => x)(CassieErrors.empty({ title: c.dataset.col === 'done' ? 'Nothing done yet' : 'Nothing here', text: c.dataset.col === 'done' ? 'Tick a task when it’s done and it moves here.' : activeExams().length ? 'No tasks for this filter.' : 'Make an exam plan and its tasks show up here.', action: filtered ? 'Show all tasks' : '', onAction: () => { deskPlanFilter = 'all'; renderHistory(); } })));
   });
   el.querySelector('.dk-count').textContent = `${tasks.length} ${tasks.length === 1 ? 'task' : 'tasks'} shown`;
   el.querySelector('.dk-chips').addEventListener('click', (e) => { const b = e.target.closest('[data-f]'); if (b) { deskPlanFilter = b.dataset.f; renderHistory(); } });
@@ -3910,7 +3959,11 @@ function xwDue() {
   const list = C && C.decks ? C.decks().filter((d) => d.due > 0) : [];
   el.innerHTML = `${xwHead('due', list.length ? `${list.length} ${list.length === 1 ? 'deck' : 'decks'} due today` : '')}<ul class="xw-list"></ul>`;
   const ul = el.querySelector('.xw-list');
-  if (!list.length) { const p = document.createElement('p'); p.className = 'xw-none xw-keep'; p.textContent = CassieErrors.say('hw_due_none'); ul.replaceWith(p); return el; }
+  if (!list.length) { // (v282) all reviewed is a finish, not the same as having no cards
+    const any = !!(C && C.count && C.count() > 0);
+    const e = CassieErrors.empty({ title: any ? 'All reviewed for today' : CassieErrors.say('hw_due_none'), text: any ? 'Every card due today is done. Nice work.' : 'Make flashcards from any answer, and they come back here to review.', action: any ? '' : 'Make flashcards', onAction: () => hubAct('cards') });
+    e.classList.add('xw-empty'); ul.replaceWith(cassieEmpty(e, any ? 'reviewed' : 'cards')); return el;
+  }
   list.slice(0, 4).forEach((d) => {
     const li = document.createElement('li');
     li.innerHTML = `<button type="button" class="xw-row"><i>${HUB_ICON.cards}</i><span><b></b><small></small></span>${HUB_ICON.go}</button>`;
@@ -3990,7 +4043,7 @@ function xwResume() {
   const list = (Array.isArray(state.recentWork) ? state.recentWork : []).slice(0, 3);
   el.innerHTML = `${xwHead('resume')}<ul class="xw-list"></ul>`;
   const ul = el.querySelector('.xw-list');
-  if (!list.length) { const p = document.createElement('p'); p.className = 'xw-none xw-keep'; p.textContent = CassieErrors.say('hw_resume_none'); ul.replaceWith(p); return el; }
+  if (!list.length) { const e = CassieErrors.empty({ title: 'Nothing to jump back into', text: CassieErrors.say('hw_resume_none'), action: 'Open Labs', onAction: () => openLabs() }); e.classList.add('xw-empty'); ul.replaceWith(cassieEmpty(e, 'resume')); return el; }
   list.forEach((r) => {
     const li = document.createElement('li');
     li.innerHTML = `<button type="button" class="xw-row"><i>${r.kind === 'board' ? XW_ICON.board : HUB_ICON.lab}</i><span><b></b><small></small></span>${HUB_ICON.go}</button>`;
@@ -4063,7 +4116,7 @@ function deskCalendar() {
     li.querySelector('button').addEventListener('click', () => { if (it.x) openExamTask(it.x.t, it.x.e); else if (it.own) openCalDay(today); });
     tl.appendChild(li);
   });
-  if (!tl.children.length) tl.replaceWith(CassieErrors.empty({ title: 'Nothing planned today', text: 'Rest, or review anything you like.' }));
+  if (!tl.children.length) tl.replaceWith(cassieEmpty(CassieErrors.empty({ title: 'Nothing planned today', text: 'Rest, or review anything you like.' }), 'rest'));
   // coming up: the next tasks and exams after today
   const soon = el.querySelector('.dk-soon');
   Object.keys(items).filter((d) => d > today).sort().flatMap((d) => items[d].filter((it) => !(it.x && it.x.t.done)).map((it) => ({ d, it }))).slice(0, 6).forEach(({ d, it }) => {
@@ -4075,7 +4128,7 @@ function deskCalendar() {
     li.querySelector('.dk-soon-when').textContent = `${left === 1 ? 'Tomorrow' : dayName(d, { weekday: 'long' })}${it.x ? ' · ' + it.x.e.name : it.own && it.own.time ? ' · ' + calTime(it.own.time) : ''}`;
     soon.appendChild(li);
   });
-  if (!soon.children.length) soon.replaceWith(CassieErrors.empty({ title: 'Nothing coming up', text: activeExams().length ? 'Every planned task is done.' : 'Plan an exam and its days show up here.', action: activeExams().length ? '' : 'Plan an exam', onAction: () => openExamSheet() }));
+  if (!soon.children.length) soon.replaceWith(cassieEmpty(CassieErrors.empty({ title: 'Nothing coming up', text: activeExams().length ? 'Every planned task is done.' : 'Plan an exam and its days show up here.', action: activeExams().length ? '' : 'Plan an exam', onAction: () => openExamSheet() }), activeExams().length ? 'caught' : 'plan'));
   el.addEventListener('click', (e) => {
     const cd = e.target.closest('[data-cal-day]'); if (cd) { openCalDay(cd.dataset.calDay); return; }
     const b = e.target.closest('[data-dk]'); if (!b) return;
@@ -4225,7 +4278,7 @@ function weekCard() {
   box.setAttribute('aria-label', 'Your week');
   box.innerHTML = '<h2 class="hub-h">Your week</h2>';
   if (!w.now.days) {
-    box.appendChild(CassieErrors.empty({ title: 'Your week starts here', text: 'Quizzes, flashcards, focus time and fixed mistakes show up here as you study this week.', action: 'Take a quick quiz', onAction: () => hubAct('quiz') }));
+    box.appendChild(cassieEmpty(CassieErrors.empty({ title: 'Your week starts here', text: 'Quizzes, flashcards, focus time and fixed mistakes show up here as you study this week.', action: 'Take a quick quiz', onAction: () => hubAct('quiz') }), 'week'));
     return box;
   }
   const card = document.createElement('div');
@@ -6381,6 +6434,7 @@ function takeBackLastQuestion(text) {
 
 /* ---------- Review my mistakes: quiz questions the student missed come back later ---------- */
 const DAY_MS = 864e5;
+let quizRun = 0; // (right answers in a row, this visit)
 function captureQuizMarks(reply) {
   if (!/\[\[\s*(MISSED|GOT)\s*:/i.test(reply || '')) return reply;
   if (!Array.isArray(state.mistakes)) state.mistakes = [];
@@ -6398,8 +6452,10 @@ function captureQuizMarks(reply) {
       if (m) { m.a = a || m.a; m.misses = (m.misses || 1) + 1; m.due = Date.now() + DAY_MS; }
       else state.mistakes.unshift({ q: q.slice(0, 400), a: (a || '').slice(0, 300), at: Date.now(), due: Date.now() + DAY_MS, misses: 1 });
       setTimeout(() => botMood('encourage', 3200), 50); // a missed question: kind, not sad
+      quizRun = 0;
     } else {
       setTimeout(() => cassieChat('correct'), 60); // (a right quiz answer)
+      quizRun++; if (quizRun % 3 === 0) setTimeout(() => botMood('dance', 3600), 120); // (v282: three right in a row, she dances)
     }
     if (!/missed/i.test(kind) && i >= 0) {
       const m = state.mistakes[i];
@@ -6419,7 +6475,7 @@ function reviewMistakes(all = false) {
   const list = (all ? state.mistakes || [] : dueMistakes()).slice(0, 10);
   if (!list.length) {
     const b = renderMessage('assistant', '');
-    b.appendChild(CassieErrors.empty({ title: 'No mistakes to review', text: 'Nice! Questions you miss in a quiz come back here, so you can practise them again.', action: 'Start a quiz', onAction: () => { b.remove(); document.getElementById('quiz-btn')?.click(); } }));
+    b.appendChild(cassieEmpty(CassieErrors.empty({ title: 'No mistakes to review', text: 'Nice! Questions you miss in a quiz come back here, so you can practise them again.', action: 'Start a quiz', onAction: () => { b.remove(); document.getElementById('quiz-btn')?.click(); } }), 'mistakes'));
     return;
   }
   if (!canChat()) { openSettings(); return; }
@@ -7150,7 +7206,7 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=281')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=282')));
 // a real photo needs Gemini pictures (Cassie's server or the student's key); the free service draws toys and models
 const realPhotoOk = () => !!((SERVER && serverPictures) || (state.geminiKey && !geminiImageOff));
 // a drawing inside a chat bubble (a new one draws itself; one from history shows finished)
@@ -7288,7 +7344,12 @@ async function realPhoto(spec, asked) {
   const prompt = `A real, accurate, true to life photograph of ${spec.photo || spec.title}. Taken with a real camera on location, natural light, sharp detail, the whole subject in view. Not a model, toy, miniature, 3D render, illustration, cartoon or diagram. No text, no labels, no watermark.`;
   let src = await serverGeminiImage(prompt);
   if (!src && state.geminiKey && !geminiImageOff) { try { src = await geminiImage(prompt); } catch (e) { src = null; } }
-  if (!src) { typing.remove(); const t = 'I could not make an accurate photo right now. Try again a little later.'; state.messages.push({ role: 'assistant', content: t }); save(); renderMessage('assistant', t); return; }
+  if (!src) { // (v282) the real status, and one way forward: try again
+    typing.remove(); const t = 'I could not make an accurate photo right now. Try again a little later.'; state.messages.push({ role: 'assistant', content: t }); save();
+    const bubble = renderMessage('assistant', t);
+    if (bubble) { const e = CassieErrors.empty({ title: 'Couldn’t make the photo', text: 'Cassie’s photo maker didn’t answer this time.', action: 'Try again', onAction: () => { e.remove(); realPhoto(spec, asked); } }); e.classList.add('es-inline'); bubble.appendChild(cassieEmpty(e, 'failed')); }
+    return;
+  }
   setTypingStatus(typing, 'Cassie is labelling it…');
   const want = spec.parts.map((p) => p.label).filter(Boolean);
   const found = !want.length ? null : ldJson(await liveDrawLook(`Find these parts in this photo: ${want.join(', ')}. Reply {"marks":[{"label": one of those names exactly, "x": 0 to 1 from the left, "y": 0 to 1 from the top}]}. Leave out any part you cannot clearly see.`, src));
@@ -8436,7 +8497,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=281');
+      exploreMod = await import('./explore/cell3d.js?v=282');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -8486,7 +8547,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=281');
+      labsMod = await import('./labs/labs.js?v=282');
       islandRest();
     }
     labsMod.open({
@@ -8588,6 +8649,7 @@ if (talkBtn) {
       if (!state.messages.length) chatLog.innerHTML = '';
       renderMessage('assistant', "Okay: real talk mode. No lessons, no fluff. What's going on? I'm listening.");
       try { set3D('encouraging'); } catch (e) { /* ignore */ }
+      setTimeout(() => botMood('love', 2600), 300); // (v282: soft and caring)
     } else {
       renderMessage('assistant', "Back to study mode. I'm here whenever you want to talk again.");
     }
@@ -9085,7 +9147,7 @@ function renderMemory() {
     </div>`;
   const memSlot = memoryPanel.querySelector('.mem-empty-slot');
   if (window.CassieMic) window.CassieMic.attach(document.getElementById('mem-fact'));
-  if (memSlot) memSlot.replaceWith(CassieErrors.empty({ title: 'Nothing remembered yet', text: 'Cassie remembers the topics you study, so she can help you review them later.', action: 'Ask a question', onAction: () => { memoryPanel.hidden = true; document.querySelector('.tabbar [data-tab="chat"]')?.click(); promptInput.focus(); } }));
+  if (memSlot) memSlot.replaceWith(cassieEmpty(CassieErrors.empty({ title: 'Nothing remembered yet', text: 'Cassie remembers the topics you study, so she can help you review them later.', action: 'Ask a question', onAction: () => { memoryPanel.hidden = true; document.querySelector('.tabbar [data-tab="chat"]')?.click(); promptInput.focus(); } }), 'memory'));
 }
 
 function openMemory() {
@@ -9338,7 +9400,7 @@ function renderChatList() {
       text: 'Every chat you start with Cassie is kept here, so you can come back to it.',
       action: 'Ask your first question',
       onAction: () => { closeSidebar(); document.querySelector('.tabbar [data-tab="chat"]')?.click(); promptInput.focus(); },
-    })));
+    }), 'chats'));
     return;
   }
   chats.forEach((c) => {
@@ -10448,10 +10510,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=281').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=282').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=281', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=282', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.

@@ -6994,24 +6994,25 @@ test('Liquid Glass tap: a tab icon, an icon button and a board tool press to 0.9
   }
 });
 
-test('empty screens: Flashcards, Chats and the Study plan show a still, flat Cassie above their words', async (b) => {
+test('empty screens: Flashcards, Chats and the Study plan show Cassie (the 3D one, as in the chat) in a mood that fits, beside a small drawing of what is missing', async (b) => {
   const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, state: { groqKey: 'gsk_test' } });
-  const bot = (sel) => page.evaluate((s) => { const e = document.querySelector(s); if (!e) return null; const svg = e.querySelector('.es-bot svg.cassie-bot'), r = e.querySelector('.es-bot') && e.querySelector('.es-bot').getBoundingClientRect(); return { svg: !!svg, hidden: e.querySelector('.es-bot') && e.querySelector('.es-bot').getAttribute('aria-hidden'), w: r && Math.round(r.width), first: e.firstElementChild && e.firstElementChild.className, title: (e.querySelector('.es-title') || {}).textContent }; }, sel);
+  const scene = (sel) => page.evaluate((s) => { const e = document.querySelector(s); if (!e) return null; const sc = e.querySelector('.es-scene'), bot = sc && sc.querySelector('.es-bot'); return { scene: sc && sc.dataset.scene, hidden: sc && sc.getAttribute('aria-hidden'), prop: !!(sc && sc.querySelector('svg.es-prop')), mood: bot && bot.dataset.state, first: e.firstElementChild && e.firstElementChild.className, title: (e.querySelector('.es-title') || {}).textContent }; }, sel);
   await page.evaluate(() => window.CassieCards.open());
   await page.waitForSelector('.fc .empty-state');
-  const fc = await bot('.fc .empty-state');
-  expect(fc && fc.svg && fc.hidden === 'true' && fc.w === 64 && fc.first === 'es-bot' && fc.title === 'No flashcards yet', 'Flashcards: ' + JSON.stringify(fc));
+  const fc = await scene('.fc .empty-state');
+  expect(fc && fc.scene === 'cards' && fc.mood === 'writing' && fc.prop && fc.hidden === 'true' && /es-scene/.test(fc.first) && fc.title === 'No flashcards yet', 'Flashcards: Cassie writing, with a stack of blank cards: ' + JSON.stringify(fc));
   await page.evaluate(() => window.CassieCards.close());
   await page.evaluate(() => deskGo('chats'));
-  await page.waitForSelector('.desk-chats .empty-state, .desk .empty-state', { timeout: 5000 });
-  const ch = await bot('.desk .empty-state');
-  expect(ch && ch.svg && ch.title === 'No chats yet', 'Chats: ' + JSON.stringify(ch));
+  await page.waitForSelector('.desk .empty-state', { timeout: 5000 });
+  const ch = await scene('.desk .empty-state');
+  expect(ch && ch.scene === 'chats' && ch.mood === 'greeting' && ch.title === 'No chats yet', 'Chats: Cassie waving, an empty chat bubble: ' + JSON.stringify(ch));
   await page.evaluate(() => deskGo('plan'));
   await page.waitForSelector('.desk-plan .empty-state', { timeout: 5000 });
-  const pl = await bot('.desk-plan [data-col="now"] .empty-state');
-  expect(pl && pl.svg && pl.w === 64, 'Study plan: ' + JSON.stringify(pl));
-  const moving = await page.evaluate(async () => { const s = document.querySelector('.desk-plan .es-bot svg').outerHTML; await new Promise((r) => setTimeout(r, 900)); return s !== document.querySelector('.desk-plan .es-bot svg').outerHTML; });
-  expect(!moving, 'she keeps still');
+  const pl = await scene('.desk-plan [data-col="now"] .empty-state');
+  expect(pl && pl.scene === 'plan' && pl.mood === 'encourage', 'Study plan: Cassie cheering you on, in a grad cap: ' + JSON.stringify(pl));
+  // every scene is its own mood, and the 3D Cassie is asked for (not the flat stand-in)
+  const all = await page.evaluate(() => { const moods = Object.values(ES_SCENE).map((x) => x[0]); return { n: moods.length, unique: new Set(moods).size, src: String(cassieEmpty) }; });
+  expect(all.unique === all.n && !/flat: true/.test(all.src), 'a different mood for each scene, and never the flat Cassie on purpose: ' + all.unique + '/' + all.n);
   expect(!errors.length, 'page errors: ' + errors.join('; '));
   await ctx.close();
 });
@@ -12253,6 +12254,62 @@ async function xwSizes(page, id, where) {
   await page.evaluate((id) => hwSize(document.querySelector(`.hw-grid > .hw[data-w="${id}"]`), 'm'), id);
 }
 
+test('v282: every empty state shows Cassie (3D, as in the chat) in her own mood with a drawing of what is missing, and a way forward: Plan an exam, Ask Cassie, Show all chats, Show all tasks, Take a quiz, Make flashcards, Open Labs, Clear search, Try again; in the chat she wears her pencil to draw and her glasses to research, dances at three right in a row, winks at a thank you and is caring in Talk mode', async (b) => {
+  const calls = [];
+  const fake = async (body) => { const all = JSON.stringify(body.messages); calls.push(all); return { text: /explains by DRAWING/.test(all) ? JSON.stringify(LD_WATER) : 'You are welcome! Anything else?' }; };
+  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, lite: 'off', fakeGroq: fake, state: { groqKey: 'gsk_test' } });
+  const es = (sel) => page.evaluate((s) => { const e = document.querySelector(s); if (!e) return null; const sc = e.querySelector('.es-scene'); return { scene: sc && sc.dataset.scene, mood: sc && sc.querySelector('.es-bot') && sc.querySelector('.es-bot').dataset.state, buttons: [...e.querySelectorAll('button')].map((x) => x.textContent.trim()), text: e.innerText.replace(/\s+/g, ' ') }; }, sel);
+  // the scenes: each its own mood and drawing
+  const sc = await page.evaluate(() => Object.fromEntries(Object.entries(ES_SCENE).map(([k, v]) => [k, v.join('/')])));
+  expect(sc.chats === 'greeting//chat' && sc.cards === 'writing/pencil/cards' && sc.plan === 'encourage/gradcap/plan' && sc.search === 'searching/glasses/search' && sc.filter === 'puzzled//filter' && sc.measure === 'thinking//gauge' && sc.reviewed === 'proud/crown/done' && sc.caught === 'dance/party/done' && sc.loading === 'busy//loading' && sc.failed === 'oops//failed' && sc.resume === 'sleeping//resume', 'the scenes, as shown: ' + JSON.stringify(sc));
+  // computer Home with nothing yet
+  await page.evaluate(() => deskGo('home')); await page.waitForSelector('.dk-plans .empty-state');
+  const plans = await es('.dk-plans .empty-state'), chats = await es('.dk-chats .empty-state'), ready = await es('.dk-ready .empty-state');
+  expect(plans && plans.scene === 'plan' && plans.buttons.join() === 'Plan an exam', 'No exam plans: Plan an exam: ' + JSON.stringify(plans));
+  expect(chats && chats.scene === 'chats' && chats.buttons.join() === 'Ask Cassie', 'Recent chats: Ask Cassie: ' + JSON.stringify(chats));
+  expect(ready && ready.scene === 'measure' && ready.buttons.join() === 'Plan an exam', 'Exam readiness: Plan an exam: ' + JSON.stringify(ready));
+  // an exam with nothing practised: Take a quiz
+  await page.evaluate(() => { const d = new Date(Date.now() + 10 * 864e5).toISOString().slice(0, 10); state.exams = [{ id: 'e1', name: 'Biology finals', date: d, from: '2000-01-01', days: [{ date: d, tasks: [{ id: 't1', kind: 'quiz', topic: 'Cells', done: false }] }], stats: {} }]; save(); deskGo('chat'); deskGo('home'); });
+  await page.waitForSelector('.dk-ready');
+  expect(await page.evaluate(() => !!document.querySelector('.dk-ready .dk-ready-go') && document.querySelector('.dk-ready .dk-ready-go').textContent === 'Take a quiz'), 'an exam with nothing practised: Take a quiz');
+  // the chats page: a filter with no match offers Show all chats
+  await page.evaluate(() => { state.chats.push({ id: 'old', title: 'Cells', messages: [{ role: 'user', content: 'cells' }, { role: 'assistant', content: 'ok' }], updatedAt: Date.now() - 40 * 864e5 }); save(); deskGo('chats'); });
+  await page.click('.dk-chip[data-f="week"]').catch(() => {}); await page.waitForTimeout(200);
+  let f = await es('.desk .empty-state');
+  expect(f && f.scene === 'filter' && f.mood === 'puzzled' && f.buttons.join() === 'Show all chats' && /Nothing matches this filter\./.test(f.text), 'a filter with no match: ' + JSON.stringify(f));
+  await page.click('.desk .empty-state .es-go'); await page.waitForTimeout(200);
+  expect(await page.evaluate(() => deskChatsFilter === 'all' && document.querySelectorAll('.dk-chat-card').length >= 1), 'Show all chats shows them all');
+  // Labs: no lab by that name, Clear search and Ask Cassie about it
+  await page.evaluate(() => openLabs()); await page.waitForSelector('.labs-search', { state: 'attached', timeout: 20000 });
+  const sel = '.labs-search';
+  await page.evaluate(() => { const i = document.querySelector('.labs-search'); i.value = 'zzqqxx'; i.dispatchEvent(new Event('input')); }); await page.waitForTimeout(400);
+  const lab = await es('.labs-empty .empty-state');
+  expect(lab && lab.scene === 'search' && lab.mood === 'searching' && lab.buttons.join('|') === 'Clear search|Ask Cassie about it', 'no lab by that name: ' + JSON.stringify(lab));
+  await page.click('.labs-empty .es-alt'); await page.waitForTimeout(300);
+  expect(await page.evaluate((s) => document.querySelector(s).value === '' && document.querySelector('.labs-empty').hidden, sel), 'Clear search widens it again');
+  await page.keyboard.press('Escape'); await page.evaluate(() => { const x = document.querySelector('.labs .labs-x, .labs [data-close]'); if (x) x.click(); });
+  // the chat: her tools, the dance, the wink, the caring face
+  await page.evaluate(() => deskGo('chat'));
+  const mood = () => page.evaluate(() => ({ s: document.querySelector('#cassie-2d-root [data-state]') && document.querySelector('#cassie-2d-root [data-state]').dataset.state, a: bot2d && bot2d.accessory }));
+  await page.evaluate(() => botMood('drawing')); let m = await mood();
+  expect(m.s === 'drawing' && /pencil/.test(m.a || ''), 'drawing: the pencil: ' + JSON.stringify(m));
+  await page.evaluate(() => botMood('searching')); m = await mood();
+  expect(m.s === 'searching' && /glasses/.test(m.a || '') && !/pencil/.test(m.a || ''), 'researching: the glasses: ' + JSON.stringify(m));
+  await page.evaluate(() => botMood('idle')); m = await mood();
+  expect(!/glasses|pencil/.test(m.a || ''), 'and back to what she wears today: ' + JSON.stringify(m));
+  await page.evaluate(() => { captureQuizMarks('[[GOT: q1 || a]]'); captureQuizMarks('[[GOT: q2 || a]]'); captureQuizMarks('[[GOT: q3 || a]]'); });
+  await page.waitForTimeout(300); m = await mood();
+  expect(m.s === 'dance', 'three right in a row: she dances: ' + JSON.stringify(m));
+  await page.waitForTimeout(3800);
+  await page.fill('#prompt-input', 'thank you!'); await page.click('#send-btn');
+  await page.waitForFunction(() => /Anything else/.test(document.getElementById('chat-log').textContent), null, { timeout: 15000 });
+  const winked = await page.waitForFunction(() => { const e = document.querySelector('#cassie-2d-root [data-state]'); return e && e.dataset.state === 'wink'; }, null, { timeout: 7000 }).then(() => true, () => false);
+  m = await mood();
+  expect(winked, 'a thank you: a wink once she has answered: ' + JSON.stringify(m));
+  expect(!errors.length, 'no script errors: ' + errors.join(' | '));
+  await ctx.close();
+});
+
 test('v281 Home widget Scratchpad: added from Edit Home (not there by default); kept on this device as it is typed, after a reload; Make a note sends it to Make study notes and clears it; an empty pad says what it is for; every size fits', async (b) => {
   const calls = [];
   const { ctx, page, errors } = await xwHome(b, { calls });
@@ -12292,7 +12349,15 @@ test('v281 Home widget Due for review: on Home by default; the decks with cards 
   }
   const { ctx, page } = await xwHome(b, { state: { cards: [{ id: 'p1', f: 'Phys', b: 'x', deck: 'Physics', box: 2, due: Date.now() + 864e5, at: 0 }] } });
   const none = await xwShow(page, 'due');
-  expect(none && /Nothing due today\./.test(none.text) && !/decks due/.test(none.text), 'nothing due says so: ' + (none && none.text));
+  expect(none && /All reviewed for today Every card due today is done\. Nice work\./.test(none.text) && !/decks due/.test(none.text), 'cards, but none due: the finish is acknowledged: ' + (none && none.text));
+  await ctx.close();
+  // (v282) no cards at all: the first move, Cassie writing beside a stack of blank cards
+  const { ctx: c2, page: p2 } = await xwHome(b, { state: { cards: [] } });
+  const fresh = await xwShow(p2, 'due');
+  const sc = await p2.evaluate(() => { const s = document.querySelector('.hw[data-w="due"] .es-scene'); return s && s.dataset.scene; });
+  expect(fresh && /Nothing due today\. Make flashcards from any answer/.test(fresh.text) && /Make flashcards/.test(fresh.text) && sc === 'cards', 'no cards: says so, with Make flashcards: ' + (fresh && fresh.text) + ' ' + sc);
+  await c2.close();
+  return;
   await ctx.close();
 });
 

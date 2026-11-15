@@ -2184,6 +2184,29 @@ input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="
 .empty-state .es-title { margin: 0; font-size: var(--fs-md); font-weight: 700; }
 .empty-state .es-text { margin: 0; font-size: var(--fs-sm); line-height: var(--lh-body); color: var(--text); max-width: 32ch; }
 .empty-state .es-go { margin-top: var(--sp-2); }
+/* (v282) the scene above an empty state's title: 3D Cassie in a mood that fits, in front of a small drawing of what is missing */
+.es-scene { position: relative; width: 220px; max-width: 100%; height: 140px; margin-bottom: var(--sp-1); flex: none; }
+.es-scene.es-solo { width: 112px; height: 108px; }
+.es-scene .es-prop { position: absolute; left: 20px; top: 0; width: 200px; height: 132px; overflow: visible; }
+.empty-state .es-scene .es-bot { position: absolute; left: 20px; bottom: -4px; width: 96px; height: 96px; margin: 0; z-index: 1; }
+.es-scene.es-solo .es-bot { left: 8px; }
+.es-prop .disc { fill: color-mix(in srgb, var(--primary) 12%, transparent); }
+.es-prop .ln { fill: none; stroke: var(--text); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.es-prop .soft { fill: var(--surface, #fff); stroke: var(--text); stroke-width: 2.4; stroke-linejoin: round; }
+.es-prop .dash { stroke-dasharray: 5 6; }
+.es-prop .acc { fill: var(--primary); } .es-prop .accl { stroke: var(--primary); }
+.es-prop .mute { fill: color-mix(in srgb, var(--text) 18%, transparent); }
+.es-prop .teal { fill: #3fb8a0; } .es-prop .gold { fill: #e8b84a; }
+.es-acts { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--sp-2); margin-top: var(--sp-2); }
+.es-acts .es-go { margin-top: 0; }
+.empty-state .es-go.es-alt { background: transparent; color: var(--text); border: 1px solid var(--border); }
+/* (in a card or a Home widget the scene is smaller; in a small widget, only the words) */
+:is(.dk-card, .xw, .hub-week, .board-state) .es-scene { width: 176px; height: 112px; }
+:is(.dk-card, .xw, .hub-week, .board-state) .es-scene .es-prop { left: 16px; width: 160px; height: 106px; }
+:is(.dk-card, .xw, .hub-week, .board-state) .es-scene .es-bot { left: 16px; width: 76px; height: 76px; }
+:is(.dk-card, .xw, .hub-week, .board-state) .es-scene.es-solo { width: 92px; height: 88px; }
+.hw.ws-s .es-scene { display: none; }
+.xw .empty-state.xw-empty { margin: 0; padding: var(--sp-3) var(--sp-2); background: transparent; border: 0; box-shadow: none; }
 .bubble .empty-state { margin: 0; background: none; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; padding: var(--sp-2) 0; }
 
 /* Chat in the Liquid Glass style: softer, rounder bubbles from the same radii as everything else */
