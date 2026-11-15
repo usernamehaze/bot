@@ -1,10 +1,11 @@
 /* Games (v230): Animal habitats, World jigsaw, Landform match, History in order, Shape sorter and History dress-up.
    Four of them are "tap a thing, then tap where it goes" (dragging works too); the jigsaw drags continents onto the map. */
-import { INK, FAINT, el, esc, canvas, drag, group, seg, button, row, stats, fmtTime, shuffle } from './kit.js';
+import { INK, FAINT, el, esc, canvas, drag, group, seg, button, row, stats, fmtTime, shuffle, sayAloud, hush } from './kit.js';
 import { loadWorld } from './puzzles.js';
+import { animalSvg, homeSvg, shapeFace } from './cartoons.js';
 
 const rand = Math.random;
-function say(t) { try { const s = window.speechSynthesis; if (!s || !window.SpeechSynthesisUtterance) return; s.cancel(); const u = new SpeechSynthesisUtterance(t); u.rate = 0.9; s.speak(u); } catch (e) { /* no voice */ } }
+const say = sayAloud; // (v285) Bella, her studio voice
 
 /* ---------- a matching board: tap (or drag) an item, then tap the place it belongs ---------- */
 // items: [{ id, html, label, to, why }], places: [{ id, html, label }]. onRight(item), onWrong(item, place), onDone()
@@ -100,9 +101,9 @@ const habitatsLab = {
       const pickOne = (h) => shuffle(ANIMALS.filter((a) => a[3] === h), rand)[0];
       const set = Object.keys(HABITATS).map(pickOne);
       matchBoard(stage, {
-        items: shuffle(set, rand).map(([id, e, name, to, why]) => ({ id, html: `<span class="mt-name">${esc(name)}</span>`, label: name, to, why })),
-        places: Object.entries(HABITATS).map(([id, [e, name]]) => ({ id, html: `<span class="mt-name">${esc(name)}</span>`, label: name })),
-        cls: 'mt-kids',
+        items: shuffle(set, rand).map(([id, e, name, to, why]) => ({ id, html: `${animalSvg(id)}<span class="mt-name">${esc(name)}</span>`, label: name, to, why })),
+        places: Object.entries(HABITATS).map(([id, [e, name]]) => ({ id, html: `${homeSvg(id)}<span class="mt-name">${esc(name)}</span>`, label: name })),
+        cls: 'mt-kids mt-toons',
         onRight: (it) => { right++; msg.className = 'gm-msg good'; msg.textContent = `Yes! ${it.why}`; say(`Yes! ${it.why}`); api.check(0); report(); },
         onWrong: (it, p) => { wrong++; msg.className = 'gm-msg bad'; msg.textContent = `Not the ${p.label.toLowerCase()}. Where would a ${it.label.toLowerCase()} find its food and shelter?`; say(`Not there. Try again!`); report(); },
         onDone: () => { rounds++; api.check(1); if (!wrong) api.check(2); const b = api.best(6 - wrong, `${6 - wrong} of 6 first time`); msg.className = 'gm-msg good'; msg.textContent = `Every animal is home! ${wrong ? `${wrong} wrong ${wrong === 1 ? 'tap' : 'taps'} on the way.` : 'Not one wrong tap!'}${b && b.isNew ? ' A new best!' : ''} Press New animals to play again.`; report(); },
@@ -111,7 +112,7 @@ const habitatsLab = {
     }
     function report() { st.set([['Right', String(right)], ['Wrong taps this round', String(wrong)], ['Rounds done', String(rounds)]]); }
     deal();
-    return { state: () => `sorting animals into their habitats: ${right} placed, ${wrong} wrong taps this round, ${rounds} rounds done`, destroy: () => { try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) { /* */ } } };
+    return { state: () => `sorting animals into their habitats: ${right} placed, ${wrong} wrong taps this round, ${rounds} rounds done`, destroy: () => { hush(); } };
   },
 };
 
@@ -214,7 +215,7 @@ const jigsawLab = {
 };
 
 /* ---------------- Landform match ---------------- */
-const SKY = '#203a5c', LAND = '#7a9a52', ROCK = '#8a7660', WATER = '#3f7fd1', SNOW = '#f2f2f4';
+const SKY = '#8fc9f2', LAND = '#7a9a52', ROCK = '#8a7660', WATER = '#3f7fd1', SNOW = '#f2f2f4';
 export const LANDFORMS = [
   ['mountain', 'Mountain', 'Very high land that rises steeply to a peak.', `<rect width="96" height="64" fill="${SKY}"/><path d="M0 64L30 14 46 36 62 8 96 64z" fill="${ROCK}"/><path d="M62 8l-8 13 8-3 6 4z M30 14l-6 10 6-2 5 3z" fill="${SNOW}"/>`],
   ['volcano', 'Volcano', 'A mountain with an opening where hot melted rock (lava), ash and gas come out.', `<rect width="96" height="64" fill="${SKY}"/><path d="M8 64L40 18h16l32 46z" fill="${ROCK}"/><path d="M40 18h16l-4 10-4-6-4 6z" fill="#ff6a3c"/><circle cx="44" cy="10" r="5" fill="#9aa0a8"/><circle cx="52" cy="6" r="4" fill="#9aa0a8"/>`],
@@ -227,6 +228,9 @@ export const LANDFORMS = [
   ['delta', 'Delta', 'Flat land where a river splits into many channels as it reaches the sea.', `<rect width="96" height="64" fill="${LAND}"/><rect y="50" width="96" height="14" fill="${WATER}"/><path d="M48 0v24M48 24L30 50M48 24L42 50M48 24L56 50M48 24L68 50" stroke="${WATER}" stroke-width="3" fill="none"/>`],
   ['canyon', 'Canyon', 'A deep, narrow valley with steep rock walls, cut by a river.', `<rect width="96" height="64" fill="${SKY}"/><path d="M0 14h36l4 12-2 14 4 24H0z M96 14H60l-2 14 4 12-4 24h38z" fill="#b5653f"/><path d="M42 64l2-8h8l2 8z" fill="${WATER}"/>`],
 ];
+// (v285) picture-book touches: a sun and a cloud in a sky
+const toon = (svg) => (svg.startsWith(`<rect width="96" height="64" fill="${SKY}"/>`)
+  ? svg.replace('/>', '/><circle cx="84" cy="10" r="6" fill="#ffd45a"/><path d="M8 14a4 4 0 0 1 7-3 5 5 0 0 1 9 1 3.5 3.5 0 0 1 0 7H10a3 3 0 0 1-2-5z" fill="#fff" opacity=".9"/>') : svg);
 const landformsLab = {
   id: 'landforms', name: 'Landform match', subject: 'games', levels: ['elem', 'hs'],
   blurb: 'Match pictures of mountains, valleys, deltas and more to their names.',
@@ -244,7 +248,7 @@ const landformsLab = {
       wrong = 0;
       const set = shuffle(LANDFORMS, rand).slice(0, 6);
       matchBoard(stage, {
-        items: shuffle(set, rand).map(([id, name, def, svg], i) => ({ id, html: `<svg viewBox="0 0 96 64" aria-hidden="true">${svg}</svg>`, label: `Picture ${i + 1}`, to: id, why: `${name}: ${def}` })),
+        items: shuffle(set, rand).map(([id, name, def, svg], i) => ({ id, html: `<svg viewBox="0 0 96 64" aria-hidden="true">${toon(svg)}</svg>`, label: `Picture ${i + 1}`, to: id, why: `${name}: ${def}` })),
         places: shuffle(set, rand).map(([id, name]) => ({ id, html: `<span class="mt-name">${esc(name)}</span>`, label: name })),
         cls: 'mt-pics',
         onRight: (it) => { total++; msg.className = 'gm-msg good'; msg.textContent = `Right! ${it.why}`; api.check(0); report(); },
@@ -365,7 +369,7 @@ const sorterLab = {
     function deal() {
       placed = 0;
       const names = shuffle(Object.keys(SHAPE_SVG), rand).slice(0, n), cols = shuffle(SHAPE_COL, rand);
-      const svg = (k, fill) => `<svg viewBox="0 0 48 48" aria-hidden="true" ${fill ? `fill="${fill}" stroke="#1b1b1d" stroke-width="1.5"` : 'fill="rgba(0,0,0,.45)" stroke="rgba(255,255,255,.55)" stroke-width="2" stroke-dasharray="4 3"'}>${SHAPE_SVG[k]}</svg>`;
+      const svg = (k, fill) => `<svg viewBox="0 0 48 48" aria-hidden="true" ${fill ? `fill="${fill}" stroke="#2b2440" stroke-width="2.4" stroke-linejoin="round"` : 'fill="rgba(0,0,0,.45)" stroke="rgba(255,255,255,.55)" stroke-width="2" stroke-dasharray="4 3"'}>${SHAPE_SVG[k]}${fill ? shapeFace(k) : ''}</svg>`; // (v285) each shape is a little character
       matchBoard(stage, {
         items: names.map((k, i) => ({ id: k, html: svg(k, cols[i % cols.length]), label: k, to: k })),
         places: shuffle(names, rand).map((k) => ({ id: k, html: svg(k), label: `${k} hole` })),
@@ -377,7 +381,7 @@ const sorterLab = {
       msg.className = 'gm-msg'; msg.textContent = 'Tap a shape, then its hole.';
     }
     deal();
-    return { state: () => `sorting ${n} shapes into their holes, ${placed} in`, destroy: () => { try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) { /* */ } } };
+    return { state: () => `sorting ${n} shapes into their holes, ${placed} in`, destroy: () => { hush(); } };
   },
 };
 

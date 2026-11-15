@@ -1,20 +1,11 @@
 /* For the little ones (Nursery and Kindergarten): trace letters and numbers, count with Cassie, and find
-   shapes and colours. No reading or typing needed: Cassie says everything aloud (the device's own
-   speech, read-aloud on from the start), every target is at least 64px, there are no timers and no
+   shapes and colours. No reading or typing needed: Cassie says everything aloud (in her own
+   studio voice, read-aloud on from the start), every target is at least 64px, there are no timers and no
    scores to lose. Drawn on canvas and SVG, nothing to download. */
-import { el, canvas, at } from './kit.js';
+import { el, canvas, at, sayAloud, hush } from './kit.js';
 
-// Cassie's voice for the little ones: the device's speech, a little slower and brighter
-function say(t) {
-  try {
-    const s = window.speechSynthesis;
-    if (!s || !window.SpeechSynthesisUtterance) return;
-    s.cancel();
-    const u = new SpeechSynthesisUtterance(t);
-    u.rate = 0.9; u.pitch = 1.1;
-    s.speak(u);
-  } catch (e) { /* no voice on this device: the pictures still work */ }
-}
+// Cassie's voice for the little ones: her studio voice, as everywhere (kit.js)
+const say = sayAloud;
 const still = () => !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
 const SPEAK = '<svg class="ic-line" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>', PREV = '<svg class="ic-line" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>', NEXT = '<svg class="ic-line" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>';
 const kidButton = (host, text, label, onClick) => {
@@ -146,7 +137,7 @@ function traceLab(id, name, list, spoken) {
       cv.c.addEventListener('pointerdown', (e) => { e.preventDefault(); try { cv.c.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ } const p = at(cv.c, e); trail.push({ ...p, start: true }); follow(p); cv.redraw(); });
       cv.c.addEventListener('pointermove', (e) => { if (!e.buttons && e.pointerType === 'mouse') return; if (!cv.c.hasPointerCapture || !cv.c.hasPointerCapture(e.pointerId)) return; const p = at(cv.c, e); trail.push(p); if (trail.length > 600) trail.shift(); follow(p); cv.redraw(); });
       go(0);
-      return { state: () => `tracing ${list[i]}: ${done ? 'finished' : Math.round((cur / total) * 100) + '% traced'}`, destroy: () => { try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) { /* */ } cv.destroy(); } };
+      return { state: () => `tracing ${list[i]}: ${done ? 'finished' : Math.round((cur / total) * 100) + '% traced'}`, destroy: () => { hush(); cv.destroy(); } };
     },
   };
 }
@@ -192,7 +183,7 @@ const countLab = {
       say(`Let's count! Tap each one.`);
     }
     deal();
-    return { state: () => `counting: ${tapped} of ${n} tapped`, destroy: () => { try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) { /* */ } } };
+    return { state: () => `counting: ${tapped} of ${n} tapped`, destroy: () => { hush(); } };
   },
 };
 
@@ -233,7 +224,7 @@ const shapesLab = {
       say(`Tap the ${want.colour} ${want.shape}.`);
     }
     deal();
-    return { state: () => `finding the ${want.colour} ${want.shape}`, destroy: () => { clearTimeout(timer); try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) { /* */ } } };
+    return { state: () => `finding the ${want.colour} ${want.shape}`, destroy: () => { clearTimeout(timer); hush(); } };
   },
 };
 

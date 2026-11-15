@@ -963,6 +963,17 @@ html.lite .lf.lf-open .lf-paper:nth-child(n) { opacity: .85; }
 .mt-pics .mt-bin { min-height: 64px; justify-content: center; }
 .mt-shapes .mt-item svg, .mt-shapes .mt-bin svg { width: 72px; height: 72px; pointer-events: none; }
 .mt-shapes .mt-got svg { width: 48px; height: 48px; }
+/* (v285) the habitat game in cartoons: each animal drawn, each home a little scene */
+.mt-toons .mt-item { min-width: 88px; padding: var(--sp-2, 8px); }
+.mt-toons .mt-item .cartoon { width: 56px; height: 56px; display: block; pointer-events: none; }
+.mt-toons .mt-bin { padding: 0 0 var(--sp-2, 8px); overflow: hidden; }
+.mt-toons .mt-bin-head { width: 100%; gap: var(--sp-1, 4px); }
+.mt-toons .cartoon-home { width: 100%; height: 64px; display: block; }
+.mt-toons .mt-got .cartoon { width: 40px; height: 40px; display: block; }
+.mt-toons .mt-got .mt-name { font-size: .72rem; }
+.mt-ghost .cartoon { width: 56px; height: 56px; display: block; }
+@media (prefers-reduced-motion: no-preference) { .mt-toons .mt-item[aria-pressed="true"] .cartoon { animation: mt-wiggle .6s ease-in-out infinite alternate; } }
+@keyframes mt-wiggle { from { transform: rotate(-6deg); } to { transform: rotate(6deg); } }
 .mt-ghost { position: fixed; left: 0; top: 0; z-index: 9999; pointer-events: none; padding: var(--sp-2, 8px); border-radius: 14px; background: rgba(16, 17, 22, .85); border: 2px solid var(--mt-pick); color: var(--mt-ink); }
 .mt-ghost svg { width: 64px; height: 48px; }
 .sq-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2, 8px); counter-reset: sq; }
