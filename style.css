@@ -1755,7 +1755,7 @@ html.native .sidebar { padding-bottom: calc(88px + var(--safe-bottom)); }
   .x3d-body-mode .x3d-sheet .x3d-sheet-head { padding-right: 104px; }
   .x3d-spread { height: var(--tap, 48px); }
   .x3d-gizmo { --gz-r: 44px; width: 132px; height: 132px; }
-  .x3d-gizmo button { width: 30px; height: 30px; margin: calc(-1 * var(--sp-4, 16px)) 0 0 calc(-1 * var(--sp-4, 16px)); font-size: .74rem; }
+  .x3d-gizmo button { width: 30px; height: 30px; min-width: 0; min-height: 0; margin: calc(-1 * var(--sp-4, 16px)) 0 0 calc(-1 * var(--sp-4, 16px)); font-size: .74rem; }
   .x3d-gizmo button::after { content: ""; position: absolute; left: -7px; top: -7px; right: -7px; bottom: -7px; border-radius: 50%; }
   .x3d-gizmo button.far { pointer-events: none; }
 }
@@ -4448,3 +4448,8 @@ html[data-uistyle="crisp"] { --r-sm: 3px; --r-md: 4px; --r-lg: 6px; --r-xl: 8px;
 .lessons-head .subject-del svg { width: 22px; height: 22px; }
 @media (hover: hover) { .lessons-head .subject-del:hover { color: var(--text); } }
 .subject-upload { width: 100%; min-height: 48px; }
+
+/* (v284) a touch-screen computer: the side menu, Settings' page list and the dashboard's idea chips are 44px to touch */
+@media (pointer: coarse) {
+  .side-tool, #side-apps .side-tool, #side-general .side-tool, .side-menu-label, body:not(.side-open) .side-menu-label, button.sidebar-section, .set-nav button, .dk-chip, .desk .dk-chip { min-height: 44px; }
+}

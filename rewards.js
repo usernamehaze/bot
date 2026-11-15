@@ -93,7 +93,7 @@
     w.innerHTML = `<div class="rw-scrim"></div><div class="rw-rays"></div>
       <div class="rw-txt rw-top"><p class="rw-eyebrow"></p><p class="rw-title"></p></div>
       <div class="rw-stage">${hero}</div>
-      <div class="rw-txt rw-bottom"><p class="rw-line"></p><p class="rw-hint"></p><button type="button" class="rw-ok">Keep going</button></div>`;
+      <div class="rw-txt rw-bottom"><p class="rw-line"></p><p class="rw-hint"></p><button type="button" class="rw-ok">Back to studying</button></div>`;
     w.querySelector('.rw-eyebrow').textContent = eyebrow;
     w.querySelector('.rw-title').textContent = title;
     w.querySelector('.rw-line').textContent = line;
