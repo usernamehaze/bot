@@ -4452,4 +4452,5 @@ html[data-uistyle="crisp"] { --r-sm: 3px; --r-md: 4px; --r-lg: 6px; --r-xl: 8px;
 /* (v284) a touch-screen computer: the side menu, Settings' page list and the dashboard's idea chips are 44px to touch */
 @media (pointer: coarse) {
   .side-tool, #side-apps .side-tool, #side-general .side-tool, .side-menu-label, body:not(.side-open) .side-menu-label, button.sidebar-section, .set-nav button, .dk-chip, .desk .dk-chip { min-height: 44px; }
+  #side-menu-toggle { margin-bottom: 4px; } /* (v284) the 4px it grew comes back here, so a phone still shows the first chat */
 }
