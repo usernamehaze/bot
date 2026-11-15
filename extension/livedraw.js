@@ -171,6 +171,18 @@ export function check3d(spec) {
     if (x.p.size != null) { const real = long3(x.b) / L, want = x.p.size; if (real > want * 1.8 + .06 || real < want / 1.8 - .06) out.push(`${name(x)} is drawn at ${Math.round(real * 100)}% of the whole object's size, but your plan says ${Math.round(want * 100)}%; give it its real size`); }
     // touching what she said it is attached to
     for (const id of x.p.attached) { const y = byId(id); if (y && y !== x && gap3(x.b, y.b) > L * .05) out.push(`${name(x)} should touch ${name(y)} but there is a gap between them`); }
+    // (v283) facing the right way: a wheel turns on an axle across the vehicle, never lying flat or facing along it;
+    // the blades of a compressor, turbine or propeller face along the airflow (the model's main axis)
+    const label = String(x.p.label || x.p.id || ''), round = x.p.shapes.filter((s) => /^(torus|ring|disc|cylinder)$/.test(String(s.t || s.type || '').toLowerCase()) && ['x', 'y', 'z'].includes(s.axis));
+    const main = ['x', 'y', 'z'].includes(spec.axis) ? spec.axis : 'x';
+    if (/\b(wheels?|tyres?|tires?|gulong)\b/i.test(label) && !/\b(fly|steering|pin|water|ferris|color|colour)\s*wheel/i.test(label) && main !== 'y' && round.length) {
+      const across = main === 'x' ? 'z' : 'x', wrong = round.find((s) => s.axis !== across);
+      if (wrong) out.push(`${name(x)} ${wrong.axis === 'y' ? 'lies flat' : 'faces along the vehicle'}: a wheel stands upright and turns on an axle across the vehicle, so give its round shapes "axis":"${across}"`);
+    }
+    if (/\b(compressor|turbine|propeller|propellor)\b/i.test(label)) {
+      const blades = x.p.shapes.find((s) => String(s.t || s.type || '').toLowerCase() === 'blades' && ['x', 'y', 'z'].includes(s.axis) && s.axis !== main);
+      if (blades) out.push(`${name(x)}'s blades face the wrong way: they turn around the main shaft, so give them "axis":"${main}"`);
+    }
   }
   return [...new Set(out)].slice(0, 10);
 }

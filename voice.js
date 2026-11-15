@@ -228,5 +228,8 @@
     supported,
     unlock,
     onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
+    // (v283) hold her voice and go on from the same word (Now playing on Home)
+    pause() { try { if (ctx && ctx.state === 'running') ctx.suspend(); if (window.speechSynthesis && speechSynthesis.speaking) speechSynthesis.pause(); } catch (e) { /* nothing playing */ } },
+    resume() { try { if (ctx && ctx.state === 'suspended') ctx.resume(); if (window.speechSynthesis && speechSynthesis.paused) speechSynthesis.resume(); } catch (e) { /* nothing playing */ } },
   };
 })();

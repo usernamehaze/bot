@@ -503,6 +503,8 @@ let bot2d = null, bot2dTimer = null;
 const LOOK_3D_TO_2D = { neutral: 'idle', thinking: 'thinking', happy: 'greeting', encouraging: 'encourage', celebratory: 'proud', curious: 'surprised', sleep: 'sleeping', walk: 'idle', peek: 'wink', angry: 'oops', puzzled: 'puzzled', dizzy: 'dizzy', typing: 'writing', sad: 'sad' };
 const EMOTE_TO_2D = { 'emote-happy': 'greeting', 'emote-love': 'love', 'emote-star': 'proud', 'emote-surprised': 'surprised', 'emote-wink': 'wink', 'emote-sleepy': 'sleeping', 'emote-focused': 'thinking', 'emote-cool': 'wink', 'emote-sad': 'sad', 'emote-dizzy': 'dizzy' };
 const OUTFIT_TO_2D = { classic: null, professor: 'glasses', graduate: 'gradcap', coder: 'pencil', heart: 'bow' };
+// (v283) her everyday outfits, picked in Settings (state.outfit): [accessory, its name]
+const OUTFITS = [['auto', 'Auto'], ['scarf', 'Scarf'], ['headphones', 'Headphones'], ['bow', 'Bow'], ['beanie', 'Beanie'], ['sampaguita', 'Flower'], ['none', 'Nothing']];
 // Cursor Cassie is everyone's Cassie. (The 3D felt Cassie was removed from Settings; an old
 // saved choice of her is forgotten.)
 if (state.look) { delete state.look; save(); }
@@ -882,8 +884,78 @@ function cassieSeasonal() {
   const items = (Array.isArray(state.calItems) ? state.calItems : []).filter((x) => x && !x.gone && x.day);
   const exam = items.some((x) => (x.label === 'quiz' || x.label === 'exam') && soon(x.day, 0, 3)) || (Array.isArray(state.exams) ? state.exams : []).some((e) => e && !e.closed && soon(e.date, 0, 3));
   const grad = items.some((x) => /graduat/i.test(`${x.other || ''} ${x.note || ''}`) && soon(x.day, -1, 3));
-  try { return window.CassieBot.seasonal(new Date(), { exam, grad }); } catch (e) { return null; }
+  let worn = null; try { worn = window.CassieBot.seasonal(new Date(), { exam, grad }); } catch (e) { return null; }
+  // (v283) her everyday outfit (Settings, Cassie's outfit): Auto keeps the season and wears her scarf on plain days;
+  // a pick is worn every day, except on a holiday or a graduation, which still dress her up; the exam tassel stays
+  const pick = OUTFITS.some(([k]) => k === state.outfit) ? state.outfit : 'auto';
+  const parts = String(worn || '').split('+').filter(Boolean), tail = parts.filter((x) => x === 'tassel'), top = parts.find((x) => x !== 'tassel') || null;
+  let hol = null; try { hol = window.CassieBot.holiday(new Date()); } catch (e) { hol = null; }
+  const wear = pick === 'auto' ? top || 'scarf' : hol ? hol.acc : grad ? 'gradcap' : pick === 'none' ? null : pick;
+  return [wear, ...tail].filter(Boolean).join('+') || null;
 }
+// (v283) Settings, Cassie's outfit: each choice shows her (the 3D one) wearing it; the pick is kept and worn at once
+function paintOutfits() {
+  const grid = document.getElementById('of-grid'); if (!grid || !window.CassieBot) return;
+  const pick = OUTFITS.some(([k]) => k === state.outfit) ? state.outfit : 'auto';
+  if (!grid.children.length) {
+    OUTFITS.forEach(([k, name]) => {
+      const o = document.createElement('div'); o.className = 'empty-state of-opt'; o.dataset.of = k; o.setAttribute('role', 'radio'); o.tabIndex = 0;
+      o.innerHTML = '<div class="es-scene es-solo"><div class="es-bot"></div></div><p class="es-title"></p>';
+      o.querySelector('.es-title').textContent = name; o.setAttribute('aria-label', `${name}${k === 'auto' ? ', by the season' : ''}`);
+      const choose = () => { state.outfit = k; save(); dressCassie(); paintOutfits(); track('feature', 'outfit-' + k); };
+      o.addEventListener('click', choose); o.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(); } });
+      grid.appendChild(o);
+      let acc = null; if (k === 'auto') { const was = state.outfit; state.outfit = 'auto'; acc = cassieSeasonal(); state.outfit = was; } else if (k !== 'none') acc = k;
+      try { window.CassieBot.create(o.querySelector('.es-bot'), { state: 'idle', accessory: acc }); } catch (e) { /* the name still shows */ }
+    });
+  }
+  grid.querySelectorAll('.of-opt').forEach((o) => { const on = o.dataset.of === pick; o.classList.toggle('on', on); o.setAttribute('aria-checked', String(on)); });
+  const note = document.getElementById('of-note');
+  if (note) { const auto = (() => { const was = state.outfit; state.outfit = 'auto'; const a = cassieSeasonal(); state.outfit = was; return String(a || '').split('+').find((x) => x !== 'tassel'); })(); note.textContent = pick === 'auto' ? `Auto: by the season${auto && auto !== 'scarf' ? `, now the ${(OUTFITS.find(([k]) => k === auto) || [0, ({ santa: 'Santa hat', witch: 'witch hat', party: 'party hat', gradcap: 'grad cap', pumpkin: 'pumpkin', candle: 'candle', flag: 'flag', heart: 'heart', apple: 'apple', leaf: 'leaf', lantern: 'lantern', ribbon: 'ribbon' })[auto] || auto])[1].toLowerCase()}` : ''}. On plain days she wears her scarf.` : 'Holidays and graduations still dress her up.'; }
+}
+// (v283) Settings, Study offline: Learn's code and pictures, the 3D code and the 3D Cassie, fetched once so the
+// service worker keeps them (offline-files.json); the student's cards, notes and chats are already on the phone
+function paintOffline() {
+  const go = document.getElementById('off-go'), size = document.getElementById('off-size'), done = document.getElementById('off-saved'); if (!go) return;
+  const s = state.offlineSaved;
+  go.textContent = s ? 'Save again' : 'Save for offline';
+  go.disabled = isOffline();
+  if (size) size.textContent = isOffline() ? 'Connect to save' : s ? '' : 'About 9 MB';
+  if (!done) return;
+  done.hidden = !s; if (!s) return;
+  const cards = (state.cards || []).length, decks = new Set((state.cards || []).map((c) => c.deck)).size, chats = (state.chats || []).filter((c) => c.messages && c.messages.length).length;
+  const when = new Date(s.at).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  done.innerHTML = '<div class="off-when"><b>Saved on this phone</b><span></span></div><ul><li></li><li></li><li></li><li class="off-not"></li></ul>';
+  done.querySelector('span').textContent = when;
+  const li = done.querySelectorAll('li');
+  li[0].textContent = 'Learn: every lab, game and study tool';
+  li[1].textContent = `Flashcards: ${cards} ${cards === 1 ? 'card' : 'cards'}${decks ? ` in ${decks} ${decks === 1 ? 'deck' : 'decks'}` : ''}`;
+  li[2].textContent = `Chats and notes: ${chats}`;
+  li[3].textContent = 'Not saved: the 3D human body (too big), and anything that asks Cassie';
+}
+async function saveOffline() {
+  const go = document.getElementById('off-go'), st = document.getElementById('off-status');
+  if (!go || go.disabled) return;
+  if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) { st.textContent = CassieErrors.say('offline_cant_save'); return; }
+  const done = busyButton(go, 'Saving…'); st.textContent = '';
+  let ok = 0, fail = 0;
+  try {
+    const list = await (await fetch('offline-files.json', { cache: 'no-cache' })).json();
+    const v = ((document.querySelector('script[src*="app.js?v="]') || {}).src || '').match(/[?&]v=(\d+)/);
+    const urls = [...list.files, ...list.versioned.map((f) => (v ? `${f}?v=${v[1]}` : f)), ...list.fixed];
+    let at = 0;
+    const worker = async () => { while (at < urls.length) { const u = urls[at++]; try { const r = await fetch(u); if (r.ok) { await r.blob(); ok++; } else fail++; } catch (e) { fail++; } st.textContent = `Saving… ${Math.round(((ok + fail) / urls.length) * 100)}%`; } };
+    await Promise.all(Array.from({ length: 6 }, worker));
+  } catch (e) { fail++; }
+  done();
+  if (fail) { st.textContent = CassieErrors.say('offline_save_failed'); return; }
+  state.offlineSaved = { at: Date.now(), files: ok }; save();
+  st.textContent = CassieErrors.say('offline_saved'); track('feature', 'offline-save');
+  paintOffline();
+}
+{ const go = document.getElementById('off-go'); if (go) go.addEventListener('click', saveOffline); }
+['online', 'offline'].forEach((ev) => window.addEventListener(ev, paintOffline));
+setTimeout(() => { paintOffline(); paintOutfits(); }, 0);
 function dressCassie() {
   const base = workMode() ? 'professor' : 'classic';
   const outfit = counselorMode ? 'heart' : quizMode ? 'coder' : (taskOutfit || base);
@@ -2545,7 +2617,7 @@ const ES_SCENE = {
   search: ['searching', 'glasses', 'search'], filter: ['puzzled', null, 'filter'], measure: ['thinking', null, 'gauge'],
   reviewed: ['proud', 'crown', 'done'], caught: ['dance', 'party', 'done'], loading: ['busy', null, 'loading'],
   failed: ['oops', null, 'failed'], resume: ['sleeping', null, 'resume'], rest: ['wink', null, ''],
-  week: ['highlighting', null, ''], mistakes: ['love', null, ''], memory: ['reading', null, ''], idle: ['idle', null, ''],
+  week: ['highlighting', null, ''], mistakes: ['love', null, ''], memory: ['reading', null, ''], notes: ['talking', 'headphones', ''], idle: ['idle', null, ''],
 };
 function cassieEmpty(box, scene = 'idle') {
   if (!box || !window.CassieBot || box.querySelector('.es-bot')) return box;
@@ -2660,7 +2732,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=282'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=283'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2682,7 +2754,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=282'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=283'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -2958,7 +3030,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=282').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=283').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -3221,8 +3293,10 @@ function openPodcastSources() {
     pressed('pick'); choose(null); status.textContent = '';
     const list = podChats();
     if (!list.length) {
-      body.innerHTML = '<div class="pod-none"><b>No notes yet</b><p>Make study notes from a topic or a file, and they show up here.</p><button type="button" class="plus-go pod-make-notes">Make study notes</button></div>';
-      body.querySelector('.pod-make-notes').addEventListener('click', () => { close(); const ex = HOME_EXAMPLES.find((x) => x.label === 'Make study notes'); if (ex) runTool(ex); });
+      // (v283) Cassie, in her headphones, with the first move
+      const e = CassieErrors.empty({ title: 'No notes yet', text: 'Make study notes from a topic or a file, and they show up here.', action: 'Make study notes', onAction: () => { close(); const ex = HOME_EXAMPLES.find((x) => x.label === 'Make study notes'); if (ex) runTool(ex); } });
+      e.classList.add('pod-none'); e.querySelector('.es-go').classList.add('pod-make-notes');
+      body.replaceChildren(cassieEmpty(e, 'notes'));
       return;
     }
     body.innerHTML = '<input type="search" class="pod-q" placeholder="Search your notes and chats" aria-label="Search your notes and chats" autocomplete="off"><ul class="pod-list" role="list"></ul><p class="pod-none-found" hidden>Nothing matches that.</p>';
@@ -3982,6 +4056,7 @@ const nowPlaying = {
   clear(p) { if (!p || this.cur === p) { this.cur = null; this.tell(); } },
   tell() { document.dispatchEvent(new CustomEvent('cassie-nowplaying')); },
 };
+window.CassieNowPlaying = nowPlaying; // (listen.js: Cassie reading an answer aloud plays here too)
 function xwPlayer() {
   const el = xwCard('player');
   el.innerHTML = `${xwHead('player')}<p class="xw-none"></p><p class="xw-title"></p>
@@ -3998,6 +4073,7 @@ function xwPlayer() {
     el.classList.toggle('xw-idle', !p);
     if (!p) return;
     el.querySelector('.xw-title').textContent = p.title;
+    el.querySelectorAll('[data-xw="back"], [data-xw="fwd"]').forEach((x) => { x.hidden = p.canSeek === false; }); // (her reading voice can't skip)
     const on = p.playing(), b = el.querySelector('[data-xw="toggle"]');
     b.innerHTML = on ? XW_ICON.pause : XW_ICON.play; b.setAttribute('aria-label', on ? 'Pause' : 'Play');
     const pct = Math.round(Math.max(0, Math.min(1, p.progress())) * 100);
@@ -4712,6 +4788,8 @@ function renderHistory() {
     if (m.image && b) addImageToBubble(b, m.image, { download: true });
     if (m.papers && b && window.CassieCite) b.appendChild(window.CassieCite.bar(m.papers, { track }));
   });
+  renderQueued(); // (v283) questions asked with no internet, still waiting
+  setTimeout(sendQueued, 400);
 }
 
 /* ---------- one-tap follow-ups + double-check (under the latest answer) ---------- */
@@ -6632,6 +6710,98 @@ function busyButton(btn, label) {
   else btn.insertAdjacentHTML('afterbegin', '<span class="busy-spin" aria-hidden="true"></span>');
   return ({ keep } = {}) => { if (!btn.isConnected) return; btn.classList.remove('is-busy'); btn.removeAttribute('aria-busy'); if (!keep) { btn.innerHTML = html; btn.disabled = was; } else btn.querySelector('.busy-spin')?.remove(); };
 }
+/* (v283) No internet: a question waits on this device and goes to Cassie as soon as the phone is back online
+   (state.offlineQueue, per chat); "Quiz me" makes a quiz from the student's own flashcards instead. */
+const isOffline = () => navigator.onLine === false;
+function queueOffline(text) {
+  if (!Array.isArray(state.offlineQueue)) state.offlineQueue = [];
+  state.offlineQueue.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), chatId: state.currentId, text: String(text).slice(0, 4000), at: Date.now() });
+  save(); promptInput.value = ''; autoGrow();
+  if (!state.messages.length) chatLog.innerHTML = '';
+  renderQueued(); track('feature', 'offline-queue');
+}
+function renderQueued() {
+  chatLog.querySelectorAll('.q-wait').forEach((e) => e.remove());
+  (state.offlineQueue || []).filter((q) => q.chatId === state.currentId).forEach((q) => {
+    const wrap = document.createElement('div'); wrap.className = 'q-wait'; wrap.dataset.id = q.id;
+    const b = document.createElement('div'); b.className = 'bubble bubble-user'; renderFormatted(b, q.text);
+    const note = document.createElement('p'); note.className = 'q-note'; note.setAttribute('role', 'status');
+    note.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span></span>';
+    note.querySelector('span').textContent = CassieErrors.say('offline_waiting');
+    const cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'q-cancel'; cancel.textContent = 'Cancel';
+    cancel.setAttribute('aria-label', 'Cancel this question');
+    cancel.addEventListener('click', () => { state.offlineQueue = (state.offlineQueue || []).filter((x) => x.id !== q.id); save(); wrap.remove(); promptInput.focus(); });
+    wrap.append(b, note, cancel); chatLog.appendChild(wrap);
+  });
+  scrollToBottom();
+}
+let sendingQueued = false;
+async function sendQueued() {
+  if (sendingQueued || isOffline()) return;
+  const mine = (state.offlineQueue || []).filter((q) => q.chatId === state.currentId);
+  if (!mine.length) return;
+  sendingQueued = true;
+  try {
+    for (const q of mine) {
+      if (isOffline()) break;
+      state.offlineQueue = (state.offlineQueue || []).filter((x) => x.id !== q.id); save();
+      const w = chatLog.querySelector(`.q-wait[data-id="${q.id}"]`); if (w) w.remove();
+      islandShow('done', CassieErrors.say('offline_sent'), 2600);
+      await handleSend(q.text);
+    }
+  } finally { sendingQueued = false; }
+}
+window.addEventListener('online', () => setTimeout(sendQueued, 800));
+// A quiz with no internet: four questions from the student's own cards (the deck with the most cards due, else the
+// biggest), each answer one of four from that deck; an answer counts toward the card's review (Good or Again).
+function offlineQuiz() {
+  const cards = (state.cards || []).filter((c) => c && c.f && c.b);
+  const decks = {}; cards.forEach((c) => { (decks[c.deck] = decks[c.deck] || []).push(c); });
+  const now = Date.now(), score = (list) => list.filter((c) => (c.due || 0) <= now).length * 1000 + list.length;
+  const name = Object.keys(decks).filter((d) => new Set(decks[d].map((c) => c.b.trim().toLowerCase())).size >= 4).sort((a, b) => score(decks[b]) - score(decks[a]))[0];
+  if (!state.messages.length) chatLog.innerHTML = '';
+  if (!name) {
+    const t = CassieErrors.say('offline_quiz_none'); state.messages.push({ role: 'assistant', content: t }); save(); renderMessage('assistant', t); return;
+  }
+  const deck = decks[name], pick = deck.slice().sort((a, b) => ((a.due || 0) <= now ? 0 : 1) - ((b.due || 0) <= now ? 0 : 1) || Math.random() - .5).slice(0, 4);
+  const intro = `No internet right now, so here’s a quick quiz from your **${name}** flashcards.`;
+  state.messages.push({ role: 'assistant', content: intro }); touchChat(); save();
+  const bubble = renderMessage('assistant', intro);
+  let at = 0, right = 0;
+  const box = document.createElement('div'); box.className = 'oq'; bubble.appendChild(box);
+  const ask = () => {
+    const c = pick[at], others = [...new Set(deck.filter((x) => x !== c && x.b.trim().toLowerCase() !== c.b.trim().toLowerCase()).map((x) => x.b.trim()))].sort(() => Math.random() - .5).slice(0, 3);
+    const choices = [c.b.trim(), ...others].sort(() => Math.random() - .5);
+    box.innerHTML = `<p class="oq-n">Question ${at + 1} of ${pick.length}</p><p class="oq-q"></p><div class="oq-opts" role="group"></div><p class="oq-note" role="status"></p>`;
+    box.querySelector('.oq-q').textContent = c.f; box.querySelector('.oq-opts').setAttribute('aria-label', 'Answers to: ' + c.f);
+    choices.forEach((t, i) => {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'oq-opt'; b.textContent = `${String.fromCharCode(65 + i)}. ${t}`;
+      b.addEventListener('click', () => {
+        const ok = t === c.b.trim(); if (ok) right++;
+        box.querySelectorAll('.oq-opt').forEach((x) => { x.disabled = true; });
+        b.classList.add(ok ? 'oq-right' : 'oq-wrong');
+        if (!ok) [...box.querySelectorAll('.oq-opt')].find((x) => x.textContent.slice(3) === c.b.trim())?.classList.add('oq-right');
+        try { const real = (state.cards || []).find((x) => x.id === c.id); if (real && window.CassieCards && window.CassieCards._grade) window.CassieCards._grade(real, ok ? 'good' : 'again'); } catch (e) { /* the quiz still goes on */ }
+        box.querySelector('.oq-note').textContent = ok ? 'Right!' : `Not quite. It’s ${c.b.trim()}.`;
+        const next = document.createElement('button'); next.type = 'button'; next.className = 'btn btn-sm oq-next';
+        next.textContent = at + 1 < pick.length ? 'Next question' : 'See my score';
+        next.addEventListener('click', () => { at++; if (at < pick.length) ask(); else done(); });
+        box.appendChild(next); next.focus({ preventScroll: true }); scrollToBottom();
+        if (ok) botMood('proud', 2000); else botMood('encourage', 2200);
+      });
+      box.querySelector('.oq-opts').appendChild(b);
+    });
+    scrollToBottom();
+  };
+  const done = () => {
+    const t = `You got ${right} of ${pick.length}. Your answers count toward your cards’ review. When you’re back online, ask Cassie about any you missed.`;
+    box.innerHTML = ''; const p = document.createElement('p'); p.className = 'oq-end'; p.textContent = t; box.appendChild(p);
+    state.messages.push({ role: 'assistant', content: t }); save();
+    if (right === pick.length) botMood('dance', 3600); else botMood('encourage', 2400);
+    track('feature', 'offline-quiz'); scrollToBottom();
+  };
+  ask();
+}
 async function handleSend(text, opts = {}) {
   // photos and files still being read: Send waits for them, so nothing is left behind
   const stillReading = attachments.filter((a) => a.status === 'reading').map((a) => a.done);
@@ -6649,6 +6819,12 @@ async function handleSend(text, opts = {}) {
   // carefully on its own, then she answers from all of them together
   const sentItems = attachments.filter((a) => a.status === 'ready');
   const images = readyImages(), docs = readyDocs(), many = images.length + docs.length > 1;
+  // (v283) no internet: a quiz from the student's own cards, or the question waits and goes once she is back online
+  // (a student at risk still gets care at once, below: that needs no internet)
+  if (isOffline() && !images.length && !docs.length && text.trim() && !(window.CassieCare && window.CassieCare.check(text))) {
+    if (quizMode || /^\s*(quiz me|quiz)\b/i.test(text)) { resetQuizUi(); promptInput.value = ''; autoGrow(); offlineQuiz(); return; }
+    queueOffline(text.trim()); return;
+  }
   const image = !many && images.length ? images[0] : null;
   const attachedDoc = !many && docs.length ? docs[0] : null;
   // the newest photo the student sent: "a photo of the answer" redraws it with the answer marked on it
@@ -7206,7 +7382,7 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=282')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=283')));
 // a real photo needs Gemini pictures (Cassie's server or the student's key); the free service draws toys and models
 const realPhotoOk = () => !!((SERVER && serverPictures) || (state.geminiKey && !geminiImageOff));
 // a drawing inside a chat bubble (a new one draws itself; one from history shows finished)
@@ -7336,10 +7512,10 @@ async function liveDrawReply(text, want3d = LIVE_3D_RE.test(text), image = null)
 }
 // "Show a real photo": an accurate photo (Gemini), then Cassie finds each part in it and lays her own labels on top;
 // a part she can't clearly see is listed instead of being pinned in the wrong place
-async function realPhoto(spec, asked) {
+async function realPhoto(spec, asked, again = false) {
   if (!realPhotoOk()) return;
   const label = asked || `Show me a real photo of ${spec.title}`;
-  state.messages.push({ role: 'user', content: label }); touchChat(); save(); renderMessage('user', label);
+  if (!again) { state.messages.push({ role: 'user', content: label }); touchChat(); save(); renderMessage('user', label); } // (v283: Try again doesn't ask a second time)
   const typing = renderTyping(); setTypingStatus(typing, 'Finding the real thing…');
   const prompt = `A real, accurate, true to life photograph of ${spec.photo || spec.title}. Taken with a real camera on location, natural light, sharp detail, the whole subject in view. Not a model, toy, miniature, 3D render, illustration, cartoon or diagram. No text, no labels, no watermark.`;
   let src = await serverGeminiImage(prompt);
@@ -7347,7 +7523,7 @@ async function realPhoto(spec, asked) {
   if (!src) { // (v282) the real status, and one way forward: try again
     typing.remove(); const t = 'I could not make an accurate photo right now. Try again a little later.'; state.messages.push({ role: 'assistant', content: t }); save();
     const bubble = renderMessage('assistant', t);
-    if (bubble) { const e = CassieErrors.empty({ title: 'Couldn’t make the photo', text: 'Cassie’s photo maker didn’t answer this time.', action: 'Try again', onAction: () => { e.remove(); realPhoto(spec, asked); } }); e.classList.add('es-inline'); bubble.appendChild(cassieEmpty(e, 'failed')); }
+    if (bubble) { const e = CassieErrors.empty({ title: 'Couldn’t make the photo', text: 'Cassie’s photo maker didn’t answer this time.', action: 'Try again', onAction: () => { e.remove(); realPhoto(spec, asked, true); } }); e.classList.add('es-inline'); bubble.appendChild(cassieEmpty(e, 'failed')); }
     return;
   }
   setTypingStatus(typing, 'Cassie is labelling it…');
@@ -8497,7 +8673,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=282');
+      exploreMod = await import('./explore/cell3d.js?v=283');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -8547,7 +8723,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=282');
+      labsMod = await import('./labs/labs.js?v=283');
       islandRest();
     }
     labsMod.open({
@@ -10510,10 +10686,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=282').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=283').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=282', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=283', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
@@ -12009,9 +12185,9 @@ const liquidGlass = (() => {
       <feDiffuseLighting in="H" surfaceScale="9" diffuseConstant="1" lighting-color="#fff" result="D"><feDistantLight azimuth="225" elevation="30"/></feDiffuseLighting>
       <feColorMatrix in="D" result="Dw" values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 .33 .33 .33 0 0"/>
       <feColorMatrix in="D" result="Dk" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -.33 -.33 -.33 0 1"/>
-      <feComposite in="Dw" in2="rim" operator="in" result="r1"/><feComponentTransfer in="r1" result="rimlit"><feFuncA type="linear" slope="var"/></feComponentTransfer>
-      <feComposite in="Dw" in2="bevel" operator="in" result="s1"/><feComponentTransfer in="s1" result="shade"><feFuncA type="linear" slope="var"/></feComponentTransfer>
-      <feComposite in="Dk" in2="bevel" operator="in" result="s2"/><feComponentTransfer in="s2" result="shadow"><feFuncA type="linear" slope="var"/></feComponentTransfer>
+      <feComposite in="Dw" in2="rim" operator="in" result="r1"/><feComponentTransfer in="r1" result="rimlit"><feFuncA type="linear" slope="1"/></feComponentTransfer>
+      <feComposite in="Dw" in2="bevel" operator="in" result="s1"/><feComponentTransfer in="s1" result="shade"><feFuncA type="linear" slope="1"/></feComponentTransfer>
+      <feComposite in="Dk" in2="bevel" operator="in" result="s2"/><feComponentTransfer in="s2" result="shadow"><feFuncA type="linear" slope="1"/></feComponentTransfer>
       <feMerge><feMergeNode in="shadow"/><feMergeNode in="shade"/><feMergeNode in="rimlit"/></feMerge>`;
     // (how strong each part is: the theme's tokens, read once per pane)
     const cs = getComputedStyle(el), num = (v, d) => parseFloat(cs.getPropertyValue(v)) || d;
