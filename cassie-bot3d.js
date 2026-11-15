@@ -252,6 +252,14 @@ export function upgrade(api, host, svg, { pokeable = false, glow = false, failed
   out.className = 'cassie-bot cassie-bot-3d';
   out.setAttribute('role', 'img'); out.setAttribute('aria-label', 'Cassie');
   out.style.display = 'block';
+  // (v283) she fills her box when the page gives her no size: her canvas takes its pixel size from its size on screen,
+  // so with no size of its own it grew a little every frame until the graphics gave up. A zero-weight rule, so any
+  // page's own size for her still wins.
+  if (!document.getElementById('cassie-bot3d-fit')) {
+    const st = document.createElement('style'); st.id = 'cassie-bot3d-fit';
+    st.textContent = ':where(canvas.cassie-bot-3d) { width: 100%; height: 100%; max-width: 100%; max-height: 100%; }';
+    document.head.prepend(st);
+  }
   out.style.opacity = '0'; out.style.transition = 'opacity .25s ease'; // (she fades into her empty place)
   if (pokeable) { out.style.cursor = 'pointer'; out.style.pointerEvents = 'auto'; out.addEventListener('click', () => api.poke()); }
   const og = out.getContext('2d');

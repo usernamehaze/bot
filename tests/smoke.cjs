@@ -7094,7 +7094,8 @@ test('Cassie dresses for the holidays (Philippine time) and says so; two taps in
   expect(!/Happy|🎉/.test(nov.said), 'Undas gets a quiet word, nothing festive: ' + nov.said);
   await nov.ctx.close();
   const plain = await day('2026-07-15');
-  expect(plain.acc === '', 'a normal day: no holiday accessory: ' + plain.acc.slice(0, 80));
+  // (v283) Auto wears her everyday scarf on a plain day; never a holiday accessory
+  expect(!plain.acc.includes(FLAG) && !plain.acc.includes(CANDLE) && (plain.acc === '' || plain.acc.includes('#d8343c')), 'a normal day: no holiday accessory (her scarf at most): ' + plain.acc.slice(0, 80));
   expect(!/Happy|Today is|ngayon/.test(plain.said), 'a normal day: no holiday line: ' + plain.said);
   // (v249) a tap opens her personal talk box, with a warm hello as its first message
   const { page } = plain;
@@ -8214,6 +8215,9 @@ test.slow('a mic on every box where a student writes to Cassie (app, Labs, the b
   await reset(page);
   await page.evaluate(() => { window.__ears.mode = 'denied'; openMemory(); });
   await page.waitForSelector('#mem-fact + .cmic');
+  // (a guest opening Memory may get the "Keep your work on every device" sign-in reminder over it: Not now first)
+  await page.waitForTimeout(600);
+  if (await page.locator('.signin-gate .gate-no').count()) { await page.click('.signin-gate .gate-no'); await page.waitForTimeout(300); }
   await page.click('#mem-fact + .cmic');
   await page.waitForSelector('.cmic-line >> text=Cassie can’t use the microphone here. Type it instead.', { timeout: 5000 });
   await page.fill('#mem-fact', 'My exam is on Friday');
@@ -12254,6 +12258,127 @@ async function xwSizes(page, id, where) {
   await page.evaluate((id) => hwSize(document.querySelector(`.hw-grid > .hw[data-w="${id}"]`), 'm'), id);
 }
 
+test('v283: Home’s Today shows the goal, the streak and the awards with nothing off the edge; an empty state’s button can be read in dark black and white; the 3D Cassie always fills her box; no glass filter errors in the console; wheels and blades are checked for the way they face', async (b) => {
+  const consoleErr = [];
+  const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, lite: 'off',
+    state: { groqKey: 'gsk_test', tab: 'home', pal: 'mono', theme: 'dark', chats: [{ id: 'c1', title: 'Cells', messages: [{ role: 'user', content: 'cells' }, { role: 'assistant', content: 'ok' }], updatedAt: Date.now() }], currentId: 'c1' } });
+  page.on('console', (m) => { if (m.type() === 'error') consoleErr.push(m.text()); });
+  await page.emulateMedia({ colorScheme: 'dark' }); await page.reload(); await page.waitForTimeout(1200);
+  await page.evaluate(() => window.CassieNative && window.CassieNative.go('home')); await page.waitForSelector('.hub-today');
+  const today = await page.evaluate(() => { const t = document.querySelector('.hub-today'), r = t.getBoundingClientRect(); return { kids: [...t.children].map((k) => { const q = k.getBoundingClientRect(); return [k.className.split(' ')[0], Math.round(q.left), Math.round(q.right)]; }), w: innerWidth, overflow: t.scrollWidth > t.clientWidth + 1 }; });
+  expect(today.kids.length === 3 && today.kids.every(([, l, r]) => l >= 0 && r <= today.w) && !today.overflow, 'Today: the goal, the streak and the awards all in view: ' + JSON.stringify(today));
+  const btn = await page.evaluate(() => [...document.querySelectorAll('.hub .empty-state .es-go:not(.es-alt)')].filter((x) => x.getClientRects().length).map((x) => { const c = getComputedStyle(x); return [x.textContent, c.color, c.backgroundColor]; }));
+  expect(btn.length && btn.every(([, c, bg]) => c !== bg), 'an empty state’s button: its words a different colour from the button: ' + JSON.stringify(btn));
+  // the 3D Cassie's canvas: always the size of her box
+  const src = fs.readFileSync(path.join(ROOT, 'cassie-bot3d.js'), 'utf8');
+  expect(/:where\(canvas\.cassie-bot-3d\) \{ width: 100%; height: 100%;/.test(src), 'her 3D canvas fills her box, so it never grows on its own');
+  const big = await page.evaluate(async () => { const h = document.createElement('div'); h.style.cssText = 'position:fixed;left:0;top:0;width:80px;height:80px'; document.body.appendChild(h); window.CassieBot.create(h, { state: 'idle' }); await new Promise((r) => setTimeout(r, 4000)); const c = h.querySelector('canvas'); const r = c ? c.getBoundingClientRect() : null; h.remove(); return r ? [Math.round(r.width), Math.round(r.height)] : 'flat'; });
+  expect(big === 'flat' || (big[0] <= 80 && big[1] <= 80), 'in a box with no rule for her she stays the size of the box: ' + JSON.stringify(big));
+  expect(!consoleErr.some((t) => /feFuncA|attribute slope/.test(t)), 'no glass filter errors: ' + consoleErr.filter((t) => /slope/.test(t)).slice(0, 1).join(''));
+  // the 3D check: a wheel lying flat is sent back, the real bicycle is not
+  const r3 = await page.evaluate(async ([bike]) => { const m = await liveDrawLoad(); const flat = JSON.parse(JSON.stringify(bike)); flat.parts.forEach((p) => p.shapes.forEach((s) => { if (/wheel/i.test(p.label) && s.axis) s.axis = 'y'; })); const prop = JSON.parse(JSON.stringify(bike)); prop.parts.push({ id: 'prop', label: 'Propeller', size: .3, inside: null, attached: ['frame'], shapes: [{ t: 'blades', n: 3, len: .6, width: .2, hub: .1, axis: 'y', pos: [2.6, -.9, 0] }] });
+    return { ok: m.check3d(m.clean(bike)).filter((x) => /wheel|blades/.test(x)).length, flat: m.check3d(m.clean(flat)).filter((x) => /lies flat/.test(x)).length, prop: m.check3d(m.clean(prop)).filter((x) => /blades face the wrong way/.test(x)).length }; }, [JSON.parse(fs.readFileSync(path.join(ROOT, 'tests/fixtures/live/bicycle3d.json'), 'utf8'))]);
+  expect(r3.ok === 0 && r3.flat === 2 && r3.prop === 1, 'wheels upright, blades along the airflow: ' + JSON.stringify(r3));
+  expect(!errors.length, 'no script errors: ' + errors.join(' | '));
+  await ctx.close();
+});
+
+test('v283: with no internet a question waits on the phone (with Cancel, kept after a reload) and goes to Cassie once she is back online; Quiz me makes a quiz from the student’s own flashcards, and each answer counts toward the card’s review', async (b) => {
+  const calls = [];
+  const fake = async (body) => { calls.push(JSON.stringify(body.messages)); return { text: 'Mitosis is how one cell divides into two.' }; };
+  const now = Date.now();
+  const cards = [['What stores energy in the cell?', 'ATP'], ['Where is most ATP made?', 'Mitochondria'], ['What does glycolysis break down?', 'Glucose'], ['What gas makes the most ATP possible?', 'Oxygen'], ['What holds the DNA?', 'Nucleus']].map(([f, bk], i) => ({ id: 'q' + i, f, b: bk, deck: 'Biology', box: 1, due: now - 1000, at: 0 }));
+  const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, fakeGroq: fake, state: { groqKey: 'gsk_test', tab: 'chat', cards, chats: [{ id: 'c1', title: 'Cells', messages: [{ role: 'user', content: 'cells' }, { role: 'assistant', content: 'ok' }], updatedAt: now }], currentId: 'c1' } });
+  await page.waitForSelector('#prompt-input');
+  await ctx.setOffline(true); await page.evaluate(() => window.dispatchEvent(new Event('offline')));
+  await page.fill('#prompt-input', 'What is mitosis?'); await page.click('#send-btn'); await page.waitForTimeout(300);
+  let w = await page.evaluate(() => ({ n: document.querySelectorAll('.q-wait').length, text: (document.querySelector('.q-wait') || {}).innerText, q: (state.offlineQueue || []).map((x) => x.text), sent: state.messages.length }));
+  expect(w.n === 1 && /What is mitosis\?/.test(w.text) && /Waiting for the internet\. Cassie answers as soon as you’re back online\./.test(w.text) && /Cancel/.test(w.text) && w.q.join() === 'What is mitosis?' && w.sent === 2 && !calls.length, 'offline: the question waits, with Cancel, and nothing is sent: ' + JSON.stringify(w));
+  // Cancel takes it away; a second one is kept after a reload
+  await page.click('.q-cancel'); expect(await page.evaluate(() => !document.querySelector('.q-wait') && !(state.offlineQueue || []).length), 'Cancel takes it away');
+  await page.fill('#prompt-input', 'What is meiosis?'); await page.click('#send-btn'); await page.waitForTimeout(200);
+  // (kept on the phone: in what is saved, and drawn again with the chat)
+  expect(await page.evaluate(() => { renderHistory(); return /What is meiosis\?/.test((document.querySelector('.q-wait') || {}).innerText || '') && JSON.parse(localStorage.getItem('cassie.v2')).offlineQueue.length === 1; }), 'kept on the phone, and shown again with the chat');
+  // back online: it goes to Cassie and she answers
+  await ctx.setOffline(false); await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await page.waitForFunction(() => /one cell divides into two/.test(document.getElementById('chat-log').textContent), null, { timeout: 15000 });
+  w = await page.evaluate(() => ({ waiting: document.querySelectorAll('.q-wait').length, q: (state.offlineQueue || []).length, asked: state.messages.filter((m) => m.role === 'user').map((m) => m.content).pop() }));
+  expect(w.waiting === 0 && w.q === 0 && /What is meiosis\?/.test(w.asked) && calls.some((c) => /What is meiosis/.test(c)), 'back online: it goes to Cassie, once: ' + JSON.stringify(w));
+  // offline Quiz me: four questions from the Biology cards
+  await ctx.setOffline(true); await page.evaluate(() => window.dispatchEvent(new Event('offline')));
+  const before = calls.length;
+  await page.evaluate(() => { promptInput.value = 'Quiz me'; return handleSend('Quiz me'); }); await page.waitForSelector('.oq-opt');
+  const q = await page.evaluate(() => ({ n: document.querySelector('.oq-n').textContent, q: document.querySelector('.oq-q').textContent, opts: [...document.querySelectorAll('.oq-opt')].map((x) => x.textContent) }));
+  expect(/Question 1 of 4/.test(q.n) && q.opts.length === 4 && q.opts.every((t) => /^[A-D]\. /.test(t)), 'a quiz from the cards: ' + JSON.stringify(q));
+  const ans = await page.evaluate(() => { const card = state.cards.find((c) => c.f === document.querySelector('.oq-q').textContent); const right = [...document.querySelectorAll('.oq-opt')].find((x) => x.textContent.slice(3) === card.b); const box = card.box; right.click(); return { box, after: card.box, note: document.querySelector('.oq-note').textContent }; });
+  expect(ans.after === ans.box + 1 && ans.note === 'Right!', 'a right answer counts toward the card’s review: ' + JSON.stringify(ans));
+  for (let i = 0; i < 3; i++) { await page.click('.oq-next'); await page.click('.oq-opt >> nth=0'); }
+  await page.click('.oq-next');
+  expect(await page.evaluate(() => /^You got \d of 4\./.test(document.querySelector('.oq-end').textContent)) && calls.length === before, 'the score at the end, and Cassie was never asked');
+  expect(!errors.length, 'no script errors: ' + errors.join(' | '));
+  await ctx.close();
+});
+
+test('v283: Settings: Save for offline saves Learn’s files for no internet (the list is the repo’s own, every versioned address in it); Cassie’s outfit: 7 choices with her wearing each, a pick is worn at once, Auto keeps the season and wears her scarf on plain days, a holiday still dresses her up', async (b) => {
+  const list = JSON.parse(fs.readFileSync(path.join(ROOT, 'offline-files.json'), 'utf8'));
+  const { execFileSync } = require('child_process');
+  execFileSync('node', [path.join(ROOT, 'scripts/offline-files.cjs')]);
+  const fresh = JSON.parse(fs.readFileSync(path.join(ROOT, 'offline-files.json'), 'utf8'));
+  expect(JSON.stringify(list.files) === JSON.stringify(fresh.files), 'offline-files.json is current (run scripts/offline-files.cjs after adding a file to labs/ or explore/)');
+  const code = ['app.js', 'labs/labs.js'].map((f) => fs.readFileSync(path.join(ROOT, f), 'utf8')).join('\n');
+  const vers = [...code.matchAll(/['"`](?:\.\/)?((?:labs\/|explore\/)?[\w-]+\.(?:js|css))\?v=(\d+)/g)].map((m) => m[1].replace(/^(museum|level-lessons|previews|labs)\.(js|css)$/, 'labs/$1.$2'));
+  const covered = (f) => list.versioned.includes(f) || list.fixed.some((x) => x.startsWith(f + '?')) || /^(rescue|boardprep)\.js$/.test(f);
+  expect(vers.every(covered), 'every file loaded with a version is saved with it: ' + vers.filter((f) => !covered(f)).join());
+  const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, lite: 'off', state: { groqKey: 'gsk_test', tab: 'you' } });
+  await page.waitForSelector('#off-go', { state: 'attached' });
+  // a phone with no service worker can't keep files: it says so (the test pages have none)
+  await page.evaluate(() => saveOffline()); await page.waitForTimeout(400);
+  const st = await page.evaluate(() => document.getElementById('off-status').textContent);
+  expect(/This browser can’t keep Cassie for offline use|Saving|Saved on this phone/.test(st), 'Save for offline answers: ' + st);
+  // pretend the files were saved: what is on the phone
+  await page.evaluate(() => { state.offlineSaved = { at: Date.now(), files: 400 }; paintOffline(); });
+  const saved = await page.evaluate(() => document.getElementById('off-saved').innerText.replace(/\s+/g, ' '));
+  expect(/Saved on this phone/.test(saved) && /Learn: every lab, game and study tool/.test(saved) && /Not saved: the 3D human body/.test(saved), 'what is saved, and what isn’t: ' + saved);
+  // the outfit
+  const of = await page.evaluate(() => [...document.querySelectorAll('#of-grid .of-opt')].map((o) => o.dataset.of + ':' + o.getAttribute('aria-checked')));
+  expect(of.join() === 'auto:true,scarf:false,headphones:false,bow:false,beanie:false,sampaguita:false,none:false', 'seven choices, Auto picked: ' + of.join());
+  await page.evaluate(() => document.querySelector('#of-grid [data-of="bow"]').click());
+  const worn = await page.evaluate(() => ({ s: state.outfit, a: bot2d && bot2d.accessory, on: document.querySelector('#of-grid [data-of="bow"]').getAttribute('aria-checked') }));
+  expect(worn.s === 'bow' && /bow/.test(worn.a || '') && worn.on === 'true', 'a pick is kept and worn at once: ' + JSON.stringify(worn));
+  const rules = await page.evaluate(() => { const B = window.CassieBot, s0 = B.seasonal, h0 = B.holiday, out = {};
+    B.seasonal = () => null; B.holiday = () => null; state.outfit = 'auto'; out.plainAuto = cassieSeasonal(); state.outfit = 'bow'; out.plainBow = cassieSeasonal(); state.outfit = 'none'; out.plainNone = cassieSeasonal();
+    B.seasonal = () => 'santa+tassel'; state.outfit = 'auto'; out.seasonAuto = cassieSeasonal(); state.outfit = 'beanie'; out.seasonBeanie = cassieSeasonal();
+    B.holiday = () => ({ acc: 'flag' }); B.seasonal = () => 'flag'; state.outfit = 'beanie'; out.holiday = cassieSeasonal();
+    B.seasonal = s0; B.holiday = h0; state.outfit = 'auto'; return out; });
+  expect(rules.plainAuto === 'scarf' && rules.plainBow === 'bow' && rules.plainNone === null && rules.seasonAuto === 'santa+tassel' && rules.seasonBeanie === 'beanie+tassel' && rules.holiday === 'flag', 'what she wears when: ' + JSON.stringify(rules));
+  expect(!errors.length, 'no script errors: ' + errors.join(' | '));
+  await ctx.close();
+});
+
+test('v283: Listen on an answer shows on Home’s Now playing (Cassie is reading, Pause and Stop, no 15 seconds), and Pause holds her voice; Talk mode starts with her caring face; a real photo’s Try again doesn’t ask twice; the podcast with no notes shows Cassie in her headphones', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, lite: 'off', state: { groqKey: 'gsk_test', tab: 'chat', chats: [{ id: 'c1', title: 'How a cell makes energy', messages: [{ role: 'user', content: 'How does a cell make energy?' }, { role: 'assistant', content: 'In its mitochondria, as ATP.' }], updatedAt: Date.now() }], currentId: 'c1' } });
+  await page.waitForSelector('.listen-btn');
+  await page.evaluate(() => { window.__voice = []; window.CassieVoice.speak = () => ({ stop() { window.__voice.push('stop'); }, done: new Promise(() => {}) }); window.CassieVoice.pause = () => window.__voice.push('pause'); window.CassieVoice.resume = () => window.__voice.push('resume'); });
+  await page.evaluate(() => document.querySelector('.listen-btn').click()); await page.waitForTimeout(200);
+  const np = await page.evaluate(() => ({ t: nowPlaying.cur && nowPlaying.cur.title, seek: nowPlaying.cur && nowPlaying.cur.canSeek }));
+  expect(np.t === 'Cassie is reading: How a cell makes energy' && np.seek === false, 'Listen is on Now playing: ' + JSON.stringify(np));
+  await page.evaluate(() => { const w = xwPlayer(); w.id = 'np-test'; document.body.appendChild(w); });
+  const ctl = await page.evaluate(() => [...document.querySelectorAll('#np-test .xw-ctl button')].filter((x) => !x.hidden).map((x) => x.getAttribute('aria-label')));
+  expect(ctl.join('|') === 'Pause|Stop and close the player', 'Pause and Stop only: ' + ctl.join('|'));
+  await page.evaluate(() => { const t = (k) => document.querySelector(`#np-test [data-xw="${k}"]`).click(); t('toggle'); t('toggle'); t('end'); });
+  const v = await page.evaluate(() => ({ calls: window.__voice.join(), cur: nowPlaying.cur, btn: document.querySelector('.listen-btn').textContent }));
+  expect(/pause,resume/.test(v.calls) && /stop/.test(v.calls) && v.cur === null && /Listen/.test(v.btn), 'Pause holds her voice, Play goes on, Stop ends it: ' + JSON.stringify(v));
+  // Talk mode: her caring face
+  await page.click('#talk-btn').catch(async () => { await page.evaluate(() => document.getElementById('talk-btn') && document.getElementById('talk-btn').click()); });
+  const loved = await page.waitForFunction(() => { const e = document.querySelector('#cassie-2d-root [data-state]'); return e && e.dataset.state === 'love'; }, null, { timeout: 3000 }).then(() => true, () => false);
+  expect(loved, 'Talk mode starts with her caring face');
+  const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
+  expect(/realPhoto\(spec, asked, true\)/.test(app) && /if \(!again\) \{ state\.messages\.push\(\{ role: 'user', content: label \}\)/.test(app), 'Try again on a real photo doesn’t ask a second time');
+  expect(/body\.replaceChildren\(cassieEmpty\(e, 'notes'\)\)/.test(app) && /notes: \['talking', 'headphones', ''\]/.test(app), 'the podcast with no notes: Cassie in her headphones');
+  expect(!errors.length, 'no script errors: ' + errors.join(' | '));
+  await ctx.close();
+});
+
 test('v282: every empty state shows Cassie (3D, as in the chat) in her own mood with a drawing of what is missing, and a way forward: Plan an exam, Ask Cassie, Show all chats, Show all tasks, Take a quiz, Make flashcards, Open Labs, Clear search, Try again; in the chat she wears her pencil to draw and her glasses to research, dances at three right in a row, winks at a thank you and is caring in Talk mode', async (b) => {
   const calls = [];
   const fake = async (body) => { const all = JSON.stringify(body.messages); calls.push(all); return { text: /explains by DRAWING/.test(all) ? JSON.stringify(LD_WATER) : 'You are welcome! Anything else?' }; };
@@ -15160,7 +15285,8 @@ test('Home header: a glass bar with the hello and a bell; every Home button stil
     await page.waitForSelector(hub + ':not(.hub-empty) .hub-hero');
     expect((phone ? /(Morning|Afternoon|Evening), Test/ : /Hi, welcome back/).test(await page.locator(hub + ' .hub-hero').innerText()), `${size}: welcome back`);
     const today = await page.evaluate((h) => { const t = document.querySelector(h + ' .hub-today'), s = getComputedStyle(t); return { n: t.querySelectorAll('.hub-w').length, dir: s.display + ' ' + s.flexDirection, x: s.overflowX, top: [...t.querySelectorAll('.hub-w')].map((w) => Math.round(w.getBoundingClientRect().top)) }; }, hub);
-    expect(today.n === 1 && today.dir === 'flex row' && await page.locator(hub + ' .ht-timer').count() === 1 && await page.locator(hub + ' .ht-cards').count() === 1, `${size}: Today keeps the streak; Flashcards and the timer are up top: ` + JSON.stringify(today));
+    // (v283) Today is a grid with everything in view, no sideways strip
+    expect(today.n === 1 && /^(flex row|grid )/.test(today.dir) && await page.locator(hub + ' .ht-timer').count() === 1 && await page.locator(hub + ' .ht-cards').count() === 1, `${size}: Today keeps the streak; Flashcards and the timer are up top: ` + JSON.stringify(today));
     // the bell: today's reminders, each going where it says
     await page.click(hub + ' .hub-bell');
     await page.waitForTimeout(300);

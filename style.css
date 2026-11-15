@@ -28,6 +28,8 @@ html, :where(body, body *) { touch-action: manipulation; }
   --success: #2e7048;
   --warning: #8a5a00;
   --danger: #b3261e;
+  --prop-teal: #3fb8a0;  /* the empty-state props (v282) */
+  --prop-gold: #e8b84a;
   --focus: var(--primary);
   --primary-ink: var(--primary);  /* the accent as words or a thin line: always 4.5:1 on the page */
   --bubble-user: var(--primary);
@@ -2192,14 +2194,58 @@ input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="
 .es-scene.es-solo .es-bot { left: 8px; }
 .es-prop .disc { fill: color-mix(in srgb, var(--primary) 12%, transparent); }
 .es-prop .ln { fill: none; stroke: var(--text); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
-.es-prop .soft { fill: var(--surface, #fff); stroke: var(--text); stroke-width: 2.4; stroke-linejoin: round; }
+.es-prop .soft { fill: var(--surface); stroke: var(--text); stroke-width: 2.4; stroke-linejoin: round; }
 .es-prop .dash { stroke-dasharray: 5 6; }
 .es-prop .acc { fill: var(--primary); } .es-prop .accl { stroke: var(--primary); }
 .es-prop .mute { fill: color-mix(in srgb, var(--text) 18%, transparent); }
-.es-prop .teal { fill: #3fb8a0; } .es-prop .gold { fill: #e8b84a; }
+.es-prop .teal { fill: var(--prop-teal); } .es-prop .gold { fill: var(--prop-gold); }
 .es-acts { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--sp-2); margin-top: var(--sp-2); }
 .es-acts .es-go { margin-top: 0; }
 .empty-state .es-go.es-alt { background: transparent; color: var(--text); border: 1px solid var(--border); }
+/* (v283) an empty state's main button: its words in the button's own ink, everywhere (Home's buttons take the page's
+   text colour, which in dark black and white is the same as the button) */
+.empty-state .es-go:not(.es-alt) { color: var(--on-primary); }
+/* (v283) a question asked with no internet, waiting: the student's bubble, a quiet line, Cancel */
+.q-wait { display: flex; flex-direction: column; align-items: flex-end; gap: var(--sp-1, 4px); }
+.q-wait .bubble-user { opacity: .85; }
+.q-note { display: flex; align-items: flex-start; gap: var(--sp-2, 8px); max-width: 86%; margin: 0 4px; color: var(--muted); font-size: 13px; line-height: 1.4; text-align: right; }
+.q-note svg { width: 16px; height: 16px; flex: none; margin-top: 1px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.q-cancel { min-height: 48px; padding: 0 var(--sp-4, 16px); margin: 0 4px; border-radius: 999px; border: 1px solid var(--border); background: transparent; color: var(--text); font: inherit; font-weight: 600; cursor: pointer; }
+.q-cancel:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* (v283) Settings: Study offline, and Cassie's outfit */
+.off-set, .of-set { display: grid; gap: var(--sp-2, 8px); }
+.off-h { margin: 0; font-weight: 700; font-size: 1rem; }
+.off-sub { margin: 0; color: var(--muted); font-size: .9rem; line-height: 1.4; }
+.off-row { display: flex; align-items: center; gap: var(--sp-3, 12px); flex-wrap: wrap; }
+.off-row .btn { min-height: 48px; }
+.off-size { color: var(--muted); }
+.off-status { margin: 0; font-size: .9rem; min-height: 1.2em; }
+.off-status:empty { display: none; }
+.off-saved { padding-top: var(--sp-3, 12px); border-top: 1px solid var(--border); }
+.off-when { display: flex; justify-content: space-between; gap: var(--sp-2, 8px); font-size: .9rem; }
+.off-when span { color: var(--muted); }
+.off-saved ul { margin: var(--sp-2, 8px) 0 0; padding-left: 16px; color: var(--muted); font-size: .9rem; line-height: 1.6; }
+.of-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: var(--sp-2, 8px); }
+.of-grid .of-opt { margin: 0; padding: var(--sp-2, 8px) 4px var(--sp-3, 12px); gap: 2px; border-radius: 16px; cursor: pointer; min-width: 0; }
+.of-grid .of-opt.on { outline: 2px solid var(--text); outline-offset: -2px; }
+.of-grid .of-opt:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.of-grid .es-scene.es-solo { width: 84px; height: 80px; }
+.of-grid .es-scene.es-solo .es-bot { left: 4px; width: 76px; height: 76px; }
+.of-grid .es-title { font-size: .85rem; }
+/* (v283) a quiz from the student's own cards, with no internet */
+.oq { display: grid; gap: var(--sp-2, 8px); margin-top: var(--sp-3, 12px); }
+.oq-n { margin: 0; color: var(--muted); font-size: 13px; font-weight: 600; }
+.oq-q { margin: 0; font-size: 1.05rem; font-weight: 700; line-height: 1.35; }
+.oq-opts { display: grid; gap: var(--sp-2, 8px); }
+.oq-opt { min-height: 48px; padding: var(--sp-2, 8px) var(--sp-4, 16px); border-radius: 14px; border: 1px solid var(--border); background: transparent; color: var(--text); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+.oq-opt:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.oq-opt.oq-right { border: 2px solid var(--success); background: color-mix(in srgb, var(--success) 14%, transparent); }
+.oq-opt.oq-wrong { border: 2px solid var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
+.oq-opt:disabled { cursor: default; }
+.oq-opt:disabled:not(.oq-right):not(.oq-wrong) { opacity: .6; }
+.oq-note { margin: 0; font-weight: 600; min-height: 1.4em; }
+.oq-next { justify-self: start; }
+.oq-end { margin: 0; line-height: 1.45; }
 /* (in a card or a Home widget the scene is smaller; in a small widget, only the words) */
 :is(.dk-card, .xw, .hub-week, .board-state) .es-scene { width: 176px; height: 112px; }
 :is(.dk-card, .xw, .hub-week, .board-state) .es-scene .es-prop { left: 16px; width: 160px; height: 106px; }
@@ -2739,7 +2785,16 @@ button.plan-go:not(.plan-go-line) { border: 0; }
 .hub-ask span { color: var(--muted); font-size: 1rem; }
 .hub-h { margin: var(--sp-4, 16px) 2px 0; font-size: 1.15rem; letter-spacing: -.01em; }
 /* Today: a sideways row of glass chips (scrolls on a phone) */
-.hub-today { display: flex; gap: var(--sp-3, 12px); overflow-x: auto; scroll-snap-type: x proximity; padding: 2px 2px var(--sp-3, 12px); margin: 0 -2px; scrollbar-width: none; overscroll-behavior-x: contain; }
+/* (v283) Today: all three in view, nothing off the edge: the goal across, then the streak and the awards side by side;
+   in a Small widget, one under the other */
+.hub-today { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3, 12px); padding: 2px; margin: 0 -2px; }
+.hub-today > * { min-width: 0 !important; }
+.hub-today > .hub-goal { grid-column: 1 / -1; }
+.hub-today.hub-today-one { display: flex; }
+.hw.ws-s .hub-today { grid-template-columns: minmax(0, 1fr); }
+.hw.ws-s .hub-today .goal-meta, .hw.ws-s .hub-today .hub-w > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.hw.ws-s .hub-goal, .hw.ws-s .hub-awards { padding-right: var(--sp-3, 12px); }
+.hw.ws-s .hub-goal .goal-dial { flex: none; }
 .hub-today::-webkit-scrollbar { display: none; }
 .hub-w { flex: 0 0 auto; display: grid; grid-template-columns: 42px auto; column-gap: var(--sp-3, 12px); align-items: center; align-content: center; min-width: 172px; min-height: 76px; padding: var(--sp-3, 12px) var(--sp-4, 16px) var(--sp-3, 12px) var(--sp-3, 12px); border-radius: 22px; text-align: left; scroll-snap-align: start;
   background: var(--lg-fill-thick); border: 1px solid var(--lg-line); box-shadow: var(--lg-edge); }
@@ -3939,6 +3994,8 @@ button.dk-day.cal-cell:focus-visible { outline: 2px solid var(--focus); outline-
 .xw-bar i { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--text); transition: width .3s ease; }
 .xw-title { margin: 0; font-weight: 700; font-size: .95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .xw-ctl { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2, 8px); }
+.xw-ctl .xw-icon[hidden] { display: none; }
+.xw-ctl:not(:has(.xw-icon[data-xw="back"]:not([hidden]))) { justify-content: center; gap: var(--sp-5, 24px); } /* (no 15 seconds: Pause and Stop, centred) */
 .xw-icon { position: relative; display: grid; place-items: center; width: 44px; height: 44px; flex: none; border-radius: 50%; border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; }
 .xw-icon small { position: absolute; font-size: 8px; font-weight: 700; }
 .xw-icon.xw-main { width: 52px; height: 52px; background: var(--text); color: var(--bg); border-color: var(--text); }

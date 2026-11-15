@@ -9,7 +9,25 @@
   if (!log || !window.CassieVoice) return;
   let playing = null; // { btn, h }
   const ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9zM16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>';
-  function stop() { if (playing) { playing.h.stop(); playing.btn.classList.remove('on'); playing.btn.lastChild.textContent = 'Listen'; playing = null; } }
+  function stop() {
+    if (!playing) return;
+    const was = playing; playing = null;
+    try { if (window.CassieVoice.resume) window.CassieVoice.resume(); } catch (e) { /* not held */ } // (a held voice is let go, so the next one plays)
+    was.h.stop(); was.btn.classList.remove('on'); was.btn.lastChild.textContent = 'Listen';
+    clearInterval(was.tick); if (was.np && window.CassieNowPlaying) window.CassieNowPlaying.clear(was.np);
+  }
+  // (v283) Now playing on Home: the answer she is reading, with Pause and Stop (her voice can't skip, so no 15 seconds)
+  function nowPlaying(text) {
+    const NP = window.CassieNowPlaying; if (!NP || !window.CassieVoice.pause) return null;
+    let on = true, held = 0, pausedAt = 0; const t0 = Date.now(), est = Math.max(3000, (text.length / 14) * 1000);
+    const chat = typeof curChat === 'function' ? curChat() : null, title = (chat && chat.title) || text.replace(/\s+/g, ' ').slice(0, 60);
+    const np = { title: 'Cassie is reading: ' + title, canSeek: false, playing: () => on, seek() {},
+      progress: () => Math.min(0.98, ((pausedAt || Date.now()) - t0 - held) / est),
+      toggle() { if (on) { window.CassieVoice.pause(); on = false; pausedAt = Date.now(); } else { window.CassieVoice.resume(); on = true; held += Date.now() - pausedAt; pausedAt = 0; } NP.tell(); },
+      stop() { stop(); } };
+    NP.set(np);
+    return np;
+  }
   function play(btn, text) {
     const was = playing && playing.btn === btn;
     stop();
@@ -18,6 +36,8 @@
     if (!clean.trim()) return;
     const h = window.CassieVoice.speak(clean, { gender: typeof voiceGender === 'function' ? voiceGender() : 'woman' });
     playing = { btn, h };
+    playing.np = nowPlaying(clean);
+    if (playing.np) playing.tick = setInterval(() => { if (window.CassieNowPlaying) window.CassieNowPlaying.tell(); }, 500);
     btn.classList.add('on'); btn.lastChild.textContent = 'Stop';
     h.done.then(() => { if (playing && playing.h === h) stop(); });
     if (typeof track === 'function') track('feature', 'listen');
