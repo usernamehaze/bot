@@ -29,11 +29,11 @@ import { PUZZLES } from './puzzles.js';
 import { space3dLab } from './space3d.js';
 import { atlasLab } from './atlas.js';
 import { TOOLS } from './tools.js';
-import { MUSEUM } from './museum.js?v=281';
+import { MUSEUM } from './museum.js?v=282';
 import { GAMES } from './games.js';
 import { GAMES2 } from './games2.js';
 import { KIDS } from './kids.js';
-import { LEVEL_LESSONS } from './level-lessons.js?v=281';
+import { LEVEL_LESSONS } from './level-lessons.js?v=282';
 
 // two shelves: things to learn with (simulations, 3D models, the atlas) and games (the daily puzzles)
 export const SUBJECTS = [['all', 'All'], ['3d', '3D'], ['biology', 'Biology'], ['chemistry', 'Chemistry'], ['physics', 'Physics'], ['space', 'Space'], ['math', 'Math'], ['geography', 'Geography'], ['history', 'History']];
@@ -241,12 +241,16 @@ function createView() {
     none.hidden = list.length > 0;
     if (!none.hidden && window.CassieErrors) {
       const q0 = search.value.trim();
-      none.replaceChildren(window.CassieErrors.empty({
+      const box = window.CassieErrors.empty({
         title: 'No lab by that name yet',
         text: `Cassie can still explain ${q0 ? `“${q0}”` : 'it'} to you, even without a lab.`,
         action: 'Ask Cassie about it',
         onAction: () => { close(); if (opts.onAsk) opts.onAsk(`Explain ${q0} to me.`, {}); },
-      }));
+      });
+      // (v282) Cassie searching, and a way to widen the search: clear it, and the subject too
+      if (window.cassieEmpty) window.cassieEmpty(box, 'search');
+      if (window.esMore) window.esMore(box, 'Clear search', () => { search.value = ''; subject = 'all'; renderShelf(); search.focus(); });
+      none.replaceChildren(box);
     }
     const t = LABS.find((l) => l.id === (typeof todayLab === 'function' && todayLab())) || todays(), tp = progress(t); // (the student's level, like the phone)
     const today = $('.labs-today');
@@ -595,8 +599,11 @@ function createView() {
       lpPath = []; lpShow('search', found);
       if (!found.length && window.CassieErrors) { // (as on the shelf: why, and one next step that asks Cassie)
         const q0 = $('.lp-q').value.trim();
-        lpRows.replaceChildren(window.CassieErrors.empty({ title: 'No lab by that name yet', text: `Cassie can still explain “${q0}” to you, even without a lab.`, action: 'Ask Cassie about it',
-          onAction: () => { close(); if (opts.onAsk) opts.onAsk(`Explain ${q0} to me.`, {}); } }));
+        const box = window.CassieErrors.empty({ title: 'No lab by that name yet', text: `Cassie can still explain “${q0}” to you, even without a lab.`, action: 'Ask Cassie about it',
+          onAction: () => { close(); if (opts.onAsk) opts.onAsk(`Explain ${q0} to me.`, {}); } });
+        if (window.cassieEmpty) window.cassieEmpty(box, 'search'); // (v282)
+        if (window.esMore) window.esMore(box, 'Clear search', () => { const qi = $('.lp-q'); qi.value = ''; qi.dispatchEvent(new Event('input')); qi.focus(); });
+        lpRows.replaceChildren(box);
       }
     });
   });
@@ -624,11 +631,18 @@ function createView() {
       const b = board || { top: [], players: 0 };
       const podium = [1, 0, 2].map((i) => b.top[i] ? `<div class="pod p${i + 1}${b.top[i].me ? ' me' : ''}"><span class="pod-av">${esc((b.top[i].name || '?').slice(0, 2))}</span><b>${esc(b.top[i].name)}</b><small>${b.top[i].points} points</small><i>${i + 1}</i></div>` : `<div class="pod p${i + 1} empty"><span class="pod-av">·</span><b>-</b><small>open</small><i>${i + 1}</i></div>`).join('');
       const done = PUZZLES.filter((p) => progress(p).done).length;
-      box.innerHTML = `<div class="board-head"><div><h3>Score board</h3><p>Points for where you place in each of today’s ${PUZZLES.length} puzzles. ${b.offline ? 'The score board can’t be reached right now. Your finishes are still kept on this device.' : b.players ? `${b.players} playing today.` : 'Be the first today!'}</p></div>
+      box.innerHTML = `<div class="board-head"><div><h3>Score board</h3><p>Points for where you place in each of today’s ${PUZZLES.length} puzzles. ${b.offline || board === null ? '' : b.players ? `${b.players} playing today.` : 'Be the first today!'}</p></div>
         <button type="button" class="lab-btn board-go" data-subject-go="puzzles">${done ? `${done}/${PUZZLES.length} done` : 'Play today’s puzzles'}</button></div>
         <div class="podium">${podium}</div>
-        ${b.me ? `<p class="board-me">You: <b>#${b.me.rank}</b> with <b>${b.me.points}</b> points</p>` : board === null ? '<p class="board-me">Loading today’s board…</p>' : ''}
+        ${b.me ? `<p class="board-me">You: <b>#${b.me.rank}</b> with <b>${b.me.points}</b> points</p>` : ''}
         ${scoreTable(b)}`;
+      // (v282) still loading, or it couldn't be reached: say which, with Cassie busy or her oops, never an empty podium
+      if ((board === null || b.offline) && window.CassieErrors) {
+        const e = window.CassieErrors.empty(board === null ? { title: 'Loading today’s board…', text: 'Your scores are on the way.' }
+          : { title: 'Couldn’t reach the score board', text: 'Your finishes are still kept on this device.', action: 'Try again', onAction: () => { board = null; boardAt = 0; renderBoard(true); } });
+        e.classList.add('board-state');
+        const pod = box.querySelector('.podium'); if (pod) pod.replaceWith(window.cassieEmpty ? window.cassieEmpty(e, board === null ? 'loading' : 'failed') : e);
+      }
       box.querySelectorAll('[data-board-tab]').forEach((t) => t.addEventListener('click', () => { boardTab = t.dataset.boardTab; draw(); }));
     };
     draw();

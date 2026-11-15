@@ -166,7 +166,7 @@
       <p class="fc-how">Cards you miss come back in minutes; ones you know come back after 1, 3, 7, 16 and 35 days, so you remember them for the exam, not just tonight.</p>`;
     // no cards yet: why, and one next step (write the first one here)
     const none = body().querySelector('.fc-empty');
-    if (none && window.CassieErrors) none.replaceWith((window.cassieEmpty || ((x) => x))(window.CassieErrors.empty({
+    if (none && window.CassieErrors) none.replaceWith((window.cassieEmpty ? (x) => window.cassieEmpty(x, 'cards') : (x) => x)(window.CassieErrors.empty({
       title: 'No flashcards yet',
       text: 'Tap ＋ Flashcards under any of Cassie’s answers and she’ll make cards from it. Or write your own.',
       action: 'Write a card',
