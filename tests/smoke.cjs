@@ -7841,8 +7841,8 @@ test.slow('Bella only: a 7-step lesson and a long Listen in Bella’s voice when
   const files = [...fs.readdirSync(ROOT).filter((f) => /\.(js|html)$/.test(f)), ...['labs', 'explore', 'extension', 'landing'].flatMap((d) => fs.readdirSync(path.join(ROOT, d)).filter((f) => /\.(js|html)$/.test(f)).map((f) => d + '/' + f))];
   const keep = files.filter((f) => /keep going/i.test(fs.readFileSync(path.join(ROOT, f), 'utf8')));
   expect(!keep.length, '"Keep going" is still in: ' + keep.join(', '));
-  // (but the little ones' labs, where Cassie says a letter or a number with the device's own free voice)
-  const synth = files.filter((f) => f !== 'labs/kids.js' && /speechSynthesis|SpeechSynthesisUtterance/.test(fs.readFileSync(path.join(ROOT, f), 'utf8')));
+  // (v285: the little ones' labs and the games too: every word is in her studio voice)
+  const synth = files.filter((f) => /speechSynthesis|SpeechSynthesisUtterance/.test(fs.readFileSync(path.join(ROOT, f), 'utf8')));
   expect(!synth.length, 'the device voice is still used in: ' + synth.join(', '));
   // the owner's voice guide: the numbers, what to raise in Cloudflare, no key, no dashes
   const guide = fs.readFileSync(path.join(ROOT, 'docs/voice-setup.md'), 'utf8');
@@ -10808,10 +10808,10 @@ test('Teach me: Cassie tutors inside a lab — steps out loud, pointing at the e
 test('for the little ones (Nursery and Kindergarten): Trace letters accepts a traced A and not a scribble, Count with me says one, two, three as three are tapped, Shapes and colours names one to tap, every target is at least 64px, and Cassie says it all aloud', async (b) => {
   const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, setup: async (c) => {
     await c.addInitScript(() => {
+      // (v285) in her studio voice: what she is asked to say, caught where voice.js hands it over
       window.__said = [];
-      const synth = { speaking: false, getVoices: () => [], addEventListener() {}, cancel() {}, speak(u) { window.__said.push(u.text); } };
-      Object.defineProperty(window, 'speechSynthesis', { value: synth, configurable: true });
-      window.SpeechSynthesisUtterance = class { constructor(t) { this.text = t; } };
+      let cv;
+      Object.defineProperty(window, 'CassieVoice', { configurable: true, get: () => cv, set: (v) => { cv = v; v.speak = (t) => { window.__said.push(t); return { stop() {}, done: Promise.resolve({ status: 'done' }) }; }; } });
     });
   } });
   const ids = await page.evaluate(async () => (await import('./labs/labs.js')).LABS.map((l) => l.id));
@@ -11123,7 +11123,7 @@ test('Games: Animal habitats, World jigsaw, Landform match, History in order, Sh
     const msg = () => page.$eval(`${V} .gm-msg`, (x) => x.textContent);
     const tapItem = (id) => page.click(`${V} .mt-item[data-item="${id}"]`);
     const tapBin = (id) => page.click(`${V} .mt-bin[data-place="${id}"]`);
-    const aa = async (id) => { await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); document.querySelector('.lab-view:not([hidden]) .lab-panel').scrollIntoView({ block: 'start' }); }); for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(900); const { bad } = await contrastIssues(page, '.lab-view:not([hidden]) .lab-panel'); expect(!bad.length, `${where}: ${id} panel words (${scheme}): ` + bad.join(' | ')); } await page.emulateMedia({ colorScheme: 'light' }); };
+    const aa = async (id) => { await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); document.querySelectorAll('.cv-note').forEach((n) => n.remove()); /* (v285: her once-only "she'll type" line, no studio voice in a test) */ document.querySelector('.lab-view:not([hidden]) .lab-panel').scrollIntoView({ block: 'start' }); }); for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(900); const { bad } = await contrastIssues(page, '.lab-view:not([hidden]) .lab-panel'); expect(!bad.length, `${where}: ${id} panel words (${scheme}): ` + bad.join(' | ')); } await page.emulateMedia({ colorScheme: 'light' }); };
     const taps = () => page.$$eval('.lab-view:not([hidden]) .lab-panel button, .lab-view:not([hidden]) .mt-board button', (xs) => xs.filter((x) => x.getClientRects().length).map((x) => Math.round(Math.min(x.getBoundingClientRect().height, x.getBoundingClientRect().width))).filter((h) => h < 44));
     const shot = async (n) => { if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/v230-${n}-${phone ? 'phone' : 'desk'}.png` }); };
     const check = async (id) => { await shot(id); if (phone) expect(!(await taps()).length, `${where}: ${id} taps 44px: ` + await taps()); await aa(id); };
@@ -11233,7 +11233,7 @@ test('Earth, Math and Geography: Day and night, Tectonic plates and earthquake w
     const setR = (label, v) => page.evaluate(([V, label, v]) => { const i = document.querySelector(`${V} input[type=range][aria-label="${label}"]`); i.value = v; i.dispatchEvent(new Event('input', { bubbles: true })); }, [V, label, v]);
     const press = async (t, n = 1) => { for (let i = 0; i < n; i++) await page.click(`${V} .lab-panel button:text-is("${t}") >> visible=true`); };
     const segBtn = (t) => page.click(`${V} .lab-seg button:text-is("${t}") >> visible=true`);
-    const aa = async (id) => { await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); document.querySelector('.lab-view:not([hidden]) .lab-panel').scrollIntoView({ block: 'start' }); }); for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(900); const { bad } = await contrastIssues(page, '.lab-view:not([hidden]) .lab-panel'); expect(!bad.length, `${where}: ${id} panel words (${scheme}): ` + bad.join(' | ')); } await page.emulateMedia({ colorScheme: 'light' }); };
+    const aa = async (id) => { await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); document.querySelectorAll('.cv-note').forEach((n) => n.remove()); /* (v285: her once-only "she'll type" line, no studio voice in a test) */ document.querySelector('.lab-view:not([hidden]) .lab-panel').scrollIntoView({ block: 'start' }); }); for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(900); const { bad } = await contrastIssues(page, '.lab-view:not([hidden]) .lab-panel'); expect(!bad.length, `${where}: ${id} panel words (${scheme}): ` + bad.join(' | ')); } await page.emulateMedia({ colorScheme: 'light' }); };
     const taps = () => page.$$eval('.lab-view:not([hidden]) .lab-panel button', (xs) => xs.filter((x) => x.getClientRects().length).map((x) => Math.round(x.getBoundingClientRect().height)).filter((h) => h < 44));
     const shot = async (n) => { if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/v229-${n}-${phone ? 'phone' : 'desk'}.png` }); };
     const check = async (id) => { await shot(id); if (phone) expect(!(await taps()).length, `${where}: ${id} taps 44px`); await aa(id); };
@@ -11311,7 +11311,7 @@ test('Biology and Chemistry: Virtual garden, Enzyme reaction rates, Le Chatelier
     const setR = (label, v) => page.evaluate(([V, label, v]) => { const i = document.querySelector(`${V} input[type=range][aria-label="${label}"]`); i.value = v; i.dispatchEvent(new Event('input', { bubbles: true })); }, [V, label, v]);
     const press = async (t, n = 1) => { for (let i = 0; i < n; i++) await page.click(`${V} .lab-panel button:text-is("${t}") >> visible=true`); };
     const segBtn = (t) => page.click(`${V} .lab-seg button:text-is("${t}") >> visible=true`);
-    const aa = async (id) => { await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); document.querySelector('.lab-view:not([hidden]) .lab-panel').scrollIntoView({ block: 'start' }); }); for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(900); const { bad } = await contrastIssues(page, '.lab-view:not([hidden]) .lab-panel'); expect(!bad.length, `${where}: ${id} panel words (${scheme}): ` + bad.join(' | ')); } await page.emulateMedia({ colorScheme: 'light' }); };
+    const aa = async (id) => { await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); document.querySelectorAll('.cv-note').forEach((n) => n.remove()); /* (v285: her once-only "she'll type" line, no studio voice in a test) */ document.querySelector('.lab-view:not([hidden]) .lab-panel').scrollIntoView({ block: 'start' }); }); for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(900); const { bad } = await contrastIssues(page, '.lab-view:not([hidden]) .lab-panel'); expect(!bad.length, `${where}: ${id} panel words (${scheme}): ` + bad.join(' | ')); } await page.emulateMedia({ colorScheme: 'light' }); };
     const taps = () => page.$$eval('.lab-view:not([hidden]) .lab-panel button', (xs) => xs.filter((x) => x.getClientRects().length).map((x) => Math.round(x.getBoundingClientRect().height)).filter((h) => h < 44));
     const shot = async (n) => { if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/v228-${n}-${phone ? 'phone' : 'desk'}.png` }); };
     const check = async (id) => { await shot(id); if (phone) expect(!(await taps()).length, `${where}: ${id} taps 44px`); await aa(id); };

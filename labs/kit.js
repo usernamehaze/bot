@@ -18,6 +18,14 @@ export const errorWords = (key, vars) => (window.CassieErrors ? window.CassieErr
 // a message about what someone typed, already in plain words (shown as it is)
 export const inputError = (words) => Object.assign(new Error(words), { friendly: true });
 export const errorWordsFor = (e, key) => (window.CassieErrors ? window.CassieErrors.explain(e, key) : '');
+// (v285) the games and the little ones' labs speak in Cassie's own studio voice (Bella, ElevenLabs), as
+// everywhere else; a new line stops the one before. With no voice left she types: the words are on screen.
+let sayNow = null, toldOnce = false;
+export function sayAloud(t) {
+  hush();
+  try { const v = window.CassieVoice; if (!v || !t) return; v.unlock && v.unlock(); sayNow = v.speak(String(t), { onText: () => { if (!toldOnce) { toldOnce = true; v.notice(); } } }); } catch (e) { /* the words are on screen */ } // (the line that she types now: once, not at every tap)
+}
+export function hush() { try { if (sayNow) sayNow.stop(); } catch (e) { /* nothing playing */ } sayNow = null; }
 export const esc = (t) => String(t).replace(/[<&>"]/g, (c) => ({ '<': '&lt;', '&': '&amp;', '>': '&gt;', '"': '&quot;' }[c]));
 // numbers people read: 3 significant figures, no "1e-7" noise
 export function num(v, digits = 3) {
