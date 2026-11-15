@@ -252,6 +252,10 @@ const museumLab = {
       const v = e.target.closest('[data-view]'); if (v) { asGrid = v.dataset.view === 'grid'; draw(); return; }
       const o = e.target.closest('[data-open]');
       if (o && o.classList.contains('tl-card3d') && !o.classList.contains('tl-front')) { at = +o.dataset.k; place(); return; }
+      // (v284) the paintings at the sides sit mostly behind the front one, so they take no taps of their own: a tap
+      // on the gallery beside the front painting turns it that way
+      const rg = e.target.closest('.tl-ring');
+      if (rg && !o) { const r = rg.getBoundingClientRect(); turn(e.clientX < r.left + r.width / 2 ? -1 : 1); return; }
       if (o) { show(o.dataset.open); return; }
       if (e.target.closest('[data-close]')) { open = null; game = null; draw(); startTurning(); return; }
       if (e.target.closest('[data-again]')) { startGame(); return; }

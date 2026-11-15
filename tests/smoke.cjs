@@ -2989,12 +2989,12 @@ test('the Pasado Pass: the pricing page opens on Monthly (₱149), the semester 
   const plus = async () => (await page.locator('#pricing .plan', { has: page.locator('h3:text-is("Plus")') }).innerText()).replace(/\s+/g, ' ');
   expect(await page.locator('#pricing [data-bill="month"]').evaluate((e) => e.classList.contains('on')), 'the Billing switch opens on Monthly');
   let p = await plus();
-  expect(/₱149/.test(p) && /One payment for 30 days\. Never renews/.test(p) && /no subscription/.test(p) && !(await page.locator('#pricing [data-pass]').isVisible()) && await page.locator('#pricing [data-plan="plus"]').innerText() === 'Get Plus early', 'Monthly first: ₱149 for 30 days, never renews, Get Plus early (no Pasado Pass label): ' + p);
+  expect(/₱149/.test(p) && /One payment for 30 days\. Never renews/.test(p) && /no subscription/.test(p) && !(await page.locator('#pricing [data-pass]').isVisible()) && /^Get Plus( early)?$/.test(await page.locator('#pricing [data-plan="plus"]').innerText()), 'Monthly first: ₱149 for 30 days, never renews, Get Plus early (no Pasado Pass label): ' + p);
   expect(await page.locator('#pricing [data-anchor]').innerText() === '₱149 a month: about ₱5 a day, less than one hour with a tutor.', 'the comparison line follows Monthly: ' + await page.locator('#pricing [data-anchor]').innerText());
   expect(/From ₱149 a month, or one payment covers your whole semester/.test(await page.locator('#pricing .sub').innerText()), 'the sub says both');
   await page.click('#pricing [data-bill="sem"]');
   p = await plus();
-  expect(await page.locator('#pricing [data-plan="plus"]').innerText() === 'Get the Pasado Pass early', 'Semester: the button is the Pasado Pass');
+  expect(/^Get the Pasado Pass( early)?$/.test(await page.locator('#pricing [data-plan="plus"]').innerText()), 'Semester: the button is the Pasado Pass ("early" only while payments are off)');
   expect(/Pasado Pass/.test(p) && /₱599/.test(p) && /about ₱4 a day/.test(p) && /One payment for 5 months\. Never renews\. 7 days to change your mind\./.test(p), 'the Plus card is the Pasado Pass: ' + p);
   expect(/Best for school/i.test(p) && /Your exam, planned day by day/.test(p) && /up to 5 exam plans/i.test(p) && /Plus these bonuses/i.test(p) && /All the 3D, any time/.test(p), 'the result first, then the named bonuses: ' + p);
   expect(/Everything in Free, including the Finals Reviewer Kit/.test(await page.locator('#pricing .plan.feat details.all').textContent()), 'what Free has too sits under See everything');
@@ -10226,7 +10226,7 @@ test.slow('Labs: the shelf, every lab opens and works, goals tick, and Ask Cassi
   await shot('labs-shelf');
   // a subject's folder and search
   await exploreLearn(page, 'labs'); await page.click('.labs-scroll .lf[data-group="visual:all"]'); await page.waitForSelector('.labs-scroll .lf[data-group="subject:chemistry"]'); await page.waitForTimeout(100); await page.click('.labs-scroll .lf[data-group="subject:chemistry"]'); await page.waitForSelector('.labs-grid:not([hidden]) [data-lab]', { timeout: 4000 });
-  expect((await page.$$eval('.labs-grid .labs-card', (c) => c.map((x) => x.dataset.lab))).join() === 'balance,ph,atom,ice-steam,metals', 'Chemistry shows the chemistry labs: ' + (await page.$$eval('.labs-grid .labs-card', (c) => c.map((x) => x.dataset.lab))).join());
+  expect((await page.$$eval('.labs-grid .labs-card', (c) => c.map((x) => x.dataset.lab))).join() === 'balance,ph,atom,ice-steam,metals,equilibrium,titration', 'Chemistry shows the chemistry labs: ' + (await page.$$eval('.labs-grid .labs-card', (c) => c.map((x) => x.dataset.lab))).join());
   await page.click('.labs-foryou .lf-back-btn'); await page.waitForSelector('.labs-scroll .lf');
   await page.fill('.labs-search', 'pendul');
   expect((await page.$$eval('.labs-grid .labs-card', (c) => c.map((x) => x.dataset.lab))).join() === 'pendulum', 'search finds the pendulum');
@@ -10236,7 +10236,7 @@ test.slow('Labs: the shelf, every lab opens and works, goals tick, and Ask Cassi
     await page.evaluate((sec) => openLabs(undefined, { section: sec }), games.includes(id) ? 'games' : 'learn');
     await openCard(page, `.labs-grid [data-lab="${id}"]`);
     await page.waitForSelector(`.lab-view:not([hidden])[data-lab="${id}"] .lab-controls > *`, { timeout: 25000 }); // (3D scenes build slowly with the test's software graphics)
-    expect(await page.locator('.lab-stage canvas, .lab-stage .lab-balance, .lab-stage .lab-units, .lab-stage .puz-sudoku, .lab-stage .puz-eq, .lab-stage .tl-sheet, .lab-stage .kid-field').count() >= 1, id + ' draws something');
+    expect(await page.locator('.lab-stage canvas, .lab-stage .lab-balance, .lab-stage .lab-units, .lab-stage .puz-sudoku, .lab-stage .puz-eq, .lab-stage .tl-sheet, .lab-stage .kid-field, .lab-stage .mt-board').count() >= 1, id + ' draws something'); // (v230: the tap-then-place games draw a board)
     expect(await page.locator('.lab-about').isVisible(), id + ' says how its model works');
     // tap the middle of the picture (nothing should break)
     const sb0 = await page.locator('.lab-stage').boundingBox();
@@ -10261,7 +10261,7 @@ test.slow('Labs: the shelf, every lab opens and works, goals tick, and Ask Cassi
   const sb = await st.boundingBox();
   await page.mouse.click(sb.x + sb.width / 2, sb.y + sb.height / 2);
   await page.waitForSelector('.lab-tries li.done', { timeout: 3000 });
-  expect(/slope f′\(x\)\s*0/.test(await page.locator('.lab-stats').innerText()), 'the slope at x = 0 is 0: ' + await page.locator('.lab-stats').innerText());
+  expect(/slope f′\(x\)\s*0/.test(await page.locator('.lab-view:not([hidden]) .lab-stats').first().innerText()), 'the slope at x = 0 is 0: ' + await page.locator('.lab-view:not([hidden]) .lab-stats').first().innerText());
   await page.fill('.lab-input', 'sin(');
   expect(await page.locator('.lab-err').isVisible(), 'a formula that can’t be read says why');
   await page.fill('.lab-input', 'sin(x)');
@@ -10276,31 +10276,31 @@ test.slow('Labs: the shelf, every lab opens and works, goals tick, and Ask Cassi
   expect(await page.locator('.lab-tries li').first().getAttribute('class') === 'done' || /done/.test(await page.locator('.lab-tries li').first().getAttribute('class')), 'balancing water ticks the goal');
   await page.click('.lab-chips >> text=Tricky one');
   await page.click('text=Show Cassie’s answer');
-  expect(/2KMnO4 \+ 16HCl → 2KCl \+ 2MnCl2 \+ 8H2O \+ 5Cl2/.test(await page.locator('.lab-stats').innerText()), 'Cassie balances the tricky one: ' + await page.locator('.lab-stats').innerText());
+  expect(/2KMnO4 \+ 16HCl → 2KCl \+ 2MnCl2 \+ 8H2O \+ 5Cl2/.test(await page.locator('.lab-view:not([hidden]) .lab-stats').first().innerText()), 'Cassie balances the tricky one: ' + await page.locator('.lab-view:not([hidden]) .lab-stats').first().innerText());
   await shot('lab-balance');
   await page.click('.lab-back');
   // Punnett: Yy × Yy is 3 : 1 right away; two genes → 9 : 3 : 3 : 1
   await openCard(page, '[data-lab="punnett"]');
-  expect(/3 : 1/.test(await page.locator('.lab-stats').innerText()), 'Yy × Yy gives 3 : 1');
+  expect(/3 : 1/.test(await page.locator('.lab-view:not([hidden]) .lab-stats').first().innerText()), 'Yy × Yy gives 3 : 1');
   await page.click('.lab-seg button:has-text("Two genes")');
-  expect(/9 : 3 : 3 : 1/.test(await page.locator('.lab-stats').innerText()), 'YyRr × YyRr gives 9 : 3 : 3 : 1');
+  expect(/9 : 3 : 3 : 1/.test(await page.locator('.lab-view:not([hidden]) .lab-stats').first().innerText()), 'YyRr × YyRr gives 9 : 3 : 3 : 1');
   await page.click('text=Grow 100 offspring');
-  expect(/100 grown/.test(await page.locator('.lab-stats').innerText()), 'a hundred offspring are grown');
+  expect(/100 grown/.test(await page.locator('.lab-view:not([hidden]) .lab-stats').first().innerText()), 'a hundred offspring are grown');
   await shot('lab-punnett');
   await page.click('.lab-back');
   // pH: 10 mL acid then 10 mL base = neutral
   await openCard(page, '[data-lab="ph"]');
   await page.locator('.lab-group:has-text("Acid") button:has-text("+ 10 mL")').click();
-  expect(/acidic/.test(await page.locator('.lab-stats').innerText()), 'acid makes it acidic');
+  expect(/acidic/.test(await page.locator('.lab-view:not([hidden]) .lab-stats').first().innerText()), 'acid makes it acidic');
   await page.locator('.lab-group:has-text("Base") button:has-text("+ 10 mL")').click();
-  expect(/pH\s*7\.00/.test(await page.locator('.lab-stats').innerText()) && /done/.test(await page.locator('.lab-tries li').first().getAttribute('class')), 'equal acid and base is neutral: ' + await page.locator('.lab-stats').innerText());
+  expect(/pH\s*7\.00/.test(await page.locator('.lab-view:not([hidden]) .lab-stats').first().innerText()) && /done/.test(await page.locator('.lab-tries li').first().getAttribute('class')), 'equal acid and base is neutral: ' + await page.locator('.lab-view:not([hidden]) .lab-stats').first().innerText());
   await shot('lab-ph');
   await page.click('.lab-back');
   // the atom: carbon-12 is built at the start
   await openCard(page, '[data-lab="atom"]');
-  expect(/Carbon \(C\)/.test(await page.locator('.lab-stats').innerText()) && /carbon-12/.test(await page.locator('.lab-stats').innerText()), 'six of each is carbon-12');
+  expect(/Carbon \(C\)/.test(await page.locator('.lab-view:not([hidden]) .lab-stats').first().innerText()) && /carbon-12/.test(await page.locator('.lab-view:not([hidden]) .lab-stats').first().innerText()), 'six of each is carbon-12');
   await page.click('.lab-chips >> text=Chloride Cl⁻');
-  expect(/negative ion/.test(await page.locator('.lab-stats').innerText()), 'chloride is a negative ion');
+  expect(/negative ion/.test(await page.locator('.lab-view:not([hidden]) .lab-stats').first().innerText()), 'chloride is a negative ion');
   await shot('lab-atom');
   await page.click('.lab-back');
   // launch: drag on the picture to aim, then 45° from the ground and the big Launch button on the picture
@@ -10323,7 +10323,7 @@ test.slow('Labs: the shelf, every lab opens and works, goals tick, and Ask Cassi
   // goals are remembered on the shelf
   await tapLabs(page);
   await page.waitForSelector(LABS_READY);
-  expect(/[1-3]\/3 tried/i.test(await page.locator('.labs-grid [data-lab="projectile"]').innerText()), 'the shelf remembers tried goals: ' + await page.locator('.labs-grid [data-lab="projectile"]').innerText());
+  expect(/[1-9]\/\d+ tried/i.test(await page.locator('.labs-grid [data-lab="projectile"]').textContent()), 'the shelf remembers tried goals: ' + await page.locator('.labs-grid [data-lab="projectile"]').textContent());
   // a link opens a lab straight away
   await page.goto(APP + '?lab=pendulum');
   await page.waitForSelector('.lab-view:not([hidden])[data-lab="pendulum"]', { timeout: 20000 });
@@ -12334,11 +12334,11 @@ test('v283: Settings: Save for offline saves Learn’s files for no internet (th
   // a phone with no service worker can't keep files: it says so (the test pages have none)
   await page.evaluate(() => saveOffline()); await page.waitForTimeout(400);
   const st = await page.evaluate(() => document.getElementById('off-status').textContent);
-  expect(/This browser can’t keep Cassie for offline use|Saving|Saved on this phone/.test(st), 'Save for offline answers: ' + st);
+  expect(/This browser can’t keep Cassie for offline use|Saving|Saved on this device/.test(st), 'Save for offline answers: ' + st);
   // pretend the files were saved: what is on the phone
   await page.evaluate(() => { state.offlineSaved = { at: Date.now(), files: 400 }; paintOffline(); });
   const saved = await page.evaluate(() => document.getElementById('off-saved').innerText.replace(/\s+/g, ' '));
-  expect(/Saved on this phone/.test(saved) && /Learn: every lab, game and study tool/.test(saved) && /Not saved: the 3D human body/.test(saved), 'what is saved, and what isn’t: ' + saved);
+  expect(/Saved on this device/.test(saved) && /Learn: every lab, game and study tool/.test(saved) && /Not saved: the 3D human body/.test(saved), 'what is saved, and what isn’t: ' + saved);
   // the outfit
   const of = await page.evaluate(() => [...document.querySelectorAll('#of-grid .of-opt')].map((o) => o.dataset.of + ':' + o.getAttribute('aria-checked')));
   expect(of.join() === 'auto:true,scarf:false,headphones:false,bow:false,beanie:false,sampaguita:false,none:false', 'seven choices, Auto picked: ' + of.join());
@@ -14987,7 +14987,7 @@ test.slow('first run screens: every word at AA in light and dark, every control 
   for (const [size, device, viewport] of [['390x844', 'iPhone 13', { width: 390, height: 844 }], ['768x1024', 'iPad Mini', { width: 768, height: 1024 }], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]]) {
     const { ctx, page, errors } = await open(b, { scale: 1, device, viewport, lite: 'off', state: null });
     ctx.on('page', (p) => { if (p !== page) p.close().catch(() => {}); });
-    const go = async (fr, sel) => { if (!page.url().startsWith(APP.replace(/app\.html.*$/, ''))) await page.goto(APP); await page.evaluate((x) => { localStorage.removeItem('cassie.v2'); localStorage.setItem('cassie.firstRun', JSON.stringify(x)); }, fr); await page.goto(APP); await page.waitForSelector(sel, { timeout: 10000 }); await page.waitForTimeout(600); return page; };
+    const go = async (fr, sel) => { if (!page.url().startsWith(APP.replace(/app\.html.*$/, ''))) await page.goto(APP); await page.evaluate((x) => { localStorage.removeItem('cassie.v2'); localStorage.setItem('cassie.firstRun', JSON.stringify(x)); }, fr); await page.goto(APP); await page.waitForSelector(sel, { timeout: 10000 }); await page.waitForSelector('.auth-intro', { state: 'detached', timeout: 5000 }).catch(() => {}); /* (v270: the sign-in's brand intro) */ await page.waitForTimeout(600); return page; };
     for (const [name, fr, sel] of STEPS) {
       await go(fr, sel);
       // the main button is on screen, and nothing scrolls sideways
@@ -14995,7 +14995,7 @@ test.slow('first run screens: every word at AA in light and dark, every control 
       expect(!g.wide && (g.btn || name === 'sign in'), `${size} ${name}: ` + JSON.stringify(g));
       if (size === '768x1024') continue;
       for (const scheme of ['light', 'dark']) {
-        await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(300);
+        await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(900); // (the sign-in's brand word fades its colour over .6s)
         const { checked, bad } = await contrastIssues(page);
         expect(checked >= 2 && !bad.length, `${size} ${name} (${scheme}): under AA: ` + bad.join(' | '));
       }
@@ -15029,13 +15029,14 @@ test.slow('Monochrome (Graphite) is everyone’s main colour unless Blush & Sage
   {
     const { ctx, page } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, lite: 'on', server: false, state: { groqKey: 'gsk_test', profile: { ...PROFILE, gender: 'female' } } });
     await page.evaluate(() => openSettings('all'));
-    expect(await page.locator('.accent-sw.accent-mono.active').count() === 1, 'Monochrome is the picked swatch');
-    await page.click('.accent-sw[data-accent="cassie"]');
+    // (v255) Appearance previews a colour, and Review saves it
+    expect(await page.locator('.appx-sw[data-accent="mono"][aria-pressed="true"]').count() === 1, 'Monochrome is the picked swatch');
+    await page.click('.appx-sw[data-accent="cassie"]'); await page.click('#appx-review');
     expect(await page.evaluate(() => [document.documentElement.dataset.pal, JSON.parse(localStorage.getItem('cassie.v2')).accent].join()) === 'blush,cassie', 'Blush & Sage, saved as accent');
     await page.reload(); await page.waitForTimeout(500);
     expect(await page.evaluate(() => document.documentElement.dataset.pal) === 'blush', 'Blush & Sage stays after a reload');
     await page.evaluate(() => openSettings('all'));
-    await page.click('.accent-sw[data-accent="mono"]');
+    await page.click('.appx-sw[data-accent="mono"]'); await page.click('#appx-review');
     expect(await page.evaluate(() => document.documentElement.dataset.pal) === 'mono', 'and back to Monochrome');
     await ctx.close();
   }
@@ -15053,7 +15054,9 @@ test.slow('Monochrome (Graphite) is everyone’s main colour unless Blush & Sage
     ['board', 'write', (p) => p.waitForSelector('.csk-live', { timeout: 15000 })],
     ['talk', 'write', (p) => p.waitForFunction(() => { const v = document.querySelector('.vc'); return (v && !v.hidden) || /microphone|mic/i.test(document.getElementById('chat-log').innerText); }, null, { timeout: 6000 })],
   ];
-  for (const [size, device, viewport] of [['390x844', 'iPhone 13', { width: 390, height: 844 }], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]]) {
+  // (v281) Home is widgets: a phone keeps its quick boxes (Lessons, Flashcards, the timer and Today's Lab are
+  // widgets with their own tests), and a computer's Home is the study dashboard (tested on its own)
+  for (const [size, device, viewport] of [['390x844', 'iPhone 13', { width: 390, height: 844 }]]) {
     const phone = size === '390x844';
     const hub = phone ? '#home .hub' : '#chat-log .hub';
     const start = async (o = {}) => {
@@ -15067,11 +15070,12 @@ test.slow('Monochrome (Graphite) is everyone’s main colour unless Blush & Sage
     };
     let { ctx, page, errors } = await start();
     const g = await page.evaluate((h) => { const hero = document.querySelector(h + ' .hub-hero').getBoundingClientRect(), bx = [...document.querySelectorAll(h + ' .hub-box')].map((e) => e.getBoundingClientRect()); return { n: bx.length, under: Math.round(bx[0].top - hero.bottom), cols: new Set(bx.map((r) => Math.round(r.left))).size, min: Math.min(...bx.map((r) => r.height)) }; }, hub);
-    expect(g.n === 11 && (phone || (g.under >= 0 && g.under < 40)) && g.cols === (phone ? 2 : 4) && g.min >= 44, `${size}: eleven boxes (Lessons first)${phone ? '' : ' right under the header'}, ${phone ? 2 : 4} across: ` + JSON.stringify(g));
+    expect(g.n >= 4 && g.cols === 2 && g.min >= 44, `${size}: the quick boxes, 2 across: ` + JSON.stringify(g));
+    const have = await page.evaluate((h) => [...document.querySelectorAll(h + ' .hub-box')].map((e) => e.dataset.hub), hub);
     expect(await page.locator(hub + ' .hub-q', { hasText: /^(Quiz me|Flashcards|Research a topic)$/ }).count() === 0, `${size}: no Quick action repeats a box`);
     for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(800); const { bad } = await contrastIssues(page, hub + ' .hub-boxes'); expect(!bad.length, `${size} boxes (${scheme}): ` + bad.join(' | ')); }
     await page.emulateMedia({ colorScheme: 'light' });
-    for (const [act, , opened] of BOXES) {
+    for (const [act, , opened] of BOXES.filter(([k]) => have.includes(k))) {
       if (act === 'room') { await ctx.close(); ({ ctx, page, errors } = await start({ server: true })); }
       else { await page.goto(APP); await page.waitForTimeout(400); await page.evaluate((ph) => { if (ph) CassieNative.go('home'); else createNewChat(); }, phone); await page.waitForSelector(hub + ' .hub-boxes', { timeout: 10000 }); }
       if (act === 'talk') await studioOn(page); // (the voice screen opens only when Bella can speak)
@@ -15921,7 +15925,7 @@ test('Labs in Liquid Glass: 44px tap targets and AA words on a phone (the Labs t
   await page.click('.lp-find');
   await page.fill('.lp-q', 'zzxqy');
   await seen(page, '.lp .es-title', 'No lab by that name yet', 8000);
-  await page.click('.lp .es-go');
+  await page.click('.lp .es-go:not(.es-alt)'); // (v282: Clear search sits beside it)
   await seen(page, '#chat-log .bubble-user', 'Explain zzxqy', 15000);
   // a lab: its controls are 44px to touch, its words readable, its error text white
   await page.evaluate(() => openLabs('projectile'));

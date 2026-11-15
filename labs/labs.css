@@ -493,6 +493,7 @@ li.tl-ok { color: var(--lab-ok); } li.tl-bad { color: var(--lab-bad); }
 .tl-card3d { position: absolute; left: 50%; top: 50%; width: clamp(160px, 34%, 300px); transform-style: preserve-3d; filter: brightness(calc(1 - var(--dim, 0)));
   transition: transform .8s cubic-bezier(.65, 0, .35, 1), filter .8s cubic-bezier(.65, 0, .35, 1), opacity .8s; }
 .tl-card3d.tl-gone { opacity: 0; visibility: hidden; pointer-events: none; }
+.tl-card3d:not(.tl-front) { pointer-events: none; } /* (v284) only the front painting is tapped; a tap beside it turns the gallery */
 .tl-card3d.tl-front .tl-frame { box-shadow: var(--frame-shadow), 0 26px 40px rgba(0, 0, 0, .6); }
 .tl-still .tl-card3d, .tl-settle .tl-card3d { transition: none; }
 .tl-hall .tl-turn { position: absolute; top: 50%; z-index: 30; width: var(--tap, 48px); height: var(--tap, 48px); margin-top: calc(-1 * var(--sp-5, 24px)); border-radius: 50%; border: 1px solid rgba(246, 238, 230, .35); background: rgba(44, 11, 14, .78); color: var(--wall-ink) !important; font-size: 1.6rem; line-height: 1; cursor: pointer; }
@@ -940,6 +941,7 @@ html.lite .lf.lf-open .lf-paper:nth-child(n) { opacity: .85; }
 /* Games (v230, games2.js): tap-then-place boards, the history order list and the dress-up card */
 :root { --mt-surface: rgba(255, 255, 255, .08); --mt-line: rgba(255, 255, 255, .24); --mt-ink: #f2f2f4; --mt-muted: #c9c9d1; --mt-pick: #ffcf5a; --mt-yes: #7fe0a8; --mt-no: #ff8a8a; --mt-slot: rgba(0, 0, 0, .28); }
 .mt-board { position: absolute; inset: 0; overflow-y: auto; padding: var(--sp-4, 16px); display: flex; flex-direction: column; gap: var(--sp-4, 16px); touch-action: manipulation; color: var(--mt-ink); }
+.mt-board > * { flex-shrink: 0; } /* (v284) it scrolls instead: a squeezed tray spilled its animals under the homes on a phone */
 .mt-tray { display: flex; flex-wrap: wrap; gap: var(--sp-3, 12px); justify-content: center; min-height: 56px; }
 .mt-bins { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: var(--sp-3, 12px); }
 .mt-item, .mt-bin { font: inherit; color: var(--mt-ink); border: 2px solid var(--mt-line); background: var(--mt-surface); border-radius: 16px; cursor: pointer; }
