@@ -8583,7 +8583,7 @@ let exploreMod = null;
 /* Ask Cassie and Quiz me inside Labs and the 3D views (labs/helper.js): the same path to Cassie as the
    chat (askCassie), her answers drawn like the chat's, a quiz written as data, missed questions kept
    for "Review my mistakes". */
-// Teach me: one decision for a whole lesson (voice.js): Bella says every step when what's left of her
+// Teach me: one decision for a whole lesson (voice.js): Jessica says every step when what's left of her
 // voice covers the lesson (plan), otherwise she types the steps and says so once
 function lessonVoice() {
   const CV = window.CassieVoice;
@@ -9689,7 +9689,7 @@ if (SpeechRecognitionCtor) {
 
 /* ---------- voice output ---------- */
 let readAloud = null; // the answer being read aloud right now
-// Read an answer aloud in Bella's studio voice (voice.js). When what's left of the month's voice
+// Read an answer aloud in Jessica's studio voice (voice.js). When what's left of the month's voice
 // can't cover it, she types instead and says so once: never another voice.
 function speak(text) {
   if (!state.voiceOut || voiceChat) return; // the voice screen speaks for itself
@@ -9709,7 +9709,7 @@ function speak(text) {
      Quiz me      — she quizzes you out loud and tells you if you got it right
    Hearing you: the browser's own speech recognition (Chrome, Edge, Safari). Where there
    isn't one, the app records and the Cassie server (or your own Groq key) writes it down.
-   Talking: Bella's studio voice only; when it isn't there, the chat goes on typed. Everything is saved in the chat. */
+   Talking: Jessica's studio voice only; when it isn't there, the chat goes on typed. Everything is saved in the chat. */
 const VOICE_MODES = {
   chat: { label: 'Chat', hello: 'Hi! I’m listening. Ask me anything.', tip: 'Ask anything out loud. Tap Cassie to stop her talking.' },
   teach: { label: 'Teach Cassie', hello: 'Okay, I’m your student today! What are you going to teach me?', tip: 'Explain a topic like you’re teaching a friend. Cassie asks questions and catches what you missed. Say “I’m done” for your report.' },
@@ -9720,7 +9720,7 @@ const canHear = () => !!SpeechRecognitionCtor || !!(navigator.mediaDevices && wi
 // the mic beside the other boxes (mic.js): where the browser can't listen, Cassie's server writes it down
 if (window.CassieMic) window.CassieMic.setup({ transcribe: (blob) => transcribeAudio(blob) });
 const boardHear = () => (window.CassieMic && window.CassieMic.can() ? window.CassieMic.listen : null);
-// Cassie's voice (voice.js): Bella, her studio voice, through Cassie's server. It is the only voice.
+// Cassie's voice (voice.js): Jessica, her studio voice, through Cassie's server. It is the only voice.
 const humanVoiceWanted = () => !!window.CassieVoice && window.CassieVoice.supported();
 if (window.CassieVoice && SERVER) window.CassieVoice.studio.setup({ server: SERVER, uid: installId(), token: () => authToken() }); // (the voice is per account: signed in, its plan's month)
 if (window.CassieVoice) window.CassieVoice.onChange(voiceHalfNote);
@@ -9819,7 +9819,7 @@ function buildVoiceUI() {
   return ui;
 }
 
-/* Settings → Voice: is Bella's voice there, and when is she back if she's resting? */
+/* Settings → Voice: is Jessica's voice there, and when is she back if she's resting? */
 const HV_SAMPLE = 'Hi! I’m Cassie. Let’s study together. Ask me anything, and I’ll explain it step by step.';
 const VOICE_ENOUGH = 400; // (about one spoken answer)
 function voiceBackDate(back) {
@@ -9848,7 +9848,7 @@ document.getElementById('hv-play')?.addEventListener('click', playHumanSample);
 document.getElementById('voice-gender-select')?.addEventListener('change', () => { state.voiceGender = document.getElementById('voice-gender-select').value; showHumanVoiceSetting(); });
 if (window.CassieVoice) window.CassieVoice.onChange(showHumanVoiceSetting);
 
-// The voice screen decides when it opens: Bella for the whole conversation, or a typed chat when
+// The voice screen decides when it opens: Jessica for the whole conversation, or a typed chat when
 // what's left of her voice can't cover it. She never speaks in another voice.
 function newConversationVoice(v) {
   if (v.voice) v.voice.end();
@@ -9856,7 +9856,7 @@ function newConversationVoice(v) {
   if (!v.voice) { voiceToTyped(v); return false; }
   return v.voice.start() === 'studio';
 }
-// Bella stopped partway: what she was saying is in the chat, the voice screen closes, the chat goes
+// Jessica stopped partway: what she was saying is in the chat, the voice screen closes, the chat goes
 // on typed, and the one line says why (once)
 function voiceToTyped(v) {
   if (v.typed) return;
@@ -9907,7 +9907,7 @@ function sayThenListen(text) {
       resolve();
       if (voiceChat === v && !v.typed) { if (v.wantPause) setVoicePhase('paused'); else listenVoice(); }
     };
-    // Bella says it; if she can't, the words are on the screen and the chat goes on typed
+    // Jessica says it; if she can't, the words are on the screen and the chat goes on typed
     if (!clean || v.typed || !v.voice) { finish(); return; }
     const h = v.voice.speak(clean);
     v.stopSpeaking = () => { h.stop(); finish(); };
@@ -10214,7 +10214,7 @@ async function askOutLoud(text) {
     if (v.phase !== 'speaking') setVoicePhase('speaking');
     v.stopSpeaking = () => { live.stop(); };
     await live.done;
-    if (voiceChat !== v || v.typed) return; // (Bella stopped partway: the rest is on screen, and the chat goes on typed)
+    if (voiceChat !== v || v.typed) return; // (Jessica stopped partway: the rest is on screen, and the chat goes on typed)
     v.stopSpeaking = null;
     if (v.wantPause) setVoicePhase('paused'); else listenVoice();
     return;
@@ -10242,7 +10242,7 @@ function startVoiceMode(mode) {
 function openVoice(mode = 'chat', checked = false) {
   if (!canChat()) { openSettings(); return; }
   if (!canHear()) { renderMessage('assistant', CassieErrors.say('no_mic_browser')); return; }
-  // what's left of Bella's voice can't cover a conversation: Cassie says so once and the chat stays typed
+  // what's left of Jessica's voice can't cover a conversation: Cassie says so once and the chat stays typed
   const CV = window.CassieVoice;
   if (CV && SERVER && !CV.studio.known() && !checked) { CV.unlock(); CV.studio.refresh().finally(() => openVoice(mode, true)); return; }
   if (!CV || !CV.canSay(CV.CHAT_CHARS)) { toTypedChat(); return; }
@@ -11932,7 +11932,7 @@ if (window.CassieCards) {
     save,
     ask: (prompt) => askCassie([{ role: 'user', content: prompt }]),
     speak: (text) => window.CassieVoice.speak(cleanForSpeech(text), { gender: voiceGender() }),
-    // Listen to a whole deck: one decision for all of it (Bella reads every card, or none and says so once)
+    // Listen to a whole deck: one decision for all of it (Jessica reads every card, or none and says so once)
     session: (all) => { const s = window.CassieVoice.session({ gender: voiceGender() }); s.plan(cleanForSpeech(all)); return { speak: (t) => s.speak(cleanForSpeech(t)), end: () => s.end() }; },
     track,
     onChange: () => { if (!state.messages.length) renderHistory(); }, // the home screen shows what's due

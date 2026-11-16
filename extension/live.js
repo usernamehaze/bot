@@ -1069,9 +1069,9 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
       paint3d();
     }
 
-    /* voice: Bella's studio voice (from Cassie's server, through the background) and no other, by the same
+    /* voice: Jessica's studio voice (from Cassie's server, through the background) and no other, by the same
        rule as her lessons: she speaks only if what's left of the month's voice covers every beat still to
-       come; otherwise, or if Bella stops partway, the beats are typed and the card says so once. */
+       come; otherwise, or if Jessica stops partway, the beats are typed and the card says so once. */
     let actx = null, src = null, studio = false, asked = false;
     const clips = new Map();
     const audio = () => { const AC = window.AudioContext || window.webkitAudioContext; if (!actx && AC) { try { actx = new AC(); } catch (e) { actx = null; } } return actx; };
@@ -1085,7 +1085,7 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
       studio = !!(left && left.on && left.left >= need && audio());
       if (!studio) typing(!!(left && left.guest));
     }
-    // one beat's words in her voice (asked for once, tried twice), or null when Bella can't say it
+    // one beat's words in her voice (asked for once, tried twice), or null when Jessica can't say it
     function clip(i) {
       const text = beats[i].say;
       if (!clips.has(text)) clips.set(text, (async () => {

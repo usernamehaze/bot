@@ -1,10 +1,10 @@
 # Cassie's voice: setup and costs
 
-Cassie speaks only in her studio voice (ElevenLabs: Jessica, voice `cgSgspJ2msm6clMCkdW9`, or Chris for a man's voice, `iP95p4xoKVk53GoZ742B`; model `eleven_flash_v2_5` unless `ELEVENLABS_MODEL` says otherwise). Her server sends the words to ElevenLabs and plays back the sound. When a lesson, a Listen or a voice chat starts, the app asks the server how many characters are left this month. Bella speaks only if that covers the whole session. Otherwise Cassie types her answers and shows one line: "Cassie’s voice isn’t available right now, so she’ll type her answers instead." There is no other voice.
+Cassie speaks only in her studio voice (ElevenLabs: Jessica, voice `cgSgspJ2msm6clMCkdW9`, or Chris for a man's voice, `iP95p4xoKVk53GoZ742B`; model `eleven_flash_v2_5` unless `ELEVENLABS_MODEL` says otherwise). Her server sends the words to ElevenLabs and plays back the sound. When a lesson, a Listen or a voice chat starts, the app asks the server how many characters are left this month. Jessica speaks only if that covers the whole session. Otherwise Cassie types her answers and shows one line: "Cassie’s voice isn’t available right now, so she’ll type her answers instead." There is no other voice.
 
 ## What uses up characters (measured from the code)
 
-One character is one letter, space or punctuation mark that Bella reads. A sentence Bella has already said is kept in Cloudflare's cache for 30 days, and saying it again costs nothing (`server/worker.src.js`, `speak`).
+One character is one letter, space or punctuation mark that Jessica reads. A sentence Jessica has already said is kept in Cloudflare's cache for 30 days, and saying it again costs nothing (`server/worker.src.js`, `speak`).
 
 | What the student does | Where the limit is set in the code | Characters |
 |---|---|---|
@@ -20,7 +20,7 @@ Each student can also use at most `SPEAK_DAILY_CHARS` a day (default 12,000, abo
 
 With today's default of 9,500 characters a month for the whole app, that is roughly 13 seven-step lessons, or 8 voice chats, or 4 ten-card flashcard sessions. That is for everyone together, not for each student.
 
-## What a month of Bella costs
+## What a month of Jessica costs
 
 Checked on 18 October 2026. The ElevenLabs website could not be opened from this session, so these figures come from the sources below, not from elevenlabs.io itself. Check [elevenlabs.io/pricing](https://elevenlabs.io/pricing) and [elevenlabs.io/pricing/api](https://elevenlabs.io/pricing/api) before you pay.
 

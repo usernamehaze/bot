@@ -607,9 +607,9 @@
       setTimeout(() => { if ([scrollX, scrollY, box0 && box0.el.scrollTop, box0 && box0.el.scrollLeft].join() === was) loseTrack(); }, 250);
     };
 
-    /* voice: Bella's studio voice (from Cassie's server, through the background) and no other. When
+    /* voice: Jessica's studio voice (from Cassie's server, through the background) and no other. When
        the lesson starts she speaks only if what's left of the month's voice covers every step; otherwise,
-       or if Bella stops partway, the steps are typed and the card says so once. Nothing waits for a tap. */
+       or if Jessica stops partway, the steps are typed and the card says so once. Nothing waits for a tap. */
     let voiceOn = true, autoOn = true, at0 = 0, timer = 0, alive = true, studio = false, src = null, clipFor = null;
     const vnote = $('.ct-vnote');
     const typing = (guest) => {
@@ -632,7 +632,7 @@
       if (ac.state !== 'running') throw new Error('audio blocked');
       return await new Promise((res, rej) => ac.decodeAudioData(bytes.buffer, res, rej));
     }
-    // the whole lesson decides, once: Bella says every step, or every step is typed (said once on the card)
+    // the whole lesson decides, once: Jessica says every step, or every step is typed (said once on the card)
     let asked = false;
     async function decideVoice(from) {
       asked = true;
@@ -653,7 +653,7 @@
           try { buf = await clip(text); } catch (e) { if (e.usedUp) break; }
           if (clipFor !== mine || !alive) return;
         }
-        if (!buf) { typing(); timer = setTimeout(then, readPace(text)); return; } // (Bella stopped: the rest is typed)
+        if (!buf) { typing(); timer = setTimeout(then, readPace(text)); return; } // (Jessica stopped: the rest is typed)
         if (!voiceOn) { timer = setTimeout(then, readPace(text)); return; }
         const node = actx.createBufferSource(); node.buffer = buf; node.connect(actx.destination);
         let done = false;

@@ -52,8 +52,8 @@ Three ways, picked by the device and the student's settings (`app.js:5554-5560`)
 |---|---|---|
 | Research | **OpenAlex** (`api.openalex.org`, `app.js:3777`) | the topic |
 | Web answers | **Google Gemini with Google Search** (`app.js:3899`) | the question |
-| Studio voice (Bella) | Cassie's server `/speak`, then **ElevenLabs** (`worker.src.js:822-866`) | **Cassie's answer text**. The made audio is kept in Cloudflare's edge cache for up to 30 days (`worker.src.js:864`), so the same sentence isn't paid for twice. **NOTE** |
-| Studio voice (ElevenLabs, Bella) | through Cassie's server; only Cassie's own words are sent | when it can't speak, Cassie types (the on-device voice was removed on 18 October 2026) |
+| Studio voice (Jessica) | Cassie's server `/speak`, then **ElevenLabs** (`worker.src.js:822-866`) | **Cassie's answer text**. The made audio is kept in Cloudflare's edge cache for up to 30 days (`worker.src.js:864`), so the same sentence isn't paid for twice. **NOTE** |
+| Studio voice (ElevenLabs, Jessica) | through Cassie's server; only Cassie's own words are sent | when it can't speak, Cassie types (the on-device voice was removed on 18 October 2026) |
 | World atlas | **Wikipedia** and the **World Bank** | a country or place name |
 | Sign in | **Google** or **Apple** | their sign-in, checked by our server |
 | iPhone Shortcut `/ask?text=…` | Cassie's server → Groq, then Workers AI | the highlighted text, **in the web address**. Not stored by our code, but if Cloudflare "Workers Logs" is switched on for the worker, web addresses are logged there. **NOTE** (please check the dashboard: Workers → cassie → Settings → Observability) |

@@ -1,10 +1,10 @@
-/* Cassie's voice: Bella, her studio voice (ElevenLabs, through Cassie's server, which holds the key
+/* Cassie's voice: Jessica, her studio voice (ElevenLabs, through Cassie's server, which holds the key
    and counts the characters). It is the only voice she ever speaks in.
    One rule for every use (Listen, flashcards, voice chat, Teach me, Teach Cassie, the tour):
-     - When a session starts (a lesson, a Listen, a voice chat), Bella speaks only if what is left of
+     - When a session starts (a lesson, a Listen, a voice chat), Jessica speaks only if what is left of
        this month's studio allowance covers the whole session.
      - Otherwise Cassie types, from the start, and says so once in one plain line.
-     - If Bella fails partway, Cassie goes on in text from that sentence, with the same line.
+     - If Jessica fails partway, Cassie goes on in text from that sentence, with the same line.
    She never switches to another voice and never stops to wait for the student.
    window.CassieVoice = { speak, stream, session, best, canSay, studio, played, unlock, supported, onChange, notice } */
 (function () {
@@ -35,7 +35,7 @@
   ['pointerdown', 'keydown', 'touchend'].forEach((ev) => window.addEventListener(ev, () => { if (AC) unlock(); }, { capture: true, passive: true }));
   const supported = () => !!AC;
 
-  /* ---------- the studio allowance: is Bella here, and how much can she still say? ---------- */
+  /* ---------- the studio allowance: is Jessica here, and how much can she still say? ---------- */
   // left: characters she can still say (this account's month, or the app's if that is less);
   // back: the day ('YYYY-MM-DD') it comes back when it runs out; guest: not signed in (no studio voice);
   // used / max: this account's month so far, and its plan's allowance
@@ -191,7 +191,7 @@
           if (decide(s, need()) === 'text') return { status: 'text', muted: true, at: i }; // (the words are on screen)
           ahead(i);
           let buf = null;
-          // a piece that fails is asked for once more, in Bella's voice; then the rest is typed
+          // a piece that fails is asked for once more, in Jessica's voice; then the rest is typed
           for (let tries = 0; tries < 2 && !buf; tries++) {
             try { buf = await pieces[i].job; } catch (e) {
               if (e && e.usedUp) break;
@@ -211,7 +211,7 @@
     })();
     return handle;
   }
-  // which voice the next session would use: Bella, or typing
+  // which voice the next session would use: Jessica, or typing
   const best = (chars) => (canSay(chars || CHAT_CHARS) ? 'studio' : 'text');
 
   window.CassieVoice = {

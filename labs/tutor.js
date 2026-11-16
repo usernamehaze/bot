@@ -98,7 +98,7 @@ export function tutor({ view, lab, mounted, described, ask, speak, speaker, hear
   document.body.append(finger, ring);
   finger.hidden = ring.hidden = true;
 
-  // one decision per lesson (speaker() comes from voice.js): Bella says every step when what's left of
+  // one decision per lesson (speaker() comes from voice.js): Jessica says every step when what's left of
   // her voice covers the whole lesson, otherwise the steps are typed and she says so once
   let lessonVoice = null;
   function newLesson(from) {
