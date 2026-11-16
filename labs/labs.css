@@ -391,6 +391,7 @@ html.lite .labs-shelf { background: var(--bg); }
 @media (max-width: 760px) { .lab-view.lab-tool .lab-body { grid-template-rows: minmax(340px, 66vh) auto; } }
 /* phones: Sudoku's picture is as tall as the board needs to fill the width (its cells as big as the screen allows) */
 @media (max-width: 760px) { .lab-view[data-lab="sudoku"] .lab-body { grid-template-rows: minmax(calc(100vw + 150px), auto) auto; } }
+@media (max-width: 760px) { .lab-view:is([data-lab="habitats"], [data-lab="landforms"], [data-lab="sorter"]) .lab-body { grid-template-rows: minmax(500px, 76vh) auto; } } /* (v286) one at a time: the picture, three choices and Next on one screen */
 .tl-sheet { position: absolute; inset: 0; overflow-y: auto; padding: var(--sp-4, 16px) var(--sp-4, 16px) var(--sp-6, 32px); touch-action: pan-y; -webkit-overflow-scrolling: touch; }
 .tl-hint { margin: 0 0 var(--sp-3, 12px); font-size: .84rem; color: rgba(255, 255, 255, .62); }
 .tl-hint.tl-win, .tl-msg.good { color: var(--lab-ok); }
@@ -1001,3 +1002,45 @@ html.lite .lf.lf-open .lf-paper:nth-child(n) { opacity: .85; }
 /* (an exam's name never breaks inside a word: Criminology, Psychometrician) */
 .lf-exams .lf-txt b { -webkit-hyphens: manual; hyphens: manual; overflow-wrap: normal; word-break: keep-all; font-size: .82rem; }
 @media (max-width: 560px) { .lf-grid.lf-exams { grid-template-columns: 1fr; gap: var(--sp-3, 12px); } .labs .lf-grid.lf-exams .lf { aspect-ratio: 3 / 1; } } /* (a phone: one exam a row, low and wide, so every name fits whole) */
+
+/* (v286) one at a time: one big picture, three big choices, then Next */
+.ob-board { align-items: center; gap: var(--sp-3, 12px); }
+.ob-count { margin: 0; font-size: .85rem; font-weight: 700; color: var(--mt-ink); opacity: .8; }
+.ob-card { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--sp-1, 4px); width: min(100%, 320px); padding: var(--sp-3, 12px); border-radius: 24px; border: 2px solid var(--mt-line); background: var(--mt-surface); }
+.ob-card .cartoon { width: min(44vw, 19vh, 200px); height: min(44vw, 19vh, 200px); display: block; }
+.ob-card svg:not(.cartoon) { width: min(80vw, 30vh, 288px); height: auto; aspect-ratio: 96 / 64; display: block; border-radius: 12px; }
+.ob-shapes .ob-card svg:not(.cartoon) { width: min(44vw, 19vh, 184px); aspect-ratio: 1; }
+.ob-name { font-size: 1.35rem; font-weight: 800; }
+.ob-choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-3, 12px); width: min(100%, 560px); }
+.ob-choice { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--sp-2, 8px); min-height: 104px; padding: var(--sp-2, 8px); overflow: hidden; font: inherit; color: var(--mt-ink); border: 3px solid var(--mt-line); border-radius: 20px; background: var(--mt-slot); cursor: pointer; touch-action: manipulation; }
+.ob-choice:focus-visible, .ob-next:focus-visible { outline: 3px solid var(--lab-accent); outline-offset: 3px; }
+.ob-choice > * { pointer-events: none; }
+.ob-toons .ob-choice { padding: 0 0 var(--sp-2, 8px); }
+.ob-toons .ob-choice .cartoon-home { width: 100%; height: 64px; display: block; }
+.ob-toons .ob-choice .mt-name { font-size: .9rem; line-height: 1.2; padding: 0 var(--sp-1, 4px); text-align: center; }
+.ob-shapes .ob-choice svg { width: 72px; height: 72px; }
+.ob-word { font-size: 1.15rem; font-weight: 800; text-align: center; line-height: 1.2; }
+.ob-choice.ob-yes { border-color: var(--mt-yes); animation: mt-pop .35s ease; }
+.ob-choice.ob-no { border-color: var(--mt-no); animation: mt-shake .35s ease; }
+.ob-say { margin: 0; min-height: 1.5em; max-width: 560px; text-align: center; font-size: .95rem; font-weight: 650; line-height: 1.45; color: var(--mt-ink); }
+.ob-say.good { color: var(--mt-yes); } .ob-say.bad { color: var(--mt-no); }
+.mt-board .ob-next { min-height: 56px; min-width: 200px; padding: 0 var(--sp-6, 24px); font: inherit; font-size: 1.15rem; font-weight: 800; border: 0; border-radius: 999px; background: var(--mt-pick); color: #1d1a2b; cursor: pointer; }
+.mt-board .ob-next[hidden] { display: none; }
+@media (prefers-reduced-motion: no-preference) { .ob-card.ob-in { animation: ob-in .3s ease; } }
+@keyframes ob-in { from { opacity: 0; transform: translateY(8px) scale(.96); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .ob-choice.ob-yes, .ob-choice.ob-no { animation: none; } }
+@media (min-width: 900px) and (min-height: 700px) {
+  .ob-card { width: min(100%, 400px); padding: var(--sp-4, 16px); }
+  .ob-card .cartoon { width: 240px; height: 240px; } .ob-card svg:not(.cartoon) { width: 384px; } .ob-shapes .ob-card svg:not(.cartoon) { width: 220px; }
+  .ob-name { font-size: 1.75rem; }
+  .ob-choices { width: min(100%, 720px); gap: var(--sp-4, 16px); }
+  .ob-choice { min-height: 152px; } .ob-toons .ob-choice .cartoon-home { height: 104px; } .ob-toons .ob-choice .mt-name { font-size: 1.05rem; }
+  .ob-word { font-size: 1.4rem; } .ob-shapes .ob-choice svg { width: 96px; height: 96px; }
+}
+/* (v286) a phone: once answered, the picture gets smaller so it, the choices, the line and Next all fit */
+@media (max-width: 899px), (max-height: 699px) {
+  .ob-solved .ob-card .cartoon { width: min(28vw, 12vh, 120px); height: min(28vw, 12vh, 120px); }
+  .ob-solved .ob-card svg:not(.cartoon) { width: min(52vw, 20vh, 200px); }
+  .ob-solved.ob-shapes .ob-card svg:not(.cartoon) { width: min(28vw, 12vh, 120px); }
+  .ob-solved .ob-name { font-size: 1.1rem; }
+}
