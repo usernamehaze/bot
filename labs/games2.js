@@ -1,5 +1,5 @@
 /* Games (v230): Animal habitats, World jigsaw, Landform match, History in order, Shape sorter and History dress-up.
-   Four of them are "tap a thing, then tap where it goes" (dragging works too); the jigsaw drags continents onto the map. */
+   Three of them show one thing at a time with three big choices, then Next (v286); the jigsaw drags continents onto the map. */
 import { INK, FAINT, el, esc, canvas, drag, group, seg, button, row, stats, fmtTime, shuffle, sayAloud, hush } from './kit.js';
 import { loadWorld } from './puzzles.js';
 import { animalSvg, homeSvg, shapeFace } from './cartoons.js';
@@ -7,63 +7,50 @@ import { animalSvg, homeSvg, shapeFace } from './cartoons.js';
 const rand = Math.random;
 const say = sayAloud; // (v285) Bella, her studio voice
 
-/* ---------- a matching board: tap (or drag) an item, then tap the place it belongs ---------- */
-// items: [{ id, html, label, to, why }], places: [{ id, html, label }]. onRight(item), onWrong(item, place), onDone()
-function matchBoard(stage, { items, places, cls = '', onRight, onWrong, onDone }) {
+/* ---------- (v286) one at a time: one big picture, three big choices, then Next ---------- */
+// items: [{ id, html, label, to, why }]; choicesFor(item): three [{ id, html, label }], the right one among them.
+// onRight(item), onWrong(item, choice), onDone() after the last; Next on the last one is againText and calls onAgain.
+const pick3 = (right, all, rand) => shuffle([right, ...shuffle(all.filter((x) => x.id !== right.id), rand).slice(0, 2)], rand);
+function oneByOne(stage, { items, choicesFor, cls = '', onRight, onWrong, onDone, onAgain, againText }) {
   stage.querySelectorAll('.mt-board').forEach((x) => x.remove());
-  const board = el('div', 'mt-board ' + cls); stage.appendChild(board);
-  const tray = el('div', 'mt-tray'); tray.setAttribute('role', 'group'); tray.setAttribute('aria-label', 'Things to place');
-  const bins = el('div', 'mt-bins');
-  board.append(tray, bins);
-  let picked = null;
-  const left = new Set(items.map((x) => x.id));
-  const itemBtn = new Map(), binEl = new Map();
-  items.forEach((it) => {
-    const b = el('button', 'mt-item', it.html); b.type = 'button'; b.dataset.item = it.id; b.setAttribute('aria-label', it.label); b.setAttribute('aria-pressed', 'false');
-    b.addEventListener('click', () => { if (b._dragged) { b._dragged = false; return; } pick(it.id); });
-    // drag it onto a place
-    b.addEventListener('pointerdown', (e) => {
-      const sx = e.clientX, sy = e.clientY; let moved = false, ghost = null;
-      const move = (ev) => {
-        if (!moved && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 8) return;
-        if (!moved) { moved = true; pick(it.id, true); ghost = el('div', 'mt-ghost', it.html); document.body.appendChild(ghost); }
-        ghost.style.transform = `translate(${ev.clientX - 30}px, ${ev.clientY - 30}px)`;
-      };
-      const up = (ev) => {
-        window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
-        if (!moved) return;
-        b._dragged = true; if (ghost) ghost.remove();
-        const t = document.elementFromPoint(ev.clientX, ev.clientY), bin = t && t.closest('.mt-bin');
-        if (bin && board.contains(bin)) drop(bin.dataset.place); else setTimeout(() => { b._dragged = false; }, 0);
-      };
-      window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
+  const board = el('div', 'mt-board ob-board ' + cls); stage.appendChild(board);
+  const count = el('p', 'ob-count');
+  const card = el('div', 'ob-card'); card.setAttribute('role', 'img');
+  const opts = el('div', 'ob-choices'); opts.setAttribute('role', 'group'); opts.setAttribute('aria-label', 'Choose one');
+  const line = el('p', 'ob-say');
+  const next = el('button', 'ob-next', 'Next'); next.type = 'button'; next.hidden = true;
+  board.append(count, card, opts, line, next);
+  let i = 0, solved = false;
+  function show() {
+    const it = items[i]; solved = false;
+    count.textContent = `${i + 1} of ${items.length}`;
+    card.innerHTML = it.html; card.dataset.item = it.id; card.setAttribute('aria-label', it.label);
+    card.classList.remove('ob-in'); void card.offsetWidth; card.classList.add('ob-in');
+    opts.innerHTML = '';
+    choicesFor(it).forEach((c) => {
+      const btn = el('button', 'ob-choice', c.html); btn.type = 'button'; btn.dataset.place = c.id; btn.setAttribute('aria-label', c.label);
+      btn.addEventListener('click', () => choose(it, c, btn)); opts.appendChild(btn);
     });
-    tray.appendChild(b); itemBtn.set(it.id, b);
-  });
-  places.forEach((p) => {
-    const d = el('button', 'mt-bin', `<span class="mt-bin-head">${p.html}</span><span class="mt-bin-got"></span>`); d.type = 'button'; d.dataset.place = p.id; d.setAttribute('aria-label', p.label);
-    d.addEventListener('click', () => drop(p.id));
-    bins.appendChild(d); binEl.set(p.id, d);
-  });
-  function pick(id, quiet) {
-    picked = picked === id && !quiet ? null : id;
-    itemBtn.forEach((b, k) => b.setAttribute('aria-pressed', String(k === picked)));
-    board.classList.toggle('mt-picking', !!picked);
+    line.textContent = ''; line.className = 'ob-say'; next.hidden = true;
   }
-  function drop(placeId) {
-    if (!picked) return;
-    const it = items.find((x) => x.id === picked), b = itemBtn.get(picked), bin = binEl.get(placeId);
-    if (it.to === placeId) {
-      left.delete(it.id); b.remove(); const got = el('span', 'mt-got', it.html); got.title = it.label; bin.querySelector('.mt-bin-got').appendChild(got);
-      bin.classList.remove('mt-no'); void bin.offsetWidth; bin.classList.add('mt-yes'); picked = null; board.classList.remove('mt-picking');
+  function choose(it, c, btn) {
+    if (solved) return;
+    if (c.id === it.to) {
+      solved = true; btn.classList.add('ob-yes'); board.classList.add('ob-solved');
+      const last = i === items.length - 1;
       onRight && onRight(it);
-      if (!left.size) onDone && onDone();
+      if (last) onDone && onDone();
+      next.textContent = last ? againText : 'Next'; next.hidden = false;
+      next.scrollIntoView({ block: 'nearest' }); next.focus({ preventScroll: true });
     } else {
-      bin.classList.remove('mt-no'); void bin.offsetWidth; bin.classList.add('mt-no');
-      onWrong && onWrong(it, places.find((p) => p.id === placeId));
+      btn.classList.remove('ob-no'); void btn.offsetWidth; btn.classList.add('ob-no');
+      onWrong && onWrong(it, c);
     }
   }
-  return { board, left: () => left.size };
+  next.addEventListener('click', () => { board.classList.remove('ob-solved'); if (i >= items.length - 1) { onAgain(); return; } i++; show(); card.scrollIntoView({ block: 'nearest' }); });
+  show();
+  // the same words on the board, big, for little ones who don't look at the panel
+  return { board, say: (t, kind) => { line.textContent = t; line.className = 'ob-say' + (kind ? ' ' + kind : ''); } };
 }
 
 /* ---------------- Animal habitats ---------------- */
@@ -71,16 +58,54 @@ export const HABITATS = { polar: ['', 'Polar ice and snow'], desert: ['', 'Deser
 export const ANIMALS = [
   ['polarbear', '', 'Polar bear', 'polar', 'Thick fur and a layer of fat keep a polar bear warm on the Arctic ice.'],
   ['penguin', '', 'Penguin', 'polar', 'Emperor penguins huddle together on the Antarctic ice to stay warm.'],
+  ['seal', '', 'Seal', 'polar', 'A seal’s thick blubber keeps it warm as it swims under the ice and rests on it.'],
+  ['walrus', '', 'Walrus', 'polar', 'A walrus uses its long tusks to pull itself up onto the Arctic ice.'],
+  ['arcticfox', '', 'Arctic fox', 'polar', 'An Arctic fox’s white winter coat hides it in the snow and keeps it warm.'],
+  ['snowyowl', '', 'Snowy owl', 'polar', 'A snowy owl’s white feathers hide it on the snowy Arctic tundra.'],
+  ['reindeer', '', 'Reindeer', 'polar', 'Reindeer dig through the snow with their hooves to find moss to eat.'],
+  ['arctichare', '', 'Arctic hare', 'polar', 'An Arctic hare turns white in winter and has thick fur, even on its feet.'],
   ['camel', '', 'Camel', 'desert', 'A camel can go days without drinking, and its wide feet don’t sink in the sand.'],
   ['scorpion', '', 'Scorpion', 'desert', 'Scorpions hide under rocks in the hot day and hunt in the cool night.'],
+  ['lizard', '', 'Lizard', 'desert', 'Lizards warm up in the desert sun and hide in the shade when it gets too hot.'],
+  ['snake', '', 'Rattlesnake', 'desert', 'A rattlesnake hides from the desert heat under rocks and in burrows.'],
+  ['fennec', '', 'Fennec fox', 'desert', 'A fennec fox’s huge ears let heat out of its body and hear bugs under the sand.'],
+  ['tortoise', '', 'Desert tortoise', 'desert', 'A desert tortoise digs a burrow to stay cool and can store water in its body.'],
+  ['meerkat', '', 'Meerkat', 'desert', 'Meerkats live in burrows in the dry Kalahari, and one stands guard while the others eat.'],
+  ['jackrabbit', '', 'Jackrabbit', 'desert', 'A jackrabbit’s long ears let out heat, which keeps it cool in the desert.'],
   ['monkey', '', 'Monkey', 'forest', 'Monkeys climb and swing through the tall rainforest trees, eating fruit and leaves.'],
   ['parrot', '', 'Parrot', 'forest', 'Parrots eat the fruits and nuts of the rainforest, and their bright colours hide among the flowers.'],
+  ['sloth', '', 'Sloth', 'forest', 'A sloth hangs upside down in the rainforest trees and moves very slowly.'],
+  ['toucan', '', 'Toucan', 'forest', 'A toucan uses its long beak to reach fruit on rainforest branches.'],
+  ['jaguar', '', 'Jaguar', 'forest', 'A jaguar’s spotted coat hides it in the shady rainforest, and it is a strong swimmer.'],
+  ['gorilla', '', 'Gorilla', 'forest', 'Gorillas live in African forests and eat leaves, stems and fruit.'],
+  ['orangutan', '', 'Orangutan', 'forest', 'Orangutans live high in the rainforest trees of Borneo and Sumatra and build a nest each night.'],
+  ['tarsier', '', 'Tarsier', 'forest', 'The Philippine tarsier’s huge eyes help it hunt insects at night in the forest of Bohol.'],
+  ['tiger', '', 'Tiger', 'forest', 'A tiger’s stripes hide it among the trees and tall grass of the jungle.'],
   ['whale', '', 'Whale', 'ocean', 'Whales live their whole lives in the sea, coming up to breathe air.'],
   ['octopus', '', 'Octopus', 'ocean', 'An octopus hides in rocks on the sea floor and can change colour.'],
+  ['dolphin', '', 'Dolphin', 'ocean', 'Dolphins swim in groups in the sea and come up to breathe through a hole on top of their head.'],
+  ['shark', '', 'Shark', 'ocean', 'A shark breathes with gills, so it lives its whole life under the sea.'],
+  ['turtle', '', 'Sea turtle', 'ocean', 'A sea turtle swims with flippers and comes to the beach only to lay its eggs.'],
+  ['crab', '', 'Crab', 'ocean', 'A crab’s hard shell protects it on the sea floor and rocky shore.'],
+  ['starfish', '', 'Starfish', 'ocean', 'A starfish (sea star) moves on tiny tube feet along the sea floor.'],
+  ['jellyfish', '', 'Jellyfish', 'ocean', 'A jellyfish drifts in the sea and catches food with its long tentacles.'],
+  ['clownfish', '', 'Clownfish', 'ocean', 'A clownfish lives safely among the stinging arms of a sea anemone on the coral reef.'],
   ['lion', '', 'Lion', 'grass', 'Lions live in the grasslands of Africa, where their sandy colour hides them in the dry grass.'],
   ['zebra', '', 'Zebra', 'grass', 'Zebras eat grass and live in big herds on the open plains.'],
+  ['giraffe', '', 'Giraffe', 'grass', 'A giraffe’s long neck reaches the leaves of tall acacia trees on the savanna.'],
+  ['elephant', '', 'Elephant', 'grass', 'African elephants roam the savanna, using their trunks to eat grass and drink.'],
+  ['rhino', '', 'Rhinoceros', 'grass', 'A rhinoceros eats grass on the savanna and cools off by rolling in mud.'],
+  ['cheetah', '', 'Cheetah', 'grass', 'A cheetah needs wide open grassland to run fast after its prey.'],
+  ['ostrich', '', 'Ostrich', 'grass', 'An ostrich can’t fly, but its long legs carry it fast across the open savanna.'],
+  ['kangaroo', '', 'Kangaroo', 'grass', 'Kangaroos hop across the grasslands of Australia and eat grass.'],
   ['frog', '', 'Frog', 'wet', 'Frogs lay their eggs in water, and tadpoles grow up in ponds.'],
   ['carabao', '', 'Carabao', 'wet', 'A carabao (water buffalo) cools off by wallowing in mud and water, in wetlands and rice fields.'],
+  ['duck', '', 'Duck', 'wet', 'A duck’s webbed feet paddle it across the pond, and its feathers keep the water out.'],
+  ['crocodile', '', 'Crocodile', 'wet', 'A crocodile waits in rivers and swamps with just its eyes and nose above the water.'],
+  ['hippo', '', 'Hippopotamus', 'wet', 'A hippopotamus spends the hot day in rivers and lakes to keep its skin cool and wet.'],
+  ['heron', '', 'Heron', 'wet', 'A heron wades on long legs in shallow water and spears fish with its beak.'],
+  ['beaver', '', 'Beaver', 'wet', 'A beaver builds a dam and a lodge out of sticks and mud in a pond.'],
+  ['dragonfly', '', 'Dragonfly', 'wet', 'A dragonfly lays its eggs in a pond, and the young grow up under the water.'],
 ];
 const habitatsLab = {
   id: 'habitats', name: 'Animal habitats', subject: 'games', levels: ['pre', 'elem'],
@@ -88,11 +113,11 @@ const habitatsLab = {
   words: 'animals habitats homes biomes ecosystems polar desert rainforest ocean grassland pond wetland matching game little ones science',
   icon: '<path d="M8 40c4-10 10-16 16-16s12 6 16 16z"/><circle cx="34" cy="12" r="5"/><path d="M14 22c0-4 3-7 6-7"/>',
   tries: ['Put an animal in its home', 'Sort every animal in a round', 'Finish a round with no wrong taps'],
-  about: 'Tap an animal, then tap its home (or drag it there). Each round has six animals, one for each home. A wrong tap is fine: Cassie says why that home doesn’t fit, and you try again.\nA habitat is the place where an animal finds its food, water and shelter, and its body is suited to it.',
+  about: 'One animal at a time: tap its home out of the three, then Next. Each round has six animals, one for each home, from 50 animals. A wrong tap is fine: Cassie says why that home doesn’t fit, and you try again.\nA habitat is the place where an animal finds its food, water and shelter, and its body is suited to it.',
   mount({ stage, panel, api }) {
     let right = 0, wrong = 0, rounds = 0;
     stage.classList.add('kid-stage');
-    const msg = el('p', 'gm-msg', 'Tap an animal, then tap its home.'); msg.setAttribute('aria-live', 'polite');
+    const msg = el('p', 'gm-msg', 'Which home is right for this animal? Tap it.'); msg.setAttribute('aria-live', 'polite');
     const st = stats(panel);
     panel.appendChild(msg);
     button(row(panel, 'lab-row-btns'), 'New animals', () => deal(), 'main');
@@ -100,15 +125,17 @@ const habitatsLab = {
       wrong = 0;
       const pickOne = (h) => shuffle(ANIMALS.filter((a) => a[3] === h), rand)[0];
       const set = Object.keys(HABITATS).map(pickOne);
-      matchBoard(stage, {
-        items: shuffle(set, rand).map(([id, e, name, to, why]) => ({ id, html: `${animalSvg(id)}<span class="mt-name">${esc(name)}</span>`, label: name, to, why })),
-        places: Object.entries(HABITATS).map(([id, [e, name]]) => ({ id, html: `${homeSvg(id)}<span class="mt-name">${esc(name)}</span>`, label: name })),
-        cls: 'mt-kids mt-toons',
-        onRight: (it) => { right++; msg.className = 'gm-msg good'; msg.textContent = `Yes! ${it.why}`; say(`Yes! ${it.why}`); api.check(0); report(); },
-        onWrong: (it, p) => { wrong++; msg.className = 'gm-msg bad'; msg.textContent = `Not the ${p.label.toLowerCase()}. Where would a ${it.label.toLowerCase()} find its food and shelter?`; say(`Not there. Try again!`); report(); },
-        onDone: () => { rounds++; api.check(1); if (!wrong) api.check(2); const b = api.best(6 - wrong, `${6 - wrong} of 6 first time`); msg.className = 'gm-msg good'; msg.textContent = `Every animal is home! ${wrong ? `${wrong} wrong ${wrong === 1 ? 'tap' : 'taps'} on the way.` : 'Not one wrong tap!'}${b && b.isNew ? ' A new best!' : ''} Press New animals to play again.`; report(); },
+      const homes = Object.entries(HABITATS).map(([id, [e, name]]) => ({ id, html: `${homeSvg(id)}<span class="mt-name">${esc(name)}</span>`, label: name }));
+      const ob = oneByOne(stage, {
+        items: shuffle(set, rand).map(([id, e, name, to, why]) => ({ id, html: `${animalSvg(id)}<span class="ob-name">${esc(name)}</span>`, label: name, to, why })),
+        choicesFor: (it) => pick3(homes.find((h) => h.id === it.to), homes, rand),
+        cls: 'ob-toons', againText: 'New animals', onAgain: () => deal(),
+        onRight: (it) => { right++; tell(`Yes! ${it.why}`, 'good'); say(`Yes! ${it.why}`); api.check(0); report(); },
+        onWrong: (it, p) => { wrong++; tell(`Not the ${p.label.toLowerCase()}. Where would a ${it.label.toLowerCase()} find its food and shelter?`, 'bad'); say(`Not there. Try again!`); report(); },
+        onDone: () => { rounds++; api.check(1); if (!wrong) api.check(2); const b = api.best(6 - wrong, `${6 - wrong} of 6 first time`); tell(`Every animal is home! ${wrong ? `${wrong} wrong ${wrong === 1 ? 'tap' : 'taps'} on the way.` : 'Not one wrong tap!'}${b && b.isNew ? ' A new best!' : ''} Press New animals to play again.`, 'good'); report(); },
       });
-      msg.className = 'gm-msg'; msg.textContent = 'Tap an animal, then tap its home.'; report();
+      function tell(t, kind) { msg.className = 'gm-msg ' + kind; msg.textContent = t; ob.say(t, kind); }
+      msg.className = 'gm-msg'; msg.textContent = 'Which home is right for this animal? Tap it.'; report();
     }
     function report() { st.set([['Right', String(right)], ['Wrong taps this round', String(wrong)], ['Rounds done', String(rounds)]]); }
     deal();
@@ -237,25 +264,27 @@ const landformsLab = {
   words: 'landforms mountain volcano valley plateau plain island peninsula bay delta canyon geography matching game',
   icon: '<path d="M4 40l12-20 8 10 8-16 12 26z"/><path d="M4 40h40"/>',
   tries: ['Match one landform', 'Match every landform in a round', 'Finish a round with no mistakes'],
-  about: 'Tap a picture, then tap the name it shows (or drag it onto the name). Each round has six of these ten landforms: mountain, volcano, valley, plateau, plain, island, peninsula, bay, delta and canyon.\nA landform is a natural shape of the Earth’s surface, made over a long time by moving plates, volcanoes, rivers, ice, wind and the sea. The pictures are simple drawings, some from the side and some from above.',
+  about: 'One picture at a time: tap its name out of the three, then Next. Each round has six of these ten landforms: mountain, volcano, valley, plateau, plain, island, peninsula, bay, delta and canyon.\nA landform is a natural shape of the Earth’s surface, made over a long time by moving plates, volcanoes, rivers, ice, wind and the sea. The pictures are simple drawings, some from the side and some from above.',
   mount({ stage, panel, api }) {
     let wrong = 0, total = 0;
-    const msg = el('p', 'gm-msg', 'Tap a picture, then tap its name.'); msg.setAttribute('aria-live', 'polite');
+    const msg = el('p', 'gm-msg', 'What is this landform? Tap its name.'); msg.setAttribute('aria-live', 'polite');
     const st = stats(panel);
     panel.appendChild(msg);
     button(row(panel, 'lab-row-btns'), 'New landforms', () => deal(), 'main');
     function deal() {
       wrong = 0;
       const set = shuffle(LANDFORMS, rand).slice(0, 6);
-      matchBoard(stage, {
-        items: shuffle(set, rand).map(([id, name, def, svg], i) => ({ id, html: `<svg viewBox="0 0 96 64" aria-hidden="true">${toon(svg)}</svg>`, label: `Picture ${i + 1}`, to: id, why: `${name}: ${def}` })),
-        places: shuffle(set, rand).map(([id, name]) => ({ id, html: `<span class="mt-name">${esc(name)}</span>`, label: name })),
-        cls: 'mt-pics',
-        onRight: (it) => { total++; msg.className = 'gm-msg good'; msg.textContent = `Right! ${it.why}`; api.check(0); report(); },
-        onWrong: (it, p) => { wrong++; const d = LANDFORMS.find((x) => x[0] === p.id); msg.className = 'gm-msg bad'; msg.textContent = `Not quite. A ${p.label.toLowerCase()} is ${d[2].charAt(0).toLowerCase() + d[2].slice(1)}`; report(); },
-        onDone: () => { api.check(1); if (!wrong) api.check(2); const b = api.best(6 - wrong, `${6 - wrong} of 6 first time`); msg.className = 'gm-msg good'; msg.textContent = `All six matched${wrong ? ` with ${wrong} ${wrong === 1 ? 'mistake' : 'mistakes'}` : ', no mistakes'}!${b && b.isNew ? ' A new best!' : ''}`; report(); },
+      const names = LANDFORMS.map(([id, name]) => ({ id, html: `<span class="ob-word">${esc(name)}</span>`, label: name }));
+      const ob = oneByOne(stage, {
+        items: set.map(([id, name, def, svg]) => ({ id, html: `<svg viewBox="0 0 96 64" aria-hidden="true">${toon(svg)}</svg>`, label: 'A landform picture', to: id, why: `${name}: ${def}` })),
+        choicesFor: (it) => pick3(names.find((n) => n.id === it.to), names, rand),
+        cls: 'ob-pics', againText: 'New landforms', onAgain: () => deal(),
+        onRight: (it) => { total++; tell(`Right! ${it.why}`, 'good'); api.check(0); report(); },
+        onWrong: (it, p) => { wrong++; const d = LANDFORMS.find((x) => x[0] === p.id); tell(`Not quite. A ${p.label.toLowerCase()} is ${d[2].charAt(0).toLowerCase() + d[2].slice(1)}`, 'bad'); report(); },
+        onDone: () => { api.check(1); if (!wrong) api.check(2); const b = api.best(6 - wrong, `${6 - wrong} of 6 first time`); tell(`All six matched${wrong ? ` with ${wrong} ${wrong === 1 ? 'mistake' : 'mistakes'}` : ', no mistakes'}!${b && b.isNew ? ' A new best!' : ''}`, 'good'); report(); },
       });
-      msg.className = 'gm-msg'; msg.textContent = 'Tap a picture, then tap its name.'; report();
+      function tell(t, kind) { msg.className = 'gm-msg ' + kind; msg.textContent = t; ob.say(t, kind); }
+      msg.className = 'gm-msg'; msg.textContent = 'What is this landform? Tap its name.'; report();
     }
     function report() { st.set([['Matched', String(total)], ['Mistakes this round', String(wrong)]]); }
     deal();
@@ -358,11 +387,11 @@ const sorterLab = {
   words: 'shapes shape sorter circle square triangle star heart rectangle diamond oval little ones nursery kindergarten matching game',
   icon: '<rect x="4" y="22" width="40" height="20" rx="3"/><circle cx="14" cy="32" r="5"/><path d="M28 36l5-9 5 9z"/><path d="M24 4v12M20 12l4 4 4-4"/>',
   tries: ['Put a shape in its hole', 'Fill every hole'],
-  about: 'Tap a shape, then tap the hole that fits it (or drag it there). Cassie says each shape’s name. A wrong hole is fine: try another!',
+  about: 'One shape at a time: tap the hole that fits it out of the three, then Next. Cassie says each shape’s name. A wrong hole is fine: try another!',
   mount({ stage, panel, api }) {
     let n = 4, placed = 0;
     stage.classList.add('kid-stage');
-    const msg = el('p', 'gm-msg', 'Tap a shape, then its hole.'); msg.setAttribute('aria-live', 'polite');
+    const msg = el('p', 'gm-msg', 'Which hole fits this shape? Tap it.'); msg.setAttribute('aria-live', 'polite');
     seg(group(panel, 'How many shapes'), { options: [[4, '4'], [6, '6'], [8, '8']], value: n, onChange: (v) => { n = v; deal(); } });
     panel.appendChild(msg);
     button(row(panel, 'lab-row-btns'), 'New shapes', () => deal(), 'main');
@@ -370,15 +399,17 @@ const sorterLab = {
       placed = 0;
       const names = shuffle(Object.keys(SHAPE_SVG), rand).slice(0, n), cols = shuffle(SHAPE_COL, rand);
       const svg = (k, fill) => `<svg viewBox="0 0 48 48" aria-hidden="true" ${fill ? `fill="${fill}" stroke="#2b2440" stroke-width="2.4" stroke-linejoin="round"` : 'fill="rgba(0,0,0,.45)" stroke="rgba(255,255,255,.55)" stroke-width="2" stroke-dasharray="4 3"'}>${SHAPE_SVG[k]}${fill ? shapeFace(k) : ''}</svg>`; // (v285) each shape is a little character
-      matchBoard(stage, {
+      const holes = Object.keys(SHAPE_SVG).map((k) => ({ id: k, html: svg(k), label: `${k} hole` }));
+      const ob = oneByOne(stage, {
         items: names.map((k, i) => ({ id: k, html: svg(k, cols[i % cols.length]), label: k, to: k })),
-        places: shuffle(names, rand).map((k) => ({ id: k, html: svg(k), label: `${k} hole` })),
-        cls: 'mt-kids mt-shapes',
-        onRight: (it) => { placed++; api.check(0); msg.className = 'gm-msg good'; msg.textContent = `Yes! The ${it.label}!`; say(`Yes! The ${it.label}!`); },
-        onWrong: (it) => { msg.className = 'gm-msg bad'; msg.textContent = `The ${it.label} doesn’t fit there. Try another hole!`; say(`Try another hole!`); },
-        onDone: () => { api.check(1); msg.className = 'gm-msg good'; msg.textContent = 'Every shape is in! Great job!'; say('Every shape is in! Great job!'); },
+        choicesFor: (it) => pick3(holes.find((h) => h.id === it.to), holes, rand),
+        cls: 'ob-shapes', againText: 'New shapes', onAgain: () => deal(),
+        onRight: (it) => { placed++; api.check(0); tell(`Yes! The ${it.label}!`, 'good'); say(`Yes! The ${it.label}!`); },
+        onWrong: (it) => { tell(`The ${it.label} doesn’t fit there. Try another hole!`, 'bad'); say(`Try another hole!`); },
+        onDone: () => { api.check(1); tell('Every shape is in! Great job!', 'good'); say('Every shape is in! Great job!'); },
       });
-      msg.className = 'gm-msg'; msg.textContent = 'Tap a shape, then its hole.';
+      function tell(t, kind) { msg.className = 'gm-msg ' + kind; msg.textContent = t; ob.say(t, kind); }
+      msg.className = 'gm-msg'; msg.textContent = 'Which hole fits this shape? Tap it.';
     }
     deal();
     return { state: () => `sorting ${n} shapes into their holes, ${placed} in`, destroy: () => { hush(); } };

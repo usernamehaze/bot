@@ -11129,17 +11129,29 @@ test('Games: Animal habitats, World jigsaw, Landform match, History in order, Sh
     const check = async (id) => { await shot(id); if (phone) expect(!(await taps()).length, `${where}: ${id} taps 44px: ` + await taps()); await aa(id); };
     const mod = await page.evaluate(async () => { const m = await import('./labs/games2.js'); return { animals: Object.fromEntries(m.ANIMALS.map((a) => [a[0], a[3]])), home: m.HOME_POINT, names: m.CONTINENTS, outfits: m.OUTFITS.map((o) => o[0]) }; });
 
-    // 1. Animal habitats: six animals, one per home; a wrong tap says so; a round with no wrong taps ticks the third goal
+    // 1. Animal habitats (v286): one animal at a time with three homes to choose from, then Next; six a round, one per home, from 50 animals
     await lab('habitats');
-    const animals = () => page.$$eval(`${V} .mt-item`, (xs) => xs.map((x) => x.dataset.item));
-    let list = await animals(); expect(list.length === 6 && new Set(list.map((a) => mod.animals[a])).size === 6, `${where}: six animals, one for each home: ` + list);
-    const wrongHome = Object.keys({ polar: 1, desert: 1, forest: 1, ocean: 1, grass: 1, wet: 1 }).find((h) => h !== mod.animals[list[0]]);
-    await tapItem(list[0]); await tapBin(wrongHome);
-    expect(await stat('Wrong taps this round') === '1' && /^Not the /.test(await msg()) && !(await done('habitats'))[0], `${where}: a wrong home: ` + await msg());
-    await tapBin(mod.animals[list[0]]); // (still picked after the wrong home)
-    for (const a of list.slice(1)) { await tapItem(a); await tapBin(mod.animals[a]); }
-    expect((await animals()).length === 0 && (await done('habitats'))[1] && !(await done('habitats'))[2], `${where}: every animal home, but not without a wrong tap`);
-    await press('New animals'); list = await animals(); for (const a of list) { await tapItem(a); await tapBin(mod.animals[a]); }
+    const card = () => page.$eval(`${V} .ob-card`, (x) => x.dataset.item);
+    const choices = () => page.$$eval(`${V} .ob-choice`, (xs) => xs.map((x) => x.dataset.place));
+    const choose = (id) => page.click(`${V} .ob-choice[data-place="${id}"]`);
+    const nextShown = () => page.$eval(`${V} .ob-next`, (x) => !x.hidden && x.getClientRects().length > 0);
+    const next = () => page.click(`${V} .ob-next`);
+    const rightOf = (k) => mod.animals[k] || k;
+    // a whole round of n, each answered right (the one one may already be answered)
+    const playRound = async (n, from = 0) => { const seen = []; for (let k = from; k < n; k++) { const it = await card(); const ch = await choices(); expect(ch.length === 3 && ch.includes(rightOf(it)), `${where}: three choices with the right one: ` + ch + ' for ' + it); await choose(rightOf(it)); seen.push(it); if (k < n - 1) await next(); } return seen; };
+    expect(Object.keys(mod.animals).length >= 48, `${where}: about 50 animals: ` + Object.keys(mod.animals).length);
+    expect(await page.$eval(`${V} .ob-count`, (x) => x.textContent) === '1 of 6' && !(await nextShown()), `${where}: 1 of 6, no Next yet`);
+    let one = await card(), ch = await choices();
+    expect(ch.length === 3 && ch.includes(mod.animals[one]), `${where}: three homes, the right one among them: ` + ch);
+    await choose(ch.find((h) => h !== mod.animals[one]));
+    expect(await stat('Wrong taps this round') === '1' && /^Not the /.test(await msg()) && !(await done('habitats'))[0] && !(await nextShown()), `${where}: a wrong home: ` + await msg());
+    await choose(mod.animals[one]);
+    expect(await nextShown() && (await done('habitats'))[0], `${where}: the right home, then Next`);
+    await next();
+    const rest = await playRound(6, 1);
+    expect(new Set([one, ...rest].map((a) => mod.animals[a])).size === 6, `${where}: six animals, one for each home: ` + [one, ...rest]);
+    expect((await done('habitats'))[1] && !(await done('habitats'))[2] && await page.$eval(`${V} .ob-next`, (x) => x.textContent) === 'New animals', `${where}: every animal home, but not without a wrong tap`);
+    await next(); await playRound(6);
     expect((await done('habitats'))[2] && /Not one wrong tap/.test(await msg()), `${where}: a round with no wrong taps: ` + await msg());
     await check('habitats');
 
@@ -11153,14 +11165,13 @@ test('Games: Animal habitats, World jigsaw, Landform match, History in order, Sh
     expect(await stat('Placed') === '6 of 6' && (await done('jigsaw')).filter(Boolean).length === 3 && /The whole world in/.test(await msg()), `${where}: the whole world, quickly: ` + await stat('Placed') + ' ' + await msg());
     await check('jigsaw');
 
-    // 3. Landform match: six pictures and six names; a wrong name explains itself
+    // 3. Landform match (v286): one picture at a time, three names; a wrong name explains itself
     await lab('landforms');
-    const forms = await page.$$eval(`${V} .mt-item`, (xs) => xs.map((x) => x.dataset.item));
-    const names = await page.$$eval(`${V} .mt-bin`, (xs) => xs.map((x) => x.dataset.place));
-    expect(forms.length === 6 && names.length === 6 && forms.every((f) => names.includes(f)), `${where}: six pictures, six names`);
-    await tapItem(forms[0]); await tapBin(names.find((n) => n !== forms[0]));
+    one = await card(); ch = await choices();
+    expect(ch.length === 3 && ch.includes(one), `${where}: three names, the right one among them`);
+    await choose(ch.find((n) => n !== one));
     expect(/^Not quite\. A .* is /.test(await msg()) && await stat('Mistakes this round') === '1', `${where}: a wrong name: ` + await msg());
-    await tapBin(forms[0]); for (const f of forms.slice(1)) { await tapItem(f); await tapBin(f); }
+    await choose(one); await next(); await playRound(6, 1);
     expect((await done('landforms'))[1] && !(await done('landforms'))[2], `${where}: all six matched (with a mistake)`);
     await check('landforms');
 
@@ -11176,12 +11187,12 @@ test('Games: Animal habitats, World jigsaw, Landform match, History in order, Sh
     await segBtn('Science and inventions'); await sortIt(); await press('Check my order'); expect((await done('sequencer'))[2], `${where}: all three sets finished`);
     await check('sequencer');
 
-    // 5. Shape sorter: each shape fits only its own hole
+    // 5. Shape sorter (v286): one shape at a time, three holes; each shape fits only its own hole
     await lab('sorter');
-    const shapes = await page.$$eval(`${V} .mt-item`, (xs) => xs.map((x) => x.dataset.item));
-    expect(shapes.length === 4, `${where}: 4 shapes`);
-    await tapItem(shapes[0]); await tapBin(shapes[1]); expect(/doesn’t fit there/.test(await msg()) && !(await done('sorter'))[0], `${where}: a shape doesn't fit another hole`);
-    await tapBin(shapes[0]); for (const sh of shapes.slice(1)) { await tapItem(sh); await tapBin(sh); }
+    expect(await page.$eval(`${V} .ob-count`, (x) => x.textContent) === '1 of 4', `${where}: 4 shapes`);
+    one = await card(); ch = await choices();
+    await choose(ch.find((h) => h !== one)); expect(/doesn’t fit there/.test(await msg()) && !(await done('sorter'))[0], `${where}: a shape doesn't fit another hole`);
+    await choose(one); await next(); await playRound(4, 1);
     expect((await done('sorter'))[1] && /Every shape is in/.test(await msg()), `${where}: every hole filled`);
     await check('sorter');
 
