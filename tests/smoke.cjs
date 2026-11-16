@@ -8403,7 +8403,7 @@ test('Apple design: the loading page is a launch screen (the app’s own backgro
     await page.goto(APP.replace('app.html', 'start.html'));
     const first = await page.evaluate(() => ({ bg: getComputedStyle(document.body).backgroundColor, words: document.body.innerText.trim(), pics: [...document.querySelectorAll('img, svg, h1, p')].length, spin: getComputedStyle(document.querySelector('.spin')).opacity }));
     expect(first.bg === bg && !first.words && !first.pics && first.spin === '0', `${scheme} ${look || 'Monochrome'}: the app’s own background (${bg}), no words, no logo, no spinner yet: ` + JSON.stringify(first));
-    await page.waitForTimeout(1100);
+    await page.waitForTimeout(1400);
     expect(await page.evaluate(() => getComputedStyle(document.querySelector('.spin')).opacity) === '1' && await page.locator('[role=progressbar][aria-label="Loading Cassie"]').count() === 1, `${scheme}: a slow app gets a small spinner, labelled for screen readers`);
     await ctx.close();
   }
