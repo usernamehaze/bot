@@ -358,6 +358,8 @@ const SCHEMA = [
   `CREATE INDEX IF NOT EXISTS identities_account ON identities(account)`,
   // the Pasado Pass early list: an email to tell when it opens, which plan, where they joined (nothing else)
   `CREATE TABLE IF NOT EXISTS early (email TEXT PRIMARY KEY, plan TEXT, src TEXT, account TEXT, at INTEGER)`,
+  // (v297) the free Plus trial: one per account, ever (only when it started is kept)
+  `CREATE TABLE IF NOT EXISTS trials (account TEXT PRIMARY KEY, at INTEGER)`,
   // payments (PayMongo): who bought which pass, for how much, and PayMongo's payment number (never card details)
   `CREATE TABLE IF NOT EXISTS payments (id TEXT PRIMARY KEY, session TEXT, account TEXT, plan TEXT, bill TEXT, php INTEGER, shown TEXT, status TEXT, pay_ref TEXT, method TEXT, live INTEGER, created INTEGER, paid INTEGER)`,
   `CREATE INDEX IF NOT EXISTS payments_session ON payments(session)`,
@@ -796,7 +798,7 @@ async function planOf(request, env) {
     return { ...paidPlan(row), account: row.account };
   } catch (e) { return { plan: 'free' }; }
 }
-const paidPlan = (row) => (row && ['plus', 'pro'].includes(row.plan) ? { plan: row.plan, until: row.until, bill: (/\bpaid (month|sem|year)\b/.exec(row.note || '') || [])[1] || '' } : { plan: 'free', until: 0 });
+const paidPlan = (row) => (row && ['plus', 'pro'].includes(row.plan) ? { plan: row.plan, until: row.until, bill: (/\bpaid (month|sem|year)\b/.exec(row.note || '') || [])[1] || '', ...(/^trial\b/.test(row.note || '') ? { trial: true } : {}) } : { plan: 'free', until: 0 });
 const planQuery = (env, id) => env.DB.prepare('SELECT plan, until, note FROM plans WHERE account = ? AND until > ?').bind(id, Date.now());
 async function accountPlan(env, id) { return paidPlan(await planQuery(env, id).first()); }
 // what each plan gets a day: questions the student sees, every request (a ceiling against abuse),
@@ -831,6 +833,28 @@ async function adminEarly(request, env) {
   if (no) return json({ error: no.error }, no.status);
   const r = await env.DB.prepare('SELECT email, plan, src, at FROM early ORDER BY at DESC LIMIT 5000').all();
   return json({ n: (r.results || []).length, list: r.results || [] });
+}
+/* ------------------------------------------------------------------ the free Plus trial (v297)
+   POST /trial/start (signed in): 14 days of Plus, no card, once per account. It ends by itself (the plan's
+   'until'), and nothing is charged. Not for an account that has a plan now or has had its trial. */
+const TRIAL_DAYS = 14;
+async function trialStart(request, env) {
+  const h = allowedOrigin(request, env);
+  if (!h) return new Response('forbidden', { status: 403 });
+  await ensureSchema(env.DB);
+  const acc = await accountFromRequest(request, env);
+  if (!acc) return json({ error: 'Sign in first, so the trial has an account to belong to.', code: 'signin' }, 401, h);
+  if (!(await authAllowed(request, env, 'trial:' + acc.id, 10))) return json({ error: 'Too many tries. Wait a while, then try again.' }, 429, h);
+  const [used, now] = [await env.DB.prepare('SELECT at FROM trials WHERE account = ?').bind(acc.id).first(), await accountPlan(env, acc.id)];
+  if (used) return json({ error: 'Your free Plus trial has been used. Plus is still there whenever you want it.', code: 'trial_used' }, 409, h);
+  if (now.plan !== 'free') return json({ error: 'You already have a plan, so there is no trial to start.', code: 'has_plan', plan: now }, 409, h);
+  const at = Date.now(), until = at + TRIAL_DAYS * 864e5;
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO trials (account, at) VALUES (?, ?)').bind(acc.id, at),
+    env.DB.prepare('INSERT INTO plans (account, plan, until, note, updated) VALUES (?, ?, ?, ?, ?) ON CONFLICT(account) DO UPDATE SET plan = excluded.plan, until = excluded.until, note = excluded.note, updated = excluded.updated')
+      .bind(acc.id, 'plus', until, `trial ${TRIAL_DAYS} days`, at),
+  ]);
+  return json({ ok: true, plan: { plan: 'plus', until, bill: '', trial: true } }, 200, h);
 }
 /* ------------------------------------------------------------------ payments (PayMongo)
    Every plan is a pass: one payment for a set time, and it never renews (Monthly 30 days, Semester
@@ -2065,6 +2089,7 @@ export default {
       if (url.pathname.startsWith('/auth/')) return await auth(request, env, url.pathname);
       if (request.method === 'POST' && url.pathname === '/early') return await early(request, env);
       if (request.method === 'POST' && url.pathname === '/web') return await web(request, env, ctx);
+      if (request.method === 'POST' && url.pathname === '/trial/start') return await trialStart(request, env);
       if (url.pathname.startsWith('/pay/')) return await pay(request, env, url, ctx);
       if (request.method === 'GET' && url.pathname === '/admin/early') return await adminEarly(request, env);
       if (url.pathname.startsWith('/room')) return await room(request, env, url);

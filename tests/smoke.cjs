@@ -2288,6 +2288,47 @@ test('v266: the plans screen shows monthly prices first with a Monthly / Semeste
   await ctx.close();
 });
 
+// (v297) the free Plus trial: trial first after sign-up, 14 days, no card, once per account, a heads-up 2 days before
+test('v297 free Plus trial: the plans screen leads with Start my free trial (one filled button, Free still there), 14 days of Plus from the server, once per account, Plans and You show the days left, one heads-up two days before it ends', async (b) => {
+  const { ctx, page, errors } = await open(b, { server: true, device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off', state: { tab: 'home', plan: null, profile: { name: 'Tia', role: 'student', grade: 'Grade 10', age: 15, at: 1 } } });
+  const email = `trial${Date.now()}@example.com`;
+  const res = await page.evaluate(async ([srv, email]) => { const r = await fetch(srv + '/auth/signup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email, password: 'secret-pass-1', age: 15, name: 'Tia' }) }); return r.json(); }, [SERVER, email]);
+  expect(res.token, 'signed up: ' + JSON.stringify(res).slice(0, 200));
+  await page.evaluate((r) => { signedIn(r.token, r.account, r.plan); window.__landed = false; frPaywall(() => { window.__landed = true; }); }, res);
+  await page.waitForSelector('.fr-pay .fr-trial', { timeout: 5000 });
+  const pay = await page.evaluate(() => { const bg = (s) => getComputedStyle(document.querySelector(s)).backgroundColor; return { h: document.querySelector('.fr-pay .fr-h').textContent, trialBg: bg('.fr-trial'), getBg: bg('.fr-get-2'), skip: !!document.querySelector('.fr-skip-pay'), focus: document.activeElement && document.activeElement.className }; });
+  expect(pay.h === 'Try Plus free for 14 days' && !/rgba\(0, 0, 0, 0\)|transparent/.test(pay.trialBg) && /rgba\(0, 0, 0, 0\)|transparent/.test(pay.getBg) && pay.skip, 'trial first: one filled button, Get Plus outlined, Continue with Free still there: ' + JSON.stringify(pay));
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/trial-paywall.png' });
+  await page.click('.fr-trial');
+  await page.waitForSelector('.pay-sheet h3:text-is("Your free Plus trial has started")', { timeout: 8000 });
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/trial-started.png' });
+  { const { contrastIssues } = require('./ui-checks.cjs'); const { bad } = await contrastIssues(page, '.pay-sheet'); expect(!bad.length, 'the trial note is readable: ' + bad.join(' | ')); }
+  const on = await page.evaluate(() => ({ plan: state.plan, used: state.trialUsed, name: planName(), days: trialDaysLeft() }));
+  expect(on.plan && on.plan.plan === 'plus' && on.plan.trial && on.name === 'plus' && on.days === 14 && on.used, '14 days of Plus from the server: ' + JSON.stringify(on));
+  // once per account: the server says no to a second one
+  const again = await page.evaluate(async (srv) => { const r = await fetch(srv + '/trial/start', { method: 'POST', headers: chatHeaders(), body: '{}' }); return { status: r.status, j: await r.json() }; }, SERVER);
+  expect(again.status === 409 && again.j.code === 'trial_used', 'only one trial per account: ' + JSON.stringify(again));
+  await page.click('.pay-sheet .plus-ok');
+  // Plans and You: the days left, no Start button
+  await page.evaluate(() => openSettings('plans')); await page.waitForTimeout(200);
+  const plans = await page.evaluate(() => ({ shown: !document.querySelector('.set-trial').hidden, h: document.querySelector('.set-trial-h').textContent, go: !document.querySelector('.set-trial-go').hidden }));
+  expect(plans.shown && /free Plus trial: 14 days left/.test(plans.h) && !plans.go, 'Plans shows the days left: ' + JSON.stringify(plans));
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/trial-plans.png' });
+  await page.evaluate(() => openSettings('profile')); await page.waitForTimeout(200);
+  expect(await page.locator('.set-val[data-val="plan"]').innerText() === 'Plus trial, 14 days left', 'You shows the trial and its days');
+  await page.evaluate(() => closeSettings());
+  // two days before the end: one plain heads-up, once
+  await page.evaluate(() => { state.plan = { ...state.plan, until: Date.now() + 1.5 * 864e5 }; state.trialWarned = 0; trialHeadsUp(); });
+  await page.waitForSelector('.pay-sheet h3:text-is("Your Plus trial ends in 2 days")', { timeout: 3000 });
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/trial-headsup.png' });
+  expect(/Nothing is charged/.test(await page.locator('.pay-sheet .plus-why').innerText()), 'the heads-up says nothing is charged');
+  await page.click('.pay-sheet .plus-ok');
+  await page.evaluate(() => trialHeadsUp());
+  expect(await page.locator('.pay-sheet').count() === 0, 'the heads-up shows once');
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test('v257: the studio voice no longer shows "guest" to a signed-in account: the podcast sheet rechecks the account on open, so a stale guest state from before sign-in self-heals', async (b) => {
   let healed = false; // node-side flag: before sign-in the server says guest; the on-open recheck flips it
   const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'authorization, content-type', 'access-control-allow-methods': 'GET, POST, OPTIONS' };

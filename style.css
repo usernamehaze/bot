@@ -4517,3 +4517,13 @@ label.notif-top { cursor: pointer; min-height: 44px; }
 .set-row .field > span { margin-bottom: var(--sp-2, 8px); }
 .set-row .field.row > span, .set-row .field-toggle > span { margin-bottom: 0; }
 
+
+/* (v297) the plans after sign-up, trial first: one filled button (the free trial); Get Plus and Get Pro outlined */
+.fr-pay .fr-trial { margin: 0 0 var(--sp-2, 8px); }
+.fr-plan-up .fr-go.fr-get-2 { background: transparent; color: var(--text); border: 1.5px solid var(--border); }
+.fr-plan-up .fr-go.fr-get-2:hover { border-color: var(--text); }
+.set-trial { margin: 0 0 var(--sp-4, 16px); padding: var(--sp-4, 16px); border-radius: 18px; background: var(--surface); border: 1.5px solid var(--primary); }
+.set-trial[hidden], .set-trial .set-trial-go[hidden] { display: none; }
+.set-trial-h { margin: 0 0 var(--sp-1, 4px); font-weight: 750; font-size: 1.02rem; }
+.set-trial-p { margin: 0 0 var(--sp-3, 12px); color: var(--muted); line-height: var(--lh-body, 1.5); }
+.set-trial .set-trial-go { width: 100%; min-height: 48px; }
