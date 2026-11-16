@@ -683,12 +683,46 @@ const COUNTRIES = [
   ['Peru', 'Peru', 'Lima', -12.05, -77.04, 'Americas'], ['Colombia', 'Colombia', 'Bogotá', 4.71, -74.07, 'Americas'], ['Venezuela', 'Venezuela', 'Caracas', 10.48, -66.90, 'Americas'],
   ['Cuba', 'Cuba', 'Havana', 23.11, -82.37, 'Americas'],
 ];
+// (v295) three more real cities of each country, where they really are [name, latitude, longitude]:
+// in the capital round the capital and these show as dots, and the student taps the one that is the capital
+const CITIES = {
+  Philippines: [['Cebu City', 10.32, 123.89], ['Davao City', 7.19, 125.46], ['Baguio', 16.41, 120.60]], Japan: [['Osaka', 34.69, 135.50], ['Sapporo', 43.06, 141.35], ['Fukuoka', 33.59, 130.40]],
+  China: [['Shanghai', 31.23, 121.47], ['Guangzhou', 23.13, 113.26], ['Chengdu', 30.57, 104.07]], India: [['Mumbai', 19.08, 72.88], ['Kolkata', 22.57, 88.36], ['Chennai', 13.08, 80.27]],
+  Indonesia: [['Surabaya', -7.25, 112.75], ['Medan', 3.59, 98.67], ['Makassar', -5.15, 119.43]], Vietnam: [['Ho Chi Minh City', 10.82, 106.63], ['Da Nang', 16.05, 108.22], ['Hai Phong', 20.86, 106.68]],
+  Thailand: [['Chiang Mai', 18.79, 98.98], ['Phuket', 7.88, 98.39], ['Khon Kaen', 16.43, 102.83]], Malaysia: [['George Town', 5.41, 100.33], ['Kota Kinabalu', 5.98, 116.07], ['Kuching', 1.55, 110.36]],
+  'South Korea': [['Busan', 35.18, 129.08], ['Daegu', 35.87, 128.60], ['Gwangju', 35.16, 126.85]], Pakistan: [['Karachi', 24.86, 67.01], ['Lahore', 31.52, 74.36], ['Quetta', 30.18, 66.98]],
+  Bangladesh: [['Chittagong', 22.36, 91.78], ['Khulna', 22.85, 89.54], ['Rangpur', 25.74, 89.25]], 'Saudi Arabia': [['Jeddah', 21.49, 39.19], ['Dammam', 26.42, 50.09], ['Tabuk', 28.38, 36.57]],
+  Iran: [['Mashhad', 36.30, 59.61], ['Shiraz', 29.59, 52.58], ['Tabriz', 38.08, 46.29]], Turkey: [['Istanbul', 41.01, 28.98], ['Izmir', 38.42, 27.14], ['Antalya', 36.90, 30.71]],
+  Mongolia: [['Erdenet', 49.03, 104.08], ['Choibalsan', 48.07, 114.53], ['Khovd', 48.01, 91.64]], Kazakhstan: [['Almaty', 43.24, 76.89], ['Shymkent', 42.34, 69.59], ['Aktobe', 50.28, 57.17]],
+  Afghanistan: [['Kandahar', 31.61, 65.71], ['Herat', 34.35, 62.20], ['Mazar-i-Sharif', 36.71, 67.11]], Iraq: [['Basra', 30.51, 47.78], ['Mosul', 36.34, 43.13], ['Erbil', 36.19, 44.01]],
+  Nepal: [['Pokhara', 28.21, 83.99], ['Biratnagar', 26.45, 87.27], ['Nepalgunj', 28.05, 81.62]], Cambodia: [['Siem Reap', 13.36, 103.86], ['Battambang', 13.10, 103.20], ['Sihanoukville', 10.63, 103.52]],
+  Laos: [['Luang Prabang', 19.89, 102.13], ['Pakse', 15.12, 105.80], ['Savannakhet', 16.56, 104.75]], Myanmar: [['Yangon', 16.84, 96.17], ['Mandalay', 21.96, 96.09], ['Myitkyina', 25.38, 97.40]],
+  Australia: [['Sydney', -33.87, 151.21], ['Melbourne', -37.81, 144.96], ['Perth', -31.95, 115.86]], 'New Zealand': [['Auckland', -36.85, 174.76], ['Christchurch', -43.53, 172.64], ['Dunedin', -45.87, 170.50]],
+  'Papua New Guinea': [['Lae', -6.72, 146.99], ['Mount Hagen', -5.86, 144.23], ['Madang', -5.22, 145.79]], Egypt: [['Alexandria', 31.20, 29.92], ['Luxor', 25.69, 32.64], ['Aswan', 24.09, 32.90]],
+  Nigeria: [['Lagos', 6.52, 3.38], ['Kano', 12.00, 8.52], ['Port Harcourt', 4.82, 7.03]], Kenya: [['Mombasa', -4.04, 39.67], ['Kisumu', -0.09, 34.77], ['Eldoret', 0.51, 35.27]],
+  Ethiopia: [['Dire Dawa', 9.59, 41.87], ['Gondar', 12.61, 37.47], ['Mekelle', 13.50, 39.47]], Morocco: [['Casablanca', 33.57, -7.59], ['Marrakesh', 31.63, -8.01], ['Tangier', 35.76, -5.83]],
+  Algeria: [['Oran', 35.70, -0.63], ['Constantine', 36.37, 6.61], ['Tamanrasset', 22.79, 5.52]], Ghana: [['Kumasi', 6.69, -1.62], ['Tamale', 9.40, -0.84], ['Takoradi', 4.90, -1.76]],
+  Madagascar: [['Toamasina', -18.15, 49.40], ['Mahajanga', -15.72, 46.32], ['Toliara', -23.35, 43.67]], Tanzania: [['Dar es Salaam', -6.79, 39.21], ['Arusha', -3.37, 36.68], ['Mwanza', -2.52, 32.90]],
+  France: [['Marseille', 43.30, 5.37], ['Lyon', 45.76, 4.84], ['Bordeaux', 44.84, -0.58]], Germany: [['Hamburg', 53.55, 9.99], ['Munich', 48.14, 11.58], ['Cologne', 50.94, 6.96]],
+  'United Kingdom': [['Manchester', 53.48, -2.24], ['Edinburgh', 55.95, -3.19], ['Birmingham', 52.49, -1.89]], Spain: [['Barcelona', 41.39, 2.17], ['Seville', 37.39, -5.98], ['Valencia', 39.47, -0.38]],
+  Italy: [['Milan', 45.46, 9.19], ['Naples', 40.85, 14.27], ['Palermo', 38.12, 13.36]], Portugal: [['Porto', 41.15, -8.61], ['Faro', 37.02, -7.93], ['Coimbra', 40.21, -8.43]],
+  Netherlands: [['Rotterdam', 51.92, 4.48], ['Groningen', 53.22, 6.57], ['Eindhoven', 51.44, 5.47]], Poland: [['Kraków', 50.06, 19.94], ['Gdańsk', 54.35, 18.65], ['Wrocław', 51.11, 17.03]],
+  Sweden: [['Gothenburg', 57.71, 11.97], ['Malmö', 55.60, 13.00], ['Umeå', 63.83, 20.26]], Norway: [['Bergen', 60.39, 5.32], ['Trondheim', 63.43, 10.40], ['Tromsø', 69.65, 18.96]],
+  Finland: [['Tampere', 61.50, 23.76], ['Oulu', 65.01, 25.47], ['Turku', 60.45, 22.27]], Greece: [['Thessaloniki', 40.64, 22.94], ['Patras', 38.25, 21.73], ['Heraklion', 35.34, 25.14]],
+  Ukraine: [['Kharkiv', 49.99, 36.23], ['Odesa', 46.48, 30.72], ['Lviv', 49.84, 24.03]], Russia: [['Saint Petersburg', 59.93, 30.36], ['Novosibirsk', 55.01, 82.93], ['Vladivostok', 43.12, 131.89]],
+  Austria: [['Salzburg', 47.81, 13.04], ['Graz', 47.07, 15.44], ['Innsbruck', 47.27, 11.40]], Ireland: [['Cork', 51.90, -8.47], ['Galway', 53.27, -9.06], ['Limerick', 52.66, -8.63]],
+  Iceland: [['Akureyri', 65.68, -18.09], ['Ísafjörður', 66.07, -23.12], ['Egilsstaðir', 65.27, -14.39]], Canada: [['Toronto', 43.65, -79.38], ['Vancouver', 49.28, -123.12], ['Calgary', 51.05, -114.07]],
+  'United States of America': [['New York City', 40.71, -74.01], ['Los Angeles', 34.05, -118.24], ['Chicago', 41.88, -87.63]], Mexico: [['Guadalajara', 20.66, -103.35], ['Monterrey', 25.69, -100.32], ['Cancún', 21.16, -86.85]],
+  Brazil: [['São Paulo', -23.55, -46.63], ['Rio de Janeiro', -22.91, -43.17], ['Manaus', -3.12, -60.02]], Argentina: [['Córdoba', -31.42, -64.18], ['Mendoza', -32.89, -68.84], ['Rosario', -32.94, -60.65]],
+  Chile: [['Valparaíso', -33.05, -71.62], ['Antofagasta', -23.65, -70.40], ['Puerto Montt', -41.47, -72.94]], Peru: [['Arequipa', -16.41, -71.54], ['Cusco', -13.53, -71.97], ['Trujillo', -8.11, -79.03]],
+  Colombia: [['Medellín', 6.24, -75.58], ['Cali', 3.45, -76.53], ['Barranquilla', 10.96, -74.80]], Venezuela: [['Maracaibo', 10.65, -71.64], ['Ciudad Guayana', 8.35, -62.64], ['Barquisimeto', 10.07, -69.32]],
+  Cuba: [['Santiago de Cuba', 20.02, -75.82], ['Camagüey', 21.38, -77.92], ['Santa Clara', 22.41, -79.96]],
+};
 // Natural Earth projection (Šavrič et al.) — the world looks the way students know it from atlases
 function naturalEarth(lon, lat) {
   const l = (lon * Math.PI) / 180, p = (lat * Math.PI) / 180, p2 = p * p, p4 = p2 * p2;
   return [l * (0.8707 - 0.131979 * p2 + p4 * (-0.013791 + p4 * (0.003971 * p2 - 0.001529 * p4))), p * (1.007226 + p2 * (0.015085 + p4 * (-0.044475 + 0.028874 * p2 - 0.005916 * p4)))];
 }
-const haversine = (a, b) => { const R = 6371, t = Math.PI / 180, dLat = (b[0] - a[0]) * t, dLon = (b[1] - a[1]) * t, h = Math.sin(dLat / 2) ** 2 + Math.cos(a[0] * t) * Math.cos(b[0] * t) * Math.sin(dLon / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(h)); };
 // the map data's short labels, written out in full
 const FULL_NAMES = { 'W. Sahara': 'Western Sahara', 'Dem. Rep. Congo': 'Democratic Republic of the Congo', 'Dominican Rep.': 'Dominican Republic', 'Falkland Is.': 'Falkland Islands', 'Fr. S. Antarctic Lands': 'French Southern and Antarctic Lands', 'Central African Rep.': 'Central African Republic', 'Eq. Guinea': 'Equatorial Guinea', eSwatini: 'Eswatini', Turkey: 'Türkiye (Turkey)', 'Solomon Is.': 'Solomon Islands', Czechia: 'Czechia (Czech Republic)', 'N. Cyprus': 'Northern Cyprus', 'Bosnia and Herz.': 'Bosnia and Herzegovina', Macedonia: 'North Macedonia', 'S. Sudan': 'South Sudan', 'United States of America': 'United States', 'Côte d\'Ivoire': 'Côte d’Ivoire (Ivory Coast)' };
 // territories whose status is disputed or that aren't countries are never asked in "Find it"
@@ -709,12 +743,12 @@ function loadWorld() { // TopoJSON → rings of [lon, lat] for each country
   return worldPromise;
 }
 const geographyLab = {
-  id: 'geography', name: 'Geography', subject: 'puzzles', levels: ['elem', 'hs'], blurb: 'Name the highlighted country, pick its capital, then pin it on the map. Or find countries on the map, or tap around to explore.',
+  id: 'geography', name: 'Geography', subject: 'puzzles', levels: ['elem', 'hs'], blurb: 'Name the highlighted country, pick its capital, then find the capital among its cities on the map. Or find countries on the map, or tap around to explore.',
   words: 'geography countries capitals map world atlas daily quiz',
   icon: '<circle cx="24" cy="24" r="18"/><path d="M6 24h36M24 6c-7 6-7 30 0 36M24 6c7 6 7 30 0 36"/><path d="M33 14l2 6-4 2" />',
-  about: 'Map: Natural Earth (public domain) in the Natural Earth projection; borders are shown as drawn in that data and are not a statement about any disputed territory. Small countries and islands are simplified at this scale.\nEach round: name the country (100 points), pick its capital (100 points), then pin the capital, 100 points minus 1 for every 10 km you are off. The capital listed is the official capital (for example Tanzania’s is Dodoma, Myanmar’s Naypyidaw, Kazakhstan’s Astana).\nEveryone gets the same 8 countries each day.',
+  about: 'Map: Natural Earth (public domain) in the Natural Earth projection; borders are shown as drawn in that data and are not a statement about any disputed territory. Small countries and islands are simplified at this scale.\nEach round: name the country (100 points), pick its capital (100 points), then find the capital among the cities on the map: the capital and three other real cities show as dots where they really are; tap the capital (100 points). Zoom in with a pinch, the mouse wheel or the + button. The capital listed is the official capital (for example Tanzania’s is Dodoma, Myanmar’s Naypyidaw, Kazakhstan’s Astana).\nEveryone gets the same 8 countries each day.',
   mount({ stage, panel, api }) {
-    let world = null, rounds = [], k = 0, step = 0, points = 0, options = [], answered = null, pin = null, view = null, over = false, rand = null;
+    let world = null, rounds = [], k = 0, step = 0, points = 0, options = [], answered = null, pin = null, view = null, over = false, rand = null, cities = [], spots = [];
     // modes: today's quiz (as before) · find a country on the map · explore (tap any country)
     let mode = 'quiz', find = null, found = null, tapped = null, findScore = [0, 0];
     let vk = 1, vx = 0, vy = 0; // zoom and pan
@@ -744,6 +778,8 @@ const geographyLab = {
       if (step === 0) options = shuffle([C0, ...shuffle(COUNTRIES.filter((c) => c !== C0 && c[5] === C0[5]), rand).slice(0, 3)], rand).map((c) => c[1]);
       if (step === 1) options = shuffle([C0, ...shuffle(COUNTRIES.filter((c) => c !== C0 && c[5] === C0[5]), rand).slice(0, 3)], rand).map((c) => c[2]);
       view = step === 2 ? 'zoom' : 'world';
+      vk = 1; vx = 0; vy = 0; // (each question starts at its own view; zoom in from there)
+      if (step === 2) cities = shuffle([[C0[2], C0[3], C0[4], true], ...(CITIES[C0[0]] || []).map((c) => [...c, false])], rand);
       render();
     }
     const nice = (name) => { const c = COUNTRIES.find((x) => x[0] === name); return c ? c[1].replace(/^the /, '') : FULL_NAMES[name] || name; };
@@ -759,7 +795,8 @@ const geographyLab = {
         cv.redraw(); return;
       }
       if (over) { qbox.innerHTML = ''; cv.redraw(); return; }
-      const q = step === 0 ? 'Which country is highlighted?' : step === 1 ? `What is the capital of ${esc(C0[1])}?` : `Tap the map where ${esc(C0[2])} is.`;
+      const q = step === 0 ? 'Which country is highlighted?' : step === 1 ? `What is the capital of ${esc(C0[1])}?`
+        : !pin ? `Which dot is <b>${esc(C0[2])}</b>? Tap it. (Pinch or scroll to zoom.)` : pin.right ? `Yes, that’s <b>${esc(C0[2])}</b>! +100` : `That’s ${esc(pin.name)}. <b>${esc(C0[2])}</b> is the green dot.`;
       qbox.innerHTML = `<p class="geo-n">Round ${k + 1} of ${rounds.length} · ${points} points</p><p class="geo-text">${q}</p>`
         + (step < 2 ? `<div class="geo-opts">${options.map((o) => `<button type="button" data-o="${esc(o)}" class="${answered ? (o === (step ? C0[2] : C0[1]) ? 'right' : o === answered ? 'wrong' : '') : ''}" ${answered ? 'disabled' : ''}>${esc(o)}</button>`).join('')}</div>` : '')
         + (answered || pin ? '<button type="button" class="lab-btn main geo-next">Next country</button>' : '');
@@ -791,7 +828,7 @@ const geographyLab = {
       const corners = [[bounds[0][0], bounds[0][1]], [bounds[1][0], bounds[1][1]], [bounds[0][0], bounds[1][1]], [bounds[1][0], bounds[0][1]], [(bounds[0][0] + bounds[1][0]) / 2, bounds[1][1]], [(bounds[0][0] + bounds[1][0]) / 2, bounds[0][1]]].map(([a, b]) => naturalEarth(a, b));
       const xs = corners.map((p) => p[0]), ys = corners.map((p) => p[1]), sx = (w - 20) / (Math.max(...xs) - Math.min(...xs)), sy = (h - top - 10) / (Math.max(...ys) - Math.min(...ys)), s = Math.min(sx, sy);
       const cx = w / 2 - ((Math.max(...xs) + Math.min(...xs)) / 2) * s, cy = top + (h - top) / 2 + ((Math.max(...ys) + Math.min(...ys)) / 2) * s;
-      const midY = top + (h - top) / 2, z = mode === 'quiz' ? { k: 1, x: 0, y: 0 } : { k: vk, x: vx, y: vy };
+      const midY = top + (h - top) / 2, z = { k: vk, x: vx, y: vy }; // (v295: zoom in every mode, the quiz too)
       const P0 = (lon, lat) => { const [x, y] = naturalEarth(lon, lat); return [cx + x * s, cy - y * s]; };
       const P = (lon, lat) => { const [x, y] = P0(lon, lat); return [(x - w / 2) * z.k + w / 2 + z.x, (y - midY) * z.k + midY + z.y]; };
       proj = { P, w, midY, inv: (x, y) => { // screen → lon/lat (search, since the projection has no simple inverse)
@@ -820,11 +857,18 @@ const geographyLab = {
       }
       ctx.restore();
       if (mode === 'quiz' && tapped && step < 2 && answered) { const [lx, ly] = tapAt || [w / 2, h - 12]; text(ctx, nice(tapped.name), lx, ly - 10, INK, 'center'); }
-      if (pin && mode === 'quiz') {
-        const [px, py] = P(pin[1], pin[0]), [tx, ty] = P(C0[4], C0[3]);
-        line(ctx, [[px, py], [tx, ty]], INK, 1.5); dot(ctx, px, py, 6, C.red); dot(ctx, tx, ty, 6, C.green);
-        text(ctx, `${C0[2]} · you were ${Math.round(pin.d)} km away (+${pin.pts})`, w / 2, h - 12, INK, 'center');
-      }
+      // (v295) the capital round: the capital and three other real cities as dots, each a 44px tap target; names show once answered
+      spots = [];
+      if (mode === 'quiz' && step === 2 && !over) cities.forEach(([name, la, lo, isCap]) => {
+        const [x, y] = P(lo, la);
+        spots.push({ name, x, y, isCap });
+        const col = pin ? (isCap ? C.green : pin.name === name ? C.red : 'rgba(250,250,252,.92)') : 'rgba(250,250,252,.95)';
+        ctx.beginPath(); ctx.arc(x, y, 11, 0, Math.PI * 2); ctx.fillStyle = 'rgba(16,17,22,.55)'; ctx.fill();
+        dot(ctx, x, y, 8, col);
+        ctx.beginPath(); ctx.arc(x, y, 8, 0, Math.PI * 2); ctx.strokeStyle = 'rgba(16,17,22,.9)'; ctx.lineWidth = 2; ctx.stroke();
+        if (pin) text(ctx, name, x, y - 16, INK, 'center');
+      });
+      cv.c._spots = spots.map((q) => ({ name: q.name, x: q.x, y: q.y, cap: q.isCap })); // (where each city dot is, for the tests)
     });
     // a tap: pin the capital (quiz), pick a country (find), or name it (explore). Dragging moves the
     // map and pinching or the mouse wheel zooms (in Find it and Explore).
@@ -835,7 +879,11 @@ const geographyLab = {
       const ll = proj.inv(p.x, p.y), c = countryAt(ll[1], ll[0]);
       if (mode === 'quiz') {
         if (over) return;
-        if (step === 2 && !pin) { const C0 = rounds[k], d = haversine(ll, [C0[3], C0[4]]), pt = Math.max(0, Math.round(100 - d / 10)); pin = [ll[0], ll[1]]; pin.d = d; pin.pts = pt; points += pt; render(); return; }
+        if (step === 2 && !pin) { // (the nearest dot within 22px: each city is a 44px target)
+          const near = spots.map((s2) => ({ ...s2, d: Math.hypot(s2.x - p.x, s2.y - p.y) })).sort((a, b) => a.d - b.d)[0];
+          if (!near || near.d > 22) return;
+          pin = { name: near.name, right: near.isCap }; if (near.isCap) points += 100; render(); return;
+        }
         if (answered && c) { tapped = c; tapAt = [p.x, p.y]; cv.redraw(); } // after answering, tap other countries to learn them
         return;
       }
@@ -847,7 +895,6 @@ const geographyLab = {
       down(p, e) { pts.set(e.pointerId, p); last = p; moved = false; },
       move(p, e) {
         const before = pts.get(e.pointerId); pts.set(e.pointerId, p);
-        if (mode === 'quiz') { if (Math.hypot(p.x - last.x, p.y - last.y) > 8) moved = true; return; }
         if (pts.size === 2) { const [a, b] = [...pts.values()], prev = [...pts.entries()].map(([id, q]) => (id === e.pointerId ? before : q)); const d0 = Math.hypot(prev[0].x - prev[1].x, prev[0].y - prev[1].y), d1 = Math.hypot(a.x - b.x, a.y - b.y); if (d0 > 0) zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, d1 / d0); moved = true; return; }
         if (Math.hypot(p.x - last.x, p.y - last.y) > 6 || moved) { moved = true; vx += p.x - before.x; vy += p.y - before.y; cv.redraw(); }
       },
@@ -861,14 +908,13 @@ const geographyLab = {
       if (vk === 1) { vx = 0; vy = 0; }
       cv.redraw();
     }
-    cv.c.addEventListener('wheel', (e) => { if (mode === 'quiz') return; e.preventDefault(); const p = at(cv.c, e); zoomAt(p.x, p.y, e.deltaY < 0 ? 1.2 : 1 / 1.2); }, { passive: false });
+    cv.c.addEventListener('wheel', (e) => { e.preventDefault(); const p = at(cv.c, e); zoomAt(p.x, p.y, e.deltaY < 0 ? 1.2 : 1 / 1.2); }, { passive: false });
     const zoomBox = overlay(stage, 'br');
     button(zoomBox, '+', () => zoomAt(cv.w / 2, (proj ? proj.midY : cv.h / 2), 1.5)).setAttribute('aria-label', 'Zoom in');
     button(zoomBox, '−', () => zoomAt(cv.w / 2, (proj ? proj.midY : cv.h / 2), 1 / 1.5)).setAttribute('aria-label', 'Zoom out');
     button(zoomBox, 'Whole world', () => { vk = 1; vx = 0; vy = 0; cv.redraw(); });
-    zoomBox.hidden = true;
     seg(group(panel, 'Mode'), { options: [['quiz', 'Today’s quiz'], ['find', 'Find it on the map'], ['explore', 'Explore the map']], value: mode, onChange: (v) => {
-      mode = v; tapped = null; tapAt = null; zoomBox.hidden = mode === 'quiz'; vk = 1; vx = 0; vy = 0;
+      mode = v; tapped = null; tapAt = null; vk = 1; vx = 0; vy = 0;
       if (mode === 'quiz') { make(); S.render(); } else { findScore = [0, 0]; nextFind(); }
     } });
     loadWorld().then((wd) => { world = wd; if (mode === 'find' && !find) nextFind(); cv.redraw(); }).catch(() => { qbox.innerHTML = `<p class="lab-err">${esc(errorWords('lab_map_failed'))}</p>`; });

@@ -1054,3 +1054,23 @@ html.lite .lf.lf-open .lf-paper:nth-child(n) { opacity: .85; }
   .ob-solved.ob-shapes .ob-card svg:not(.cartoon) { width: min(28vw, 12vh, 120px); }
   .ob-solved .ob-name { font-size: 1.1rem; }
 }
+
+/* (v295) phones: Teach me and Ask Cassie are small pills beside Back, not a row of their own, so the lab
+   gets the room. Each stays 44px tall with its words; the lab's name sits on a slim line under them. */
+@media (max-width: 760px) {
+  .lab-head { row-gap: var(--sp-1, 4px); padding-bottom: var(--sp-2, 8px); }
+  .lab-back { order: 1; min-height: 44px; padding: 0 var(--sp-3, 12px); }
+  .lab-acts { order: 2; width: auto; margin-left: auto; flex-wrap: nowrap; gap: var(--sp-2, 8px); }
+  .lab-acts .lab-btn { flex: 0 0 auto; min-height: 44px; padding: 0 var(--sp-3, 12px); gap: var(--sp-1, 4px); font-size: .82rem; white-space: nowrap; }
+  .lab-acts .lab-btn svg { width: 14px; height: 14px; flex: none; }
+  .lab-name { order: 3; flex-basis: 100%; margin-right: 0; gap: var(--sp-2, 8px); }
+  .lab-name h2 { font-size: 1rem; }
+}
+@media (max-width: 380px) { .lab-back span { display: none; } .lab-back { min-width: 44px; justify-content: center; } } /* (the narrowest phones: Back is the arrow alone, labelled) */
+/* (with Quiz me too, three pills: Back is the arrow alone so they still share Back's line) */
+@media (max-width: 760px) {
+  .lab-head:has(.lab-quiz:not([hidden])) .lab-back span { display: none; }
+  .lab-head:has(.lab-quiz:not([hidden])) .lab-back { min-width: 44px; padding: 0; justify-content: center; }
+  .lab-head:has(.lab-quiz:not([hidden])) .lab-acts .lab-btn { padding: 0 10px; }
+}
+@media (max-width: 380px) { .lab-head:has(.lab-quiz:not([hidden])) .lab-acts .lab-btn svg { display: none; } }

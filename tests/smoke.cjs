@@ -10525,6 +10525,21 @@ test('Labs puzzles: today’s puzzle is the same for everyone, finishing it goes
   await page.waitForSelector('.geo-next');
   await page.waitForTimeout(500);
   await shot('puzzle-geography');
+  // (v295) the capital round: its capital and three real cities are dots; tap one; the map zooms in the quiz too
+  await page.click('.geo-next'); await page.click('.geo-opts button >> nth=0'); await page.click('.geo-next');
+  await page.waitForFunction(() => /Which dot is/.test(document.querySelector('.geo-q').textContent), null, { timeout: 5000 });
+  const geoCv = page.locator('.lab-stage canvas.lab-canvas').first();
+  await page.waitForFunction(() => { const c = document.querySelector('.lab-stage canvas.lab-canvas'); return c && c._spots && c._spots.length === 4; }, null, { timeout: 5000 }); // (the map redraws on its next frame)
+  const spots0 = await geoCv.evaluate((c) => c._spots);
+  expect(spots0 && spots0.length === 4 && spots0.filter((x) => x.cap).length === 1, 'four city dots, one the capital: ' + JSON.stringify(spots0));
+  await page.click('.lab-overlay .lab-btn[aria-label="Zoom in"]'); await page.waitForTimeout(400);
+  const spots1 = await geoCv.evaluate((c) => c._spots);
+  const spread = (sp) => Math.max(...sp.map((q) => q.x)) - Math.min(...sp.map((q) => q.x)) + Math.max(...sp.map((q) => q.y)) - Math.min(...sp.map((q) => q.y));
+  expect(spread(spots1) > spread(spots0) * 1.3, 'Zoom in spreads the cities apart in the quiz: ' + JSON.stringify([spread(spots0), spread(spots1)]));
+  const cap = spots1.find((q) => q.cap), cb = await geoCv.boundingBox();
+  await page.mouse.click(cb.x + cap.x + 6, cb.y + cap.y - 6); // (near the dot counts: each is a 44px target)
+  await page.waitForTimeout(200);
+  expect(/Yes, that’s/.test(await page.locator('.geo-q').innerText()) && await page.locator('.geo-next').count() === 1, 'tapping the capital’s dot: right, then Next: ' + await page.locator('.geo-q').innerText());
   expect(errors.length === 0, 'page errors: ' + errors.join('; '));
   await ctx.close();
 });
