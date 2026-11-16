@@ -7364,6 +7364,29 @@ test('v294 tap targets: every button, link, switch and field on a computer’s H
   await ctx.close();
 });
 
+// (v295) Cassie's grammar and vocabulary fit the student: by age or grade, then by how they write in the chat
+test('v295 language fit: Cassie’s grammar and vocabulary follow the student’s age or grade and how they write, her own grammar always correct, theirs never corrected unless asked', async (b) => {
+  const { ctx, page, errors } = await open(b, { server: false, state: { groqKey: 'gsk_test' } });
+  const fit = await page.evaluate(() => {
+    const out = {}, was = { p: state.profile, l: state.level, c: state.chats, id: state.currentId };
+    const lang = () => (buildSystemPrompt({ tutor: true }).match(/\n\nLanguage: [^\n]*/) || [''])[0];
+    state.level = 'auto';
+    for (const [k, p] of [['kinder', { name: 'Ana', grade: 'Kindergarten', age: 5 }], ['g4', { name: 'Ben', grade: 'Grade 4', age: 9 }], ['g8', { name: 'Cy', grade: 'Grade 8' }], ['shs', { name: 'Di', grade: 'Senior High', age: 17 }], ['college', { name: 'Ed', grade: 'College', age: 20 }], ['pro', { name: 'Fe', role: 'pro', field: 'nursing' }]]) { state.profile = { role: 'student', ...p }; out[k] = lang(); }
+    state.profile = { name: 'Ben', grade: 'Grade 4', age: 9, role: 'student' }; state.level = 'college'; out.levelWins = lang(); state.level = 'auto';
+    const chat = (msgs) => { state.chats = [{ id: 'lf', title: 't', messages: msgs.map((t) => ({ role: 'user', content: t })) }]; state.currentId = 'lf'; return lang(); };
+    out.simple = chat(['what is a cell', 'how big is it', 'is it alive']);
+    out.rich = chat(['Could you elaborate on the thermodynamic constraints governing photosynthetic efficiency in C4 plants?', 'I am particularly interested in the comparative energetics of photorespiration versus carbon concentrating mechanisms.']);
+    state.profile = was.p; state.level = was.l; state.chats = was.c; state.currentId = was.id;
+    return out;
+  });
+  expect(/5 to 8 words/.test(fit.kinder) && /8 to 11/.test(fit.g4) && /junior high/.test(fit.g8) && /senior high/.test(fit.shs) && /college student or adult/.test(fit.college) && /college student or adult/.test(fit.pro), 'each age gets its own sentence length and words: ' + JSON.stringify(fit));
+  expect(/college student or adult/.test(fit.levelWins), 'an explanation level picked in Settings comes first');
+  expect(/short, simple sentences/.test(fit.simple) && /rich vocabulary/.test(fit.rich), 'she follows how they write: ' + JSON.stringify([fit.simple, fit.rich]));
+  expect(Object.values(fit).every((t) => /grammar is always correct/.test(t) && /Never correct the student’s grammar or spelling unless they ask/.test(t)), 'her grammar always correct; theirs never corrected unless asked');
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test('8-point grid v233: every padding, margin and gap in the stylesheets is on the scale (4, 8, 12, 16, 24, 32, 40, 48, 56, 64, then multiples of 8; 1 to 2px hairlines; notes for the rest), styled elements on the website and in the app compute to it, and every button, field and tab is 48px on a phone and 40px or more on a computer (1280x800 and 390x844)', async (b) => {
   // 1. the stylesheets
   const PROPS = /(?<![\w-])(padding|margin|gap|row-gap|column-gap|padding-[a-z-]+|margin-[a-z-]+)\s*:\s*([^;}"`]+)/g;
@@ -11290,6 +11313,9 @@ test('Games: Animal habitats, World jigsaw, Landform match, History in order, Sh
     expect(await stat('Wrong taps this round') === '1' && /^Not the /.test(await msg()) && !(await done('habitats'))[0] && !(await nextShown()), `${where}: a wrong home: ` + await msg());
     await choose(mod.animals[one]);
     expect(await nextShown() && (await done('habitats'))[0], `${where}: the right home, then Next`);
+    // (v295) the right home: the animal in its home, moving the way it really does (Lite mode keeps it still)
+    const scene = await page.$eval(`${V} .ob-card`, (c) => { const s = c.querySelector('.hb-scene'); return s ? { home: !!s.querySelector('.cartoon-home'), animal: !!s.querySelector('.hb-actor .cartoon'), move: [...s.classList].find((k) => /^hb-(walk|swim|drift|fly|hop|swing|sloth|crawl|slither)$/.test(k)), label: c.getAttribute('aria-label'), anim: getComputedStyle(s.querySelector('.hb-actor')).animationName + '/' + getComputedStyle(s.querySelector('.hb-body')).animationName, lite: document.documentElement.classList.contains('lite') } : null; });
+    expect(scene && scene.home && scene.animal && scene.move && / at home: it /.test(scene.label) && (scene.lite ? !/hb/.test(scene.anim) : /hb/.test(scene.anim)), `${where}: the animal at home, moving: ` + JSON.stringify(scene));
     await next();
     const rest = await playRound(6, 1);
     expect(new Set([one, ...rest].map((a) => mod.animals[a])).size === 6, `${where}: six animals, one for each home: ` + [one, ...rest]);
@@ -12495,16 +12521,19 @@ test('v283: Settings: Save for offline saves Learn’s files for no internet (th
   expect(/Saved on this device/.test(saved) && /Learn: every lab, game and study tool/.test(saved) && /Not saved: the 3D human body/.test(saved), 'what is saved, and what isn’t: ' + saved);
   // the outfit
   const of = await page.evaluate(() => [...document.querySelectorAll('#of-grid .of-opt')].map((o) => o.dataset.of + ':' + o.getAttribute('aria-checked')));
-  expect(of.join() === 'auto:true,scarf:false,headphones:false,bow:false,beanie:false,sampaguita:false,none:false', 'seven choices, Auto picked: ' + of.join());
+  expect(of.join() === 'auto:true,scarf:false,headphones:false,bow:false,beanie:false,sampaguita:false,cap:false,glasses:false,sunglasses:false,bowtie:false,star:false,crown:false,salakot:false,party:false,pencil:false,none:false', 'sixteen choices (v295: nine more accessories), Auto picked: ' + of.join());
+  // (v295) every accessory is one Cassie can wear (drawn, so the 3D Cassie builds it too); the note names the next holiday
+  expect(await page.evaluate(() => OUTFITS.filter(([k]) => !['auto', 'none'].includes(k)).every(([k]) => window.CassieBot.ACCESSORIES.includes(k))), 'every accessory is one Cassie has');
+  expect(/(Today is .+ so she wears the|Next holiday: .+ in \d+ days?; she’ll wear the) /.test(await page.locator('#of-note').innerText()), 'the note says the holiday dresses her up by itself: ' + await page.locator('#of-note').innerText());
   await page.evaluate(() => document.querySelector('#of-grid [data-of="bow"]').click());
   const worn = await page.evaluate(() => ({ s: state.outfit, a: bot2d && bot2d.accessory, on: document.querySelector('#of-grid [data-of="bow"]').getAttribute('aria-checked') }));
   expect(worn.s === 'bow' && /bow/.test(worn.a || '') && worn.on === 'true', 'a pick is kept and worn at once: ' + JSON.stringify(worn));
   const rules = await page.evaluate(() => { const B = window.CassieBot, s0 = B.seasonal, h0 = B.holiday, out = {};
     B.seasonal = () => null; B.holiday = () => null; state.outfit = 'auto'; out.plainAuto = cassieSeasonal(); state.outfit = 'bow'; out.plainBow = cassieSeasonal(); state.outfit = 'none'; out.plainNone = cassieSeasonal();
     B.seasonal = () => 'santa+tassel'; state.outfit = 'auto'; out.seasonAuto = cassieSeasonal(); state.outfit = 'beanie'; out.seasonBeanie = cassieSeasonal();
-    B.holiday = () => ({ acc: 'flag' }); B.seasonal = () => 'flag'; state.outfit = 'beanie'; out.holiday = cassieSeasonal();
+    B.holiday = () => ({ acc: 'flag' }); B.seasonal = () => 'flag'; state.outfit = 'beanie'; out.holiday = cassieSeasonal(); state.outfit = 'cap'; out.holidayCap = cassieSeasonal();
     B.seasonal = s0; B.holiday = h0; state.outfit = 'auto'; return out; });
-  expect(rules.plainAuto === 'scarf' && rules.plainBow === 'bow' && rules.plainNone === null && rules.seasonAuto === 'santa+tassel' && rules.seasonBeanie === 'beanie+tassel' && rules.holiday === 'flag', 'what she wears when: ' + JSON.stringify(rules));
+  expect(rules.plainAuto === 'scarf' && rules.plainBow === 'bow' && rules.plainNone === null && rules.seasonAuto === 'santa+tassel' && rules.seasonBeanie === 'beanie+tassel' && rules.holiday === 'flag' && rules.holidayCap === 'flag', 'what she wears when (a holiday still dresses her up, the new picks too): ' + JSON.stringify(rules));
   expect(!errors.length, 'no script errors: ' + errors.join(' | '));
   await ctx.close();
 });

@@ -107,6 +107,25 @@ export const ANIMALS = [
   ['beaver', '', 'Beaver', 'wet', 'A beaver builds a dam and a lodge out of sticks and mud in a pond.'],
   ['dragonfly', '', 'Dragonfly', 'wet', 'A dragonfly lays its eggs in a pond, and the young grow up under the water.'],
 ];
+// (v295) a right answer: the animal in its own home, moving the way it really does (swims, flies, hops, climbs,
+// crawls or walks). With Reduce Motion it just sits in its home.
+const MOVES = {
+  swim: ['whale', 'dolphin', 'shark', 'turtle', 'clownfish', 'octopus', 'seal', 'crocodile', 'hippo', 'beaver', 'duck', 'walrus'],
+  drift: ['jellyfish'],
+  fly: ['snowyowl', 'parrot', 'toucan', 'dragonfly'],
+  hop: ['kangaroo', 'frog', 'jackrabbit', 'arctichare', 'meerkat', 'tarsier'],
+  swing: ['monkey', 'orangutan'],
+  sloth: ['sloth'],
+  crawl: ['crab', 'starfish', 'scorpion', 'tortoise'],
+  slither: ['snake', 'lizard'],
+};
+const moveOf = (id) => Object.keys(MOVES).find((k) => MOVES[k].includes(id)) || 'walk';
+const VERB = { swim: 'swims', drift: 'drifts', fly: 'flies', hop: 'hops', swing: 'swings through the trees', sloth: 'hangs and sways, very slowly', crawl: 'crawls', slither: 'slithers', walk: 'walks' };
+function homeScene(card, it) {
+  const mv = moveOf(it.id);
+  card.innerHTML = `<div class="hb-scene hb-${mv} hb-in-${esc(it.to)}">${homeSvg(it.to)}<span class="hb-actor"><span class="hb-body">${animalSvg(it.id)}</span></span></div>`;
+  card.setAttribute('aria-label', `${it.label} at home: it ${VERB[mv]}`);
+}
 const habitatsLab = {
   id: 'habitats', name: 'Animal habitats', subject: 'games', levels: ['pre', 'elem'],
   blurb: 'Help each animal find its home: polar ice, desert, rainforest, ocean, grassland or pond.',
@@ -130,7 +149,7 @@ const habitatsLab = {
         items: shuffle(set, rand).map(([id, e, name, to, why]) => ({ id, html: `${animalSvg(id)}<span class="ob-name">${esc(name)}</span>`, label: name, to, why })),
         choicesFor: (it) => pick3(homes.find((h) => h.id === it.to), homes, rand),
         cls: 'ob-toons', againText: 'New animals', onAgain: () => deal(),
-        onRight: (it) => { right++; tell(`Yes! ${it.why}`, 'good'); say(`Yes! ${it.why}`); api.check(0); report(); },
+        onRight: (it) => { right++; homeScene(ob.board.querySelector('.ob-card'), it); tell(`Yes! ${it.why}`, 'good'); say(`Yes! ${it.why}`); api.check(0); report(); },
         onWrong: (it, p) => { wrong++; tell(`Not the ${p.label.toLowerCase()}. Where would a ${it.label.toLowerCase()} find its food and shelter?`, 'bad'); say(`Not there. Try again!`); report(); },
         onDone: () => { rounds++; api.check(1); if (!wrong) api.check(2); const b = api.best(6 - wrong, `${6 - wrong} of 6 first time`); tell(`Every animal is home! ${wrong ? `${wrong} wrong ${wrong === 1 ? 'tap' : 'taps'} on the way.` : 'Not one wrong tap!'}${b && b.isNew ? ' A new best!' : ''} Press New animals to play again.`, 'good'); report(); },
       });
