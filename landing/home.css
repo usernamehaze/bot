@@ -111,7 +111,7 @@ footer .brand { color: var(--ink); }
 #try-page b[data-term] { font-weight: 700; background-image: linear-gradient(currentColor, currentColor); background-size: 100% 1.5px; background-position: 0 92%; background-repeat: no-repeat; cursor: pointer; border-radius: 3px; }
 #try-page b[data-term]:hover { background-color: var(--page-2); }
 #try-page ::selection { background: var(--accent); color: var(--accent-ink); }
-#try-hint { display: inline-flex; align-items: center; gap: var(--sp-2, 8px); margin: 0 0 var(--sp-4, 16px); padding: var(--sp-2, 8px) var(--sp-3, 12px) var(--sp-2, 8px) var(--sp-3, 12px); border-radius: 999px; background: var(--accent); color: var(--accent-ink); font: 600 13px/1 var(--sans); transition: opacity .3s, transform .3s; }
+#try-hint { display: inline-flex; align-items: center; gap: var(--sp-2, 8px); margin: 0 0 var(--sp-4, 16px); padding: var(--sp-2, 8px) var(--sp-3, 12px) var(--sp-2, 8px) var(--sp-3, 12px); border-radius: 999px; background: var(--accent); color: var(--accent-ink); font: 600 13px/1.4 var(--sans); transition: opacity .3s, transform .3s; }
 #try-hint svg { width: 14px; height: 14px; }
 #try-hint svg path { fill: var(--accent-ink); }
 #try-hint.play { animation: tpNudge 1.6s ease-in-out 3; }
@@ -291,7 +291,7 @@ h2 { font: 600 clamp(32px, 4.4vw, 52px)/1.08 var(--sans); letter-spacing: -.025e
 .plan .early-done { margin: 0; padding: var(--sp-4, 16px) 0 0; font-size: 15px; font-weight: 600; }
 .badge { position: absolute; top: 16px; right: 16px; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: var(--sp-2, 8px) var(--sp-3, 12px); border-radius: 999px; background: var(--accent); color: var(--accent-ink); }
 .anchor { margin: var(--sp-6, 32px) 0 0; font-size: 17px; font-weight: 600; text-align: center; }
-.fine { margin: var(--sp-4, 16px) 0 0; color: var(--mute); font-size: 14.5px; text-align: center; }
+.fine { margin: var(--sp-4, 16px) 0 0; color: var(--mute); font-size: 14.5px; line-height: 1.5; text-align: left; } /* (v293: a long note reads best left-aligned) */
 
 /* ---------- 7. faq ---------- */
 .faq { display: grid; gap: var(--sp-2, 8px); }

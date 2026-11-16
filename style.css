@@ -1315,7 +1315,7 @@ html.lite .hub-say { animation: none; }
 .auth-switch button { background: none; border: 0; padding: 0; font: inherit; font-weight: 650; color: var(--text); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .auth-skip { background: none; border: 1px solid var(--border); border-radius: 10px; padding: var(--sp-3, 12px); font: inherit; font-size: .92rem; color: var(--text); cursor: pointer; }
 .auth-skip:hover { border-color: var(--text); }
-.auth-legal { margin: var(--sp-1, 4px) 0 0; text-align: center; font-size: .76rem; color: var(--muted); line-height: 1.5; }
+.auth-legal { margin: var(--sp-1, 4px) 0 0; text-align: left; font-size: .76rem; color: var(--muted); line-height: 1.5; }
 .auth-legal a { color: inherit; }
 .auth-right { position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: center; padding: var(--sp-9, 56px) clamp(var(--sp-6, 32px), 5vw, 72px); color: var(--paper-1);
   background: radial-gradient(120% 80% at 80% 10%, var(--dark-3) 0%, var(--dark-1) 55%, var(--dark-0) 100%); }
@@ -2193,7 +2193,7 @@ input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="
 .room-join .field-err { flex-basis: 100%; margin-top: 0; }
 
 /* An empty list (errors.js → CassieErrors.empty): a calm mark, why it's empty, one next step */
-.empty-state { display: flex; flex-direction: column; align-items: center; text-align: center; gap: var(--sp-2); padding: var(--sp-5) var(--sp-4); margin: var(--sp-3) 0; border-radius: var(--r-lg); background: var(--lg-fill-thick); border: 1px solid var(--lg-line); -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); box-shadow: var(--lg-edge); color: var(--text); }
+.empty-state { display: flex; flex-direction: column; align-items: flex-start; text-align: left; /* (v293: left-aligned, so its sentences read easily) */ gap: var(--sp-2); padding: var(--sp-5) var(--sp-4); margin: var(--sp-3) 0; border-radius: var(--r-lg); background: var(--lg-fill-thick); border: 1px solid var(--lg-line); -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); box-shadow: var(--lg-edge); color: var(--text); }
 .empty-state .es-mark { width: 40px; height: 40px; border-radius: 50%; border: 2px dashed var(--muted); margin-bottom: var(--sp-1); }
 .empty-state .es-title { margin: 0; font-size: var(--fs-md); font-weight: 700; }
 .empty-state .es-text { margin: 0; font-size: var(--fs-sm); line-height: var(--lh-body); color: var(--text); max-width: 32ch; }
@@ -2742,7 +2742,7 @@ html.lite .auth-busy { -webkit-backdrop-filter: none; backdrop-filter: none; bac
 .set-danger, .set-danger b { color: var(--danger-ink); }
 .set-danger:hover { background: color-mix(in srgb, var(--danger) 8%, transparent); }
 /* Plans */
-.set-plans-sub { margin: 0 2px var(--sp-4, 16px); color: var(--muted); }
+.set-plans-sub { margin: 0 2px var(--sp-4, 16px); color: var(--muted); line-height: var(--lh-body); }
 .plan-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--sp-3, 12px); margin: 0 0 var(--sp-4, 16px); }
 @media (max-width: 480px) { .plan-grid { grid-template-columns: 1fr; } }
 .plan { position: relative; display: flex; flex-direction: column; gap: var(--sp-2, 8px); padding: var(--sp-4, 16px) var(--sp-4, 16px) var(--sp-4, 16px); border-radius: 20px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--lg-edge); }
@@ -2752,7 +2752,7 @@ html.lite .auth-busy { -webkit-backdrop-filter: none; backdrop-filter: none; bac
 .plan-price b { color: var(--text); font-size: 1.6rem; letter-spacing: -.02em; }
 .plan-pass { align-self: flex-start; padding: 2px var(--sp-3, 12px); border-radius: 99px; border: 1px solid var(--text); color: var(--text); font-size: .76rem; font-weight: 750; }
 .plan-under { margin: 0; color: var(--text); font-size: .84rem; line-height: 1.4; }
-.plan ul { margin: var(--sp-2, 8px) 0 var(--sp-3, 12px); padding: 0 0 0 var(--sp-4, 16px); display: grid; gap: var(--sp-2, 8px); font-size: .9rem; line-height: 1.35; flex: 1; }
+.plan ul { margin: var(--sp-2, 8px) 0 var(--sp-3, 12px); padding: 0 0 0 var(--sp-4, 16px); display: grid; gap: var(--sp-2, 8px); font-size: .9rem; line-height: 1.45; flex: 1; }
 .plan-badge { position: absolute; top: -11px; right: 14px; padding: var(--sp-1, 4px) var(--sp-3, 12px); border-radius: 99px; background: var(--primary); color: var(--on-primary); font-size: .74rem; font-weight: 750; }
 .plan-go, .plan-now { display: grid; place-items: center; min-height: 48px; border-radius: 14px; font-weight: 750; text-decoration: none; }
 .plan-go { background: var(--primary); color: var(--on-primary); }
