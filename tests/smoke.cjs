@@ -1848,7 +1848,7 @@ test('computer Settings is a page: its parts listed on the left (You, Account, S
     await page.click('#side-general #settings-btn');
     await page.waitForSelector('#settings-panel:not([hidden]) .set-nav', { timeout: 4000 });
     const nav = await page.evaluate(() => [...document.querySelectorAll('.set-nav [data-go]')].map((x) => x.textContent));
-    expect(nav.join() === 'You,Account,Study,Appearance,Language,Notifications,Voice and sound,Privacy and data,Plans,Help,Advanced,All settings', 'the list: ' + nav.join());
+    expect(nav.join() === 'You,Account,Study,Appearance,Language,Notifications,Voice and sound,Privacy and data,Plans,Help,Advanced', 'the list (v295: no All settings, it was the same things again): ' + nav.join());
     const geo = await page.evaluate(() => { const n = document.querySelector('.set-nav').getBoundingClientRect(), c = document.querySelector('.settings-card').getBoundingClientRect(); return { navLeft: n.left - c.left, navW: n.width, cardW: c.width }; });
     expect(geo.navLeft < 40 && geo.navW >= 200 && geo.cardW > 900, 'the list on the left of a wide page: ' + JSON.stringify(geo));
     for (const [go, title, inside] of [['study', 'Study', '#level-select'], ['voice', 'Voice and sound', '#voice-gender-select'], ['plans', 'Plans', '.plan-compare'], ['appearance', 'Appearance', '#appx-colors']]) {
@@ -3288,8 +3288,11 @@ test('v255: "Make it yours" personalization. Appearance previews a color, text s
   await page.click('#appx-textsize button[data-size="larger"]');
   await page.click('#appx-uistyle .appx-style[data-style="crisp"]');
   await page.waitForTimeout(150);
+  // (v295) Text size grows every word at once: the root size, so Settings itself and its preview grow too
+  const grow = await page.evaluate(() => ({ root: getComputedStyle(document.documentElement).fontSize, title: parseFloat(getComputedStyle(document.getElementById('set-title')).fontSize) }));
+  expect(grow.root === '20px' && grow.title > 19, 'Text size: Extra large grows the whole app at once, Settings included: ' + JSON.stringify(grow));
   const mid = await page.evaluate(() => ({ bar: !!document.getElementById('appx-bar').offsetParent, n: document.getElementById('appx-bar-n').textContent, accent: state.accent, textSize: state.textSize, uiStyle: state.uiStyle, uiAttr: document.documentElement.getAttribute('data-uistyle'), savedUi: (JSON.parse(localStorage.getItem('cassie.v2') || '{}')).uiStyle }));
-  expect(mid.bar && mid.n === '3 changes' && mid.accent === '#7e22ce' && mid.textSize === 'larger' && mid.uiStyle === 'crisp' && mid.uiAttr === 'crisp' && mid.savedUi !== 'crisp', '1. three choices preview live (state + data-uistyle) and the bar says "3 changes", but nothing is saved yet: ' + JSON.stringify(mid));
+  expect(mid.bar && mid.n === '3 changes to apply' && mid.accent === '#7e22ce' && mid.textSize === 'larger' && mid.uiStyle === 'crisp' && mid.uiAttr === 'crisp' && mid.savedUi !== 'crisp', '1. three choices preview live (state + data-uistyle) and the bar says "3 changes", but nothing is saved yet: ' + JSON.stringify(mid));
   // Discard puts everything back
   await page.click('#appx-discard'); await page.waitForTimeout(150);
   const dis = await page.evaluate(() => ({ bar: !!document.getElementById('appx-bar').offsetParent, accent: state.accent, uiStyle: state.uiStyle, uiAttr: document.documentElement.getAttribute('data-uistyle') }));
@@ -3298,7 +3301,34 @@ test('v255: "Make it yours" personalization. Appearance previews a color, text s
   await page.click('#appx-uistyle .appx-style[data-style="soft"]'); await page.waitForTimeout(100);
   await page.click('#appx-review'); await page.waitForTimeout(150);
   const rev = await page.evaluate(() => ({ bar: !!document.getElementById('appx-bar').offsetParent, uiStyle: state.uiStyle, saved: (JSON.parse(localStorage.getItem('cassie.v2') || '{}')).uiStyle }));
-  expect(!rev.bar && rev.uiStyle === 'soft' && rev.saved === 'soft', '1. Review saves the previewed choice (and the bar goes away): ' + JSON.stringify(rev));
+  expect(!rev.bar && rev.uiStyle === 'soft' && rev.saved === 'soft', '1. Apply saves the previewed choice (and the bar goes away): ' + JSON.stringify(rev));
+  expect(await page.locator('#appx-review').innerText() === 'Apply', '1. the button says Apply');
+  // (v295) leaving with a change not applied: Cassie asks, Apply or Discard; Apply keeps it everywhere
+  await page.click('#appx-textsize button[data-size="large"]'); await page.waitForTimeout(100);
+  await page.evaluate(() => openSettings('language'));
+  await page.waitForSelector('.sure-sheet .sure-yes');
+  const ask = await page.evaluate(() => ({ h: document.querySelector('.sure-sheet h3').textContent, yes: document.querySelector('.sure-yes').textContent, no: document.querySelector('.sure-no').textContent }));
+  expect(ask.h === 'Apply your change?' && ask.yes === 'Apply' && ask.no === 'Discard', '1. leaving asks Apply or Discard: ' + JSON.stringify(ask));
+  await page.click('.sure-sheet .sure-yes'); await page.waitForTimeout(150);
+  const kept = await page.evaluate(() => ({ ts: state.textSize, saved: (JSON.parse(localStorage.getItem('cassie.v2') || '{}')).textSize, root: getComputedStyle(document.documentElement).fontSize }));
+  expect(kept.ts === 'large' && kept.saved === 'large' && kept.root === '18px', '1. Apply on the way out keeps it, saved and in effect: ' + JSON.stringify(kept));
+  // and Discard on the way out puts it back
+  await page.evaluate(() => openSettings('appearance')); await page.waitForSelector('#appx-textsize button');
+  await page.click('#appx-textsize button[data-size="normal"]'); await page.waitForTimeout(100);
+  await page.evaluate(() => closeSettings());
+  await page.waitForSelector('.sure-sheet .sure-no'); await page.click('.sure-sheet .sure-no'); await page.waitForTimeout(150);
+  const back = await page.evaluate(() => ({ ts: state.textSize, saved: (JSON.parse(localStorage.getItem('cassie.v2') || '{}')).textSize, root: getComputedStyle(document.documentElement).fontSize }));
+  expect(back.ts === 'large' && back.saved === 'large' && back.root === '18px', '1. Discard on the way out puts back what was applied: ' + JSON.stringify(back));
+  await page.evaluate(() => { state.textSize = 'normal'; save(); applyReading(); });
+  // (v295) search sits on You: typing shows the matching settings, Back returns to You
+  await page.evaluate(() => openSettings()); await page.waitForTimeout(200);
+  expect(await page.evaluate(() => document.querySelector('#settings-panel .settings-card').dataset.page) === 'profile' && await page.locator('#settings-search').isVisible(), 'Settings opens on You, with search at the top');
+  await page.fill('#settings-search', 'citation'); await page.waitForTimeout(200);
+  const found = await page.evaluate(() => ({ page: document.querySelector('#settings-panel .settings-card').dataset.page, rows: [...document.querySelectorAll('#settings-panel .set-row')].filter((r) => r.offsetParent).length, cite: !!document.getElementById('citation-select').offsetParent }));
+  expect(found.page === 'all' && found.rows >= 1 && found.cite, 'searching from You shows the matching setting: ' + JSON.stringify(found));
+  await page.click('#settings-panel .set-back'); await page.waitForTimeout(150);
+  expect(await page.evaluate(() => document.querySelector('#settings-panel .settings-card').dataset.page) === 'profile' && await page.inputValue('#settings-search') === '', 'Back returns to You, the search cleared');
+  expect(await page.locator('.set-link[data-open="all"]').count() === 0 && await page.locator('.set-link[data-open="advanced"]').count() === 1, 'no All settings row; Advanced has its own');
   // 2. Language sets the reply language Cassie really uses
   await page.evaluate(() => openSettings('language'));
   await page.waitForSelector('#lang-list .lang-opt');
@@ -8188,7 +8218,7 @@ function micLooksRight(where, r) {
   expect(L.shown && L.w >= 44 && L.h >= 44 && L.label === 'Say it instead of typing', `${where}: a 44px mic labelled "Say it instead of typing": ` + JSON.stringify(L));
   expect(L.onScreen, `${where}: the mic is on screen: ` + JSON.stringify(L));
   expect(isGrey(L.color) && isGrey(L.border) && (/rgba\(\d+, \d+, \d+, 0\)|transparent/.test(L.bg) || isGrey(L.bg)), `${where}: monochrome: ` + JSON.stringify(L));
-  expect(r.during.stop && r.during.h >= 44 && r.during.line.includes('Listening…') && r.during.placeholder === 'Listening…', `${where}: Listening… and a Stop button while it listens: ` + JSON.stringify(r.during));
+  expect(r.during.stop && r.during.h >= 44 && r.during.line.some((t) => t.startsWith('Listening…')) && r.during.placeholder === 'Listening…', `${where}: Listening… and a Stop button while it listens: ` + JSON.stringify(r.during));
   const partial = r.values.some((v) => / how do( plants)?$/.test(' ' + v.trim()) || /^how do( plants)?$/.test(v.trim()));
   expect(partial && r.values.some((v) => v.includes(SAID)), `${where}: the words appear as they come: ` + JSON.stringify(r.values));
   expect(!r.after.line.some((t) => /[–—]/.test(t)) && !r.after.sideways, `${where}: no dashes, nothing off screen: ` + JSON.stringify(r.after));
@@ -8260,9 +8290,16 @@ test.slow('a mic on every box where a student writes to Cassie (app, Labs, the b
   // the chat's own mic still works as before
   await reset(page);
   before = groqCalls.length;
+  await page.evaluate(() => { window.__ears.values = []; });
   await page.click('#mic-btn');
+  // (v295) the chat's mic is the shared one: red with Stop while it records, a pulsing Listening… line, the words in the box as they come
+  const chatOn = await page.evaluate(() => { const m = document.getElementById('mic-btn'); return { on: m.dataset.on === '1', label: m.getAttribute('aria-label'), bg: getComputedStyle(m).backgroundColor, line: (document.querySelector('.cmic-line') || {}).textContent || '', dot: !!document.querySelector('.cmic-line .cmic-dot'), ph: document.getElementById('prompt-input').placeholder }; });
+  expect(chatOn.on && chatOn.label === 'Stop listening' && /rgb\(217, 58, 58\)/.test(chatOn.bg) && /^Listening… speak now/.test(chatOn.line) && chatOn.dot && chatOn.ph === 'Listening…', 'the chat’s mic shows it is recording: ' + JSON.stringify(chatOn));
   await page.waitForTimeout(1500);
-  expect(groqCalls.slice(before).some((c) => JSON.stringify(c).includes(SAID)), 'the chat’s mic still sends what was said');
+  const chatWords = await page.evaluate(() => window.__ears.values);
+  expect(chatWords.some((v) => /^how do( plants)?$/.test(v.trim())) && chatWords.some((v) => v.includes(SAID)), 'the chat box fills with the words as they are said: ' + JSON.stringify(chatWords));
+  expect(groqCalls.slice(before).some((c) => JSON.stringify(c).includes(SAID)), 'the chat’s mic sends what was said');
+  expect(await page.evaluate(() => document.getElementById('mic-btn').getAttribute('aria-label')) === 'Ask by voice', 'the chat’s mic goes back to its own icon and name');
   // not allowed: one plain line, the box still takes typing
   await reset(page);
   await page.evaluate(() => { window.__ears.mode = 'denied'; openMemory(); });
@@ -8271,7 +8308,7 @@ test.slow('a mic on every box where a student writes to Cassie (app, Labs, the b
   await page.waitForTimeout(600);
   if (await page.locator('.signin-gate .gate-no').count()) { await page.click('.signin-gate .gate-no'); await page.waitForTimeout(300); }
   await page.click('#mem-fact + .cmic');
-  await page.waitForSelector('.cmic-line >> text=Cassie can’t use the microphone here. Type it instead.', { timeout: 5000 });
+  await page.waitForSelector('.cmic-line >> text=Cassie can’t hear you because the microphone is blocked for this site. Allow the microphone, then tap the mic.', { timeout: 5000 }); // (v295: blocked says so, and how to fix it)
   await page.fill('#mem-fact', 'My exam is on Friday');
   expect(await page.inputValue('#mem-fact') === 'My exam is on Friday', 'typing still works after the mic can’t');
   expect(!errors.length, 'page errors: ' + errors.join('; '));
@@ -8374,7 +8411,7 @@ test('a mic on every box where a student writes to Cassie in the extension (the 
     expect(await popup.locator('#page-answer').isVisible(), 'the popup: the mic asks about the page');
     await popup.evaluate(() => { window.__ears.mode = 'denied'; document.getElementById('page-q').value = ''; });
     await popup.click('#page-q + .cmic');
-    await popup.waitForSelector('.cmic-line >> text=Cassie can’t use the microphone here. Type it instead.', { timeout: 5000 });
+    await popup.waitForSelector('.cmic-line >> text=Cassie can’t hear you because the microphone is blocked for this site. Allow the microphone, then tap the mic.', { timeout: 5000 });
     await popup.fill('#page-q', 'Typed instead');
     expect(await popup.inputValue('#page-q') === 'Typed instead', 'typing still works');
     await popup.close();
@@ -11010,7 +11047,7 @@ test('phone You sheets (iPhone, with the notch and home bar): You, Account, Stud
   const you = await check('You');
   if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/you-sheet.png' });
   expect(ok(you), 'the You sheet: ' + JSON.stringify(you));
-  for (const [go, name] of [['account', 'Account'], ['study', 'Study'], ['voice', 'Voice'], ['privacy', 'Privacy and data'], ['plans', 'Plans'], ['all', 'All settings']]) {
+  for (const [go, name] of [['account', 'Account'], ['study', 'Study'], ['voice', 'Voice'], ['privacy', 'Privacy and data'], ['plans', 'Plans'], ['notifications', 'Notifications'], ['help', 'Help'], ['advanced', 'Advanced']]) { // (v295: no All settings row; every part has its own)
     await page.evaluate(() => { document.querySelector('#settings-panel .settings-card').scrollTop = 0; });
     await page.click(`#settings-panel .set-link[data-open="${go}"]`);
     await page.waitForFunction((p) => document.querySelector('#settings-panel .settings-card').dataset.page === p, go);

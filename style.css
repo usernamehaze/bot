@@ -725,8 +725,9 @@ html.lite .hub-say { animation: none; }
 .fu-chip:hover { border-color: var(--primary); color: var(--text); }
 
 /* reading accessibility */
-#app[data-textsize="large"] .bubble { font-size: 1.05rem; }
-#app[data-textsize="larger"] .bubble { font-size: 1.18rem; }
+/* (v295) Text size grows every word in the app, not only the chat: the root size scales every rem */
+:root[data-textsize="large"] { font-size: 112.5%; }
+:root[data-textsize="larger"] { font-size: 125%; }
 #app[data-easyread="on"] .bubble { line-height: 1.75; letter-spacing: .015em; }
 #app[data-easyread="on"] .bubble li { margin: var(--sp-1, 4px) 0; }
 .chip.active { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
@@ -4498,3 +4499,21 @@ button.sidebar-section, .side-tool, #side-apps .side-tool, #side-general .side-t
 .key-link { display: inline-block; }
 label.notif-top { cursor: pointer; min-height: 44px; }
 @media (pointer: fine) { .field.row, .field-toggle { min-height: 44px; align-items: center; } } /* (the whole row is the switch's label, so all of it taps) */
+
+/* ---------- (v295) Settings boxes: even spacing ----------
+   Every box has the same inner padding, every row 16px above and below, the parts of a row 8 to 12px
+   apart, and a row whose parts are all hidden (a setting that isn't for you) leaves no gap. */
+.set-group { padding: var(--sp-1, 4px) var(--sp-4, 16px); }
+.set-row { padding: var(--sp-4, 16px) 0; }
+.set-row:has(> [hidden]):not(:has(> :not([hidden]))) { display: none; }
+.set-row > .field-hint:first-child, #account-row > .field-hint:first-child { margin-top: 0; }
+#account-row:not([hidden]) + .field-hint { margin-top: var(--sp-3, 12px); }
+#edit-profile-btn { margin: var(--sp-3, 12px) 0 0; }
+#account-row .new-chat-btn { margin: var(--sp-3, 12px) 0 0; }
+.set-row .field-hint.set-legal { margin: 0; }
+.hv-set { margin: 0; }
+.hv-set .hint { margin: 0 0 var(--sp-3, 12px); font-size: var(--fs-sm); line-height: var(--lh-body); color: var(--muted); }
+.hv-set .hint:empty { display: none; }
+.set-row .field > span { margin-bottom: var(--sp-2, 8px); }
+.set-row .field.row > span, .set-row .field-toggle > span { margin-bottom: 0; }
+

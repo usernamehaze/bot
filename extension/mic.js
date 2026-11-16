@@ -8,6 +8,7 @@
        send(text): for boxes that ask Cassie. When the student stops talking (or taps Stop), the question
        is sent. Without send (notes, topics…), the words just stay in the box to edit and save.
        row: the one line ("Listening…", or why the mic can't work) goes after this (default: just under the box)
+       button: an existing mic button to use (the chat's own), instead of adding one beside the box
      CassieMic.watch(root, selector, opts) → stop()   a mic on every matching box, now and as boxes appear
      CassieMic.listen(onWords) → Promise<text>, with .stop()   (for the board: opts.hear)
      CassieMic.can()   whether this browser can listen at all (when it can't, no mic is shown)
@@ -21,6 +22,8 @@
   const recorderOk = () => !!(transcribe && navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
   const can = () => !!SR() || recorderOk();
   const micError = () => Object.assign(new Error(cantLine()), { code: 'mic_here' });
+  const blocked = () => Object.assign(new Error(say('mic_blocked', 'Cassie can’t hear you because the microphone is blocked for this site. Allow the microphone, then tap the mic.')), { code: 'mic_blocked' });
+  let noBrowserEars = false; // (v295: the browser's own listening failed once here, e.g. a phone app or a home screen app: record instead)
 
   // One thing said out loud. onWords(text so far) as they come; resolves to all of it ('' when nothing was said).
   function listen(onWords) {
@@ -33,7 +36,7 @@
     const me = { stop: () => stopFn() };
     current = me;
     done.then(() => { if (current === me) current = null; }, () => { if (current === me) current = null; });
-    const Rec = SR();
+    const Rec = noBrowserEars && recorderOk() ? null : SR();
     if (Rec) {
       let rec, got = '';
       try { rec = new Rec(); } catch (e) { fail(micError()); return Object.assign(done, me); }
@@ -44,7 +47,12 @@
         got = t.trim();
         if (onWords) onWords(got);
       };
-      rec.onerror = (e) => { if (e.error === 'no-speech' || e.error === 'aborted') finish(got); else fail(micError()); };
+      rec.onerror = (e) => {
+        if (e.error === 'no-speech' || e.error === 'aborted') finish(got);
+        else if (e.error === 'not-allowed') fail(blocked());
+        else if (recorderOk() && !got) { noBrowserEars = true; fail(Object.assign(new Error('again'), { code: 'retry_recorder' })); } // (service-not-allowed, network…: record instead)
+        else fail(micError());
+      };
       rec.onend = () => finish(got);
       try { rec.start(); } catch (e) { fail(micError()); }
       stopFn = () => { try { rec.stop(); } catch (e) { finish(got); } };
@@ -82,7 +90,7 @@
           } catch (e) { /* no pause detection: Stop, or 15 seconds */ }
         }
         setTimeout(end, 15000);
-      }).catch(() => fail(micError()));
+      }).catch((e) => fail(e && /NotAllowed|Security|Permission/i.test(e.name) ? blocked() : micError()));
     } else fail(micError());
     return Object.assign(done, me);
   }
@@ -91,18 +99,28 @@
   const STOP = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg><span>Stop</span>';
   const LOOK = { boxSizing: 'border-box', width: 'auto', minWidth: '48px', height: '48px', minHeight: '48px', padding: '0 var(--sp-3, 12px)', flex: '0 0 auto', alignSelf: 'flex-start', justifySelf: 'start', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--sp-2, 8px)',
     border: '1px solid rgba(127,127,127,.45)', borderRadius: '99px', background: 'transparent', color: 'inherit', font: 'inherit', fontWeight: '600', cursor: 'pointer', margin: '0' };
-  const LINE = { margin: 'var(--sp-2, 8px) 0 0', fontSize: '.85em', lineHeight: '1.35', opacity: '.85', flexBasis: '100%' };
+  const LINE = { margin: 'var(--sp-2, 8px) 0 0', fontSize: '.85em', lineHeight: '1.4', flexBasis: '100%', display: 'flex', alignItems: 'center', gap: '8px' };
+  // (v295) while it listens: a red dot that pulses beside "Listening…", so it is plain that it is recording
+  const DOT_CSS = '@keyframes cmicPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.7)}}.cmic-dot{flex:none;width:10px;height:10px;border-radius:50%;background:#d93a3a;animation:cmicPulse 1.1s ease-in-out infinite}@media (prefers-reduced-motion: reduce){.cmic-dot{animation:none}}.cmic[data-on]{background:#d93a3a !important;border-color:#d93a3a !important;color:#fff !important}';
+  // (in a page, or inside a shadow root like the extension's cards: the style goes where the box lives)
+  const addCss = (box) => {
+    const doc = box.ownerDocument, root = box.getRootNode ? box.getRootNode() : doc;
+    const host = root && root !== doc && root.appendChild ? root : (doc.head || doc.documentElement);
+    if (!host || (host.querySelector && host.querySelector('#cmic-css'))) return;
+    const st = doc.createElement('style'); st.id = 'cmic-css'; st.textContent = DOT_CSS; host.appendChild(st);
+  };
 
   function attach(box, opts = {}) {
     if (!box || box.__cassieMic) return box && box.__cassieMic;
-    const doc = box.ownerDocument;
-    const btn = doc.createElement('button');
-    btn.type = 'button'; btn.className = 'cmic';
-    Object.assign(btn.style, LOOK);
-    const idle = () => { btn.innerHTML = ICON; btn.setAttribute('aria-label', 'Say it instead of typing'); btn.title = 'Say it instead of typing'; btn.removeAttribute('aria-pressed'); delete btn.dataset.on; };
+    const doc = box.ownerDocument, own = !!opts.button;
+    try { addCss(box); } catch (e) { /* no styles: the words still say it */ }
+    const btn = opts.button || doc.createElement('button');
+    if (!own) { btn.type = 'button'; btn.className = 'cmic'; Object.assign(btn.style, LOOK); } else btn.classList.add('cmic');
+    const label0 = own ? btn.getAttribute('aria-label') || 'Say it instead of typing' : 'Say it instead of typing', icon0 = own ? btn.innerHTML : ICON;
+    const idle = () => { btn.innerHTML = icon0; btn.setAttribute('aria-label', label0); btn.title = label0; btn.removeAttribute('aria-pressed'); delete btn.dataset.on; };
     idle();
-    if (!can()) { btn.hidden = true; btn.style.display = 'none'; } // (this browser can't listen: no mic, just the box)
-    box.insertAdjacentElement('afterend', btn);
+    if (!can()) { btn.hidden = true; btn.style.display = 'none'; } else if (own) btn.hidden = false; // (this browser can't listen: no mic, just the box)
+    if (!own) box.insertAdjacentElement('afterend', btn);
     let live = null, line = null, lineTimer = 0, placeholder = '';
     const showLine = (text, stay) => {
       clearTimeout(lineTimer);
@@ -114,7 +132,9 @@
         const inRow = cs && /flex/.test(cs.display) && /^row/.test(cs.flexDirection) && cs.flexWrap === 'nowrap';
         if (opts.row || inRow) (opts.row || p).insertAdjacentElement('afterend', line); else (p || box).insertAdjacentElement('beforeend', line);
       }
-      line.textContent = text;
+      line.textContent = '';
+      if (stay) { const d = doc.createElement('span'); d.className = 'cmic-dot'; d.setAttribute('aria-hidden', 'true'); line.appendChild(d); }
+      line.appendChild(doc.createTextNode(text));
       if (!stay) lineTimer = setTimeout(hideLine, 7000);
     };
     const hideLine = () => { clearTimeout(lineTimer); if (line) { line.remove(); line = null; } };
@@ -123,8 +143,8 @@
       const before = box.value, sep = before && !/\s$/.test(before) ? ' ' : '';
       placeholder = box.placeholder;
       box.placeholder = 'Listening…';
-      btn.innerHTML = STOP; btn.setAttribute('aria-label', 'Stop listening'); btn.title = 'Stop listening'; btn.setAttribute('aria-pressed', 'true'); btn.dataset.on = '1';
-      showLine('Listening…', true);
+      btn.innerHTML = own ? STOP.replace(/<span>Stop<\/span>/, '') : STOP; btn.setAttribute('aria-label', 'Stop listening'); btn.title = 'Stop listening'; btn.setAttribute('aria-pressed', 'true'); btn.dataset.on = '1';
+      showLine('Listening… speak now', true);
       box.addEventListener('input', typed);
       const put = (words) => {
         if (!box.isConnected) return;
@@ -133,11 +153,13 @@
       };
       let said = '', failed = null;
       try { live = listen(put); said = await live; } catch (e) { failed = e; }
+      if (failed && failed.code === 'retry_recorder') { failed = null; showLine('Listening… speak now', true); try { live = listen(put); said = await live; } catch (e) { failed = e; } } // (the browser's own listening can't work here: Cassie records instead)
       live = null;
       box.removeEventListener('input', typed);
       box.placeholder = placeholder;
       idle();
-      if (failed) { showLine(failed.code === 'mic_here' || !failed.message ? cantLine() : (window.CassieErrors ? window.CassieErrors.explain(failed, 'not_heard') : failed.message)); return; }
+      if (failed) { showLine(failed.code === 'mic_here' || !failed.message ? cantLine() : failed.code === 'mic_blocked' ? failed.message : (window.CassieErrors ? window.CassieErrors.explain(failed, 'not_heard') : failed.message)); return; }
+      if (!said && !box.value.trim()) { showLine(say('mic_nothing', 'Cassie didn’t hear anything. Tap the mic and speak a little louder.')); return; }
       hideLine();
       if (!box.isConnected) return;
       if (said) put(said);
