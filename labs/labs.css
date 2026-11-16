@@ -1071,6 +1071,6 @@ html.lite .lf.lf-open .lf-paper:nth-child(n) { opacity: .85; }
 @media (max-width: 760px) {
   .lab-head:has(.lab-quiz:not([hidden])) .lab-back span { display: none; }
   .lab-head:has(.lab-quiz:not([hidden])) .lab-back { min-width: 44px; padding: 0; justify-content: center; }
-  .lab-head:has(.lab-quiz:not([hidden])) .lab-acts .lab-btn { padding: 0 10px; }
+  .lab-head:has(.lab-quiz:not([hidden])) .lab-acts .lab-btn { padding: 0 var(--sp-2, 8px); }
 }
 @media (max-width: 380px) { .lab-head:has(.lab-quiz:not([hidden])) .lab-acts .lab-btn svg { display: none; } }
