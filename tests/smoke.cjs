@@ -5124,7 +5124,10 @@ test('the Chrome extension: its button sits beside Open Cassie on computers (non
   expect(zipped === extver, `the built zip is version ${zipped}, the extension is ${extver}`);
   expect(JSON.parse(fs.readFileSync(path.join(built, 'extension-version.json'), 'utf8')).version === extver, 'extension-version.json has the extension’s version');
   const site = fs.readFileSync(path.join(built, 'index.html'), 'utf8');
-  expect(site.includes('Version ' + extver), 'the built page shows Version ' + extver);
+  // (the Version under Add to Chrome is the Chrome Web Store's: that button installs the store's copy)
+  const storever = JSON.parse(fs.readFileSync(path.join(ROOT, 'store-version.json'), 'utf8')).chrome;
+  expect(/^\d+\.\d+\.\d+$/.test(storever), 'store-version.json has the store version: ' + storever);
+  expect(site.includes('Version ' + storever + '</small>'), 'the built page shows the store’s Version ' + storever);
   // a computer: the button is in the header, just before Open Cassie, on one line at 1024, 1280 and 1440
   const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, serviceWorkers: 'block' });
   const page = await ctx.newPage();
@@ -5132,7 +5135,7 @@ test('the Chrome extension: its button sits beside Open Cassie on computers (non
   await page.goto(APP.replace('app.html', 'index.html'));
   const head = page.locator('.nav a[data-ext]');
   expect(await head.count() === 1 && await head.isVisible(), 'the extension button is in the header');
-  expect((await page.locator('[data-ext-version]').innerText()).trim() === 'Version ' + extver, 'Version ' + extver + ' under the button');
+  expect((await page.locator('[data-ext-version]').innerText()).trim() === 'Version ' + storever, 'Version ' + storever + ' (the store’s) under the button');
   expect(await page.locator('.final a[data-ext]').count() === 0, 'the last section has no extension button');
   expect(await page.locator('details a[data-ext]').count() === 1, 'the FAQ still has its link');
   for (const width of [1024, 1280, 1440]) {

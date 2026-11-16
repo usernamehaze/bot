@@ -40,7 +40,9 @@ rm -rf "$tmp"
 # Always the newest extension: its download links and the "Version" under the button carry
 # extension/manifest.json's version, and the extension checks extension-version.json for a newer one.
 extver="$(python3 -c 'import json; print(json.load(open("extension/manifest.json"))["version"])')"
-sed -i -E "s/cassie-extension\.zip\?v=[0-9a-z.]+/cassie-extension.zip?v=$extver/g; s/(data-ext-version>)Version [0-9.]+/\1Version $extver/" _site/index.html
+# (the Version under "Add to Chrome" is the Chrome Web Store's, from store-version.json: that button installs the store's copy)
+storever="$(python3 -c 'import json; print(json.load(open("store-version.json"))["chrome"])')"
+sed -i -E "s/cassie-extension\.zip\?v=[0-9a-z.]+/cassie-extension.zip?v=$extver/g; s/(data-ext-version>)Version [0-9.]+/\1Version $storever/" _site/index.html
 printf '{ "version": "%s" }\n' "$extver" > _site/extension-version.json
 echo "Built _site: $(du -sh _site | cut -f1), $(find _site -type f | wc -l) files"
 find _site -type f -size +25M -print -exec false {} + || { echo "A file is over 25 MB — Cloudflare will refuse it"; exit 1; }
