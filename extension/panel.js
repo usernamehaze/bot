@@ -24,7 +24,9 @@ function errorText(m) {
   m = String((m && m.message) || m || '');
   if (m === 'no-key') return 'Add a free Groq or Gemini key first. Click the Cassie icon in the toolbar.';
   if (m === 'no-vision') return 'Your Groq key has no picture-reading model right now. Add a free Google (Gemini) key in the Cassie toolbar popup.';
-  return m || 'Something went wrong. Please try again.';
+  // (v292) never a vague "something went wrong": what happened and what to do, in plain words (errors.js)
+  if (window.CassieErrors && (!m || /failed to fetch|networkerror|load failed|network|timeout|timed out|abort|^\w*Error\b|^HTTP \d|status \d{3}/i.test(m))) return window.CassieErrors.explain({ message: m }, 'unknown');
+  return m || 'Cassie couldn’t answer this time. Check your internet, then ask again.';
 }
 
 // "Invalid API Key" / no key → fix it right here in the panel, then try again.

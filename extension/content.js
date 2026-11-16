@@ -1573,7 +1573,9 @@
     if (m === 'no-key') return 'Add a free Groq or Gemini key first. Click the Cassie icon in the toolbar.';
     if (m === 'no-vision') return 'Your Groq key has no picture-reading model right now. Add a free Google (Gemini) key in the Cassie toolbar popup and I can read snips.';
     if (m === 'reload' || /context invalidated|receiving end does not exist|Could not establish connection/i.test(m)) return 'Cassie was just updated. Refresh this tab (F5) and try again.';
-    return m || 'Something went wrong. Please try again.';
+    // (v292) never a vague "something went wrong": what happened and what to do, in plain words (errors.js)
+    if (window.CassieErrors && (!m || /failed to fetch|networkerror|load failed|network|timeout|timed out|abort|^\w*Error\b|^HTTP \d|status \d{3}/i.test(m))) return window.CassieErrors.explain({ message: m }, 'unknown');
+    return m || 'Cassie couldn’t answer this time. Check your internet, then ask again.';
   }
 
   async function askVision(image, prompt, system, maxTokens, board, log) {
