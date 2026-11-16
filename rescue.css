@@ -18,7 +18,8 @@ main { width: min(720px, calc(100% - 32px)); margin: 0 auto; padding-bottom: var
 .rs-open { font-weight: 600; font-size: 15px; text-decoration: none; border: 1px solid var(--line); border-radius: 999px; padding: var(--sp-3, 12px) var(--sp-4, 16px); min-height: var(--tap, 48px); display: inline-flex; align-items: center; gap: var(--sp-2, 8px); transition: transform .15s, background-color .15s; }
 .rs-open:hover { border-color: var(--ink); }
 .rs-open:active, .rs-open.opening { transform: scale(.97); background: var(--ink); color: var(--page); border-color: var(--ink); } /* (pressed: filled, the words stay clear) */
-.rs-open.opening::before { content: ""; width: 13px; height: 13px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: rs-spin .7s linear infinite; }
+.rs-open.opening::before { content: ""; width: 13px; height: 13px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; opacity: 0; animation: rs-spin .7s linear infinite, rs-show 0s linear 1s forwards; } /* (v288: only after a second) */
+@keyframes rs-show { to { opacity: 1; } }
 @keyframes rs-spin { to { transform: rotate(360deg); } }
 .rs-hero { padding: var(--sp-6, 32px) 0 var(--sp-2, 8px); }
 .rs-kicker { margin: 0 0 var(--sp-2, 8px); font-size: 13px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--mute); }

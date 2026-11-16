@@ -70,7 +70,8 @@ footer .brand { color: var(--ink); }
 .nav.light .btn.solid:active, .nav.light .btn.solid.opening { background: color-mix(in srgb, var(--ink) 80%, var(--page)); }
 .btn.quiet { background: transparent; color: inherit; border-color: var(--night-line); }
 .nav.light .btn.quiet { border-color: var(--line); }
-.btn.opening::before { content: ""; width: 14px; height: 14px; flex: none; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: open-spin .7s linear infinite; }
+.btn.opening::before { content: ""; width: 14px; height: 14px; flex: none; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; opacity: 0; animation: open-spin .7s linear infinite, open-show 0s linear 1s forwards; } /* (v288: only if opening takes over a second) */
+@keyframes open-show { to { opacity: 1; } }
 @keyframes open-spin { to { transform: rotate(360deg); } }
 .btn.big { min-height: 52px; padding: 0 var(--sp-5, 24px); font-size: 17px; }
 .btn.ink { background: var(--ink); color: var(--page); }

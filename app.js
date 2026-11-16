@@ -933,20 +933,34 @@ function paintOffline() {
   li[2].textContent = `Chats and notes: ${chats}`;
   li[3].textContent = 'Not saved: the 3D human body (too big), and anything that asks Cassie';
 }
+// (v288) "About 20 seconds left", "About 2 minutes left", "Almost done": for a wait that shows its progress
+function timeLeft(sec) {
+  if (sec <= 3) return 'Almost done.';
+  if (sec < 60) return `About ${Math.max(5, Math.round(sec / 5) * 5)} seconds left.`;
+  const m = Math.round(sec / 60); return `About ${m} ${m === 1 ? 'minute' : 'minutes'} left.`;
+}
 async function saveOffline() {
   const go = document.getElementById('off-go'), st = document.getElementById('off-status');
   if (!go || go.disabled) return;
   if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) { st.textContent = CassieErrors.say('offline_cant_save'); return; }
   const done = busyButton(go, 'Saving…'); st.textContent = '';
-  let ok = 0, fail = 0;
+  let ok = 0, fail = 0, bar = null;
   try {
     const list = await (await fetch('offline-files.json', { cache: 'no-cache' })).json();
     const v = ((document.querySelector('script[src*="app.js?v="]') || {}).src || '').match(/[?&]v=(\d+)/);
     const urls = [...list.files, ...list.versioned.map((f) => (v ? `${f}?v=${v[1]}` : f)), ...list.fixed];
     let at = 0;
-    const worker = async () => { while (at < urls.length) { const u = urls[at++]; try { const r = await fetch(u); if (r.ok) { await r.blob(); ok++; } else fail++; } catch (e) { fail++; } st.textContent = `Saving… ${Math.round(((ok + fail) / urls.length) * 100)}%`; } };
+    // (v288) a long wait: a bar, how many files of how many, and about how long is left
+    bar = document.createElement('div'); bar.className = 'wait-bar'; bar.setAttribute('aria-hidden', 'true'); bar.innerHTML = '<i></i>'; st.after(bar);
+    const t0 = Date.now();
+    const show = () => { const n = ok + fail, sec = n >= 6 && Date.now() - t0 > 1500 ? Math.round(((Date.now() - t0) / n) * (urls.length - n) / 1000) : null;
+      bar.firstChild.style.width = `${Math.round((n / urls.length) * 100)}%`;
+      st.textContent = `Saving ${n} of ${urls.length} files.` + (sec === null ? '' : ` ${timeLeft(sec)}`); };
+    show();
+    const worker = async () => { while (at < urls.length) { const u = urls[at++]; try { const r = await fetch(u); if (r.ok) { await r.blob(); ok++; } else fail++; } catch (e) { fail++; } show(); } };
     await Promise.all(Array.from({ length: 6 }, worker));
   } catch (e) { fail++; }
+  if (bar) bar.remove();
   done();
   if (fail) { st.textContent = CassieErrors.say('offline_save_failed'); return; }
   state.offlineSaved = { at: Date.now(), files: ok }; save();
@@ -2055,7 +2069,8 @@ function giveCare(lang, aiWords) {
 function renderTyping() {
   const bubble = document.createElement('div');
   bubble.className = 'bubble bubble-assistant';
-  bubble.innerHTML = '<span class="typing-dots"><span></span><span></span><span></span></span>';
+  // (v288) a skeleton of her answer (three grey lines), shown only if it takes over a second (style.css)
+  bubble.innerHTML = '<span class="typing-dots" role="status" aria-label="Cassie is writing"><span></span><span></span><span></span></span>';
   chatLog.appendChild(bubble);
   scrollToBottom();
   return bubble;
@@ -2732,7 +2747,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=287'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=288'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2754,7 +2769,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=287'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=288'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -3030,7 +3045,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=287').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=288').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -5837,9 +5852,11 @@ async function groqDocument(doc, request, history, onStatus, { notesOnly = false
   const notes = [];
   let span = 'the start';
   if (doc.preNoted) notes.push(...parts); // (already notes, from each file: never notes of notes)
-  else for (let i = 0; i < parts.length; i++) {
+  else for (let i = 0, t0 = Date.now(); i < parts.length; i++) {
     span = partSpan(parts[i], span);
-    onStatus(`Reading ${span} of ${doc.name}: part ${i + 1} of ${parts.length}…`);
+    // (v288) a long read: which part of how many, and about how long is left once one part has been timed
+    const left = i ? ` ${timeLeft(((Date.now() - t0) / i) * (parts.length - i) / 1000)}` : '';
+    onStatus(`Reading ${span} of ${doc.name}: part ${i + 1} of ${parts.length}…${left}`);
     notes.push(`[${span.replace(/^\w/, (c) => c.toUpperCase())}]\n${await noteFor(parts[i], span.replace(/^\w/, (c) => c.toUpperCase()))}`);
   }
   notes.push(...visualNotes);
@@ -7382,7 +7399,7 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=287')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=288')));
 // a real photo needs Gemini pictures (Cassie's server or the student's key); the free service draws toys and models
 const realPhotoOk = () => !!((SERVER && serverPictures) || (state.geminiKey && !geminiImageOff));
 // a drawing inside a chat bubble (a new one draws itself; one from history shows finished)
@@ -8673,7 +8690,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=287');
+      exploreMod = await import('./explore/cell3d.js?v=288');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -8723,7 +8740,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=287');
+      labsMod = await import('./labs/labs.js?v=288');
       islandRest();
     }
     labsMod.open({
@@ -10686,10 +10703,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=287').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=288').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=287', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=288', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.

@@ -23,7 +23,8 @@
   .top a.btn { display: inline-flex; align-items: center; gap: var(--sp-2, 8px); min-height: 44px; font-size: .9rem; text-decoration: none; padding: 0 var(--sp-4, 16px); border: 1px solid var(--line); border-radius: 999px; transition: transform .15s, background-color .15s; }
   .top a.btn:hover { border-color: currentColor; }
   .top a.btn:active, .top a.btn.opening { transform: scale(.97); background: var(--text); color: var(--bg); border-color: var(--text); } /* (pressed: filled, the words stay clear) */
-  .top a.btn.opening::before { content: ""; width: 13px; height: 13px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: open-spin .7s linear infinite; }
+  .top a.btn.opening::before { content: ""; width: 13px; height: 13px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; opacity: 0; animation: open-spin .7s linear infinite, open-show 0s linear 1s forwards; }
+  @keyframes open-show { to { opacity: 1; } }
   @keyframes open-spin { to { transform: rotate(360deg); } }
 
   /* hero */
@@ -122,8 +123,8 @@
   <footer>Cursor Cassie is Cassie's own character, the Cassie pointer, caret eyes and cursor-state moods were made for Cassie.<br><a href="index.html">askcassie.study</a></footer>
 </div>
 
-<script src="cassie-bot.js?v=287"></script>
-<script src="opening.js?v=287" defer></script>
-<script src="bot-page.js?v=287"></script>
+<script src="cassie-bot.js?v=288"></script>
+<script src="opening.js?v=288" defer></script>
+<script src="bot-page.js?v=288"></script>
 </body>
 </html>

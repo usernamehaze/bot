@@ -170,6 +170,16 @@ html.lite .labs-shelf { background: var(--bg); }
 .pod.p3 i { height: 30px; }
 .pod.me b { text-decoration: underline; text-underline-offset: 3px; }
 .pod.empty { opacity: .5; }
+/* (v288) the board on its way: a skeleton of the podium and the rows, in Learn's own ink */
+.board-skel .pod { gap: var(--sp-2, 8px); }
+.board-skel .bs-av { width: 40px; height: 40px; border-radius: 50%; }
+.board-skel .p1 .bs-av { width: 48px; height: 48px; }
+.board-skel .bs-name { width: 64%; height: 10px; }
+.board-skel .bs-step { width: 100%; border-radius: 10px 10px 0 0; height: 42px; } .board-skel .p1 .bs-step { height: 58px; } .board-skel .p3 .bs-step { height: 30px; }
+.board-skel-rows { margin-top: var(--sp-4, 16px); max-width: 460px; }
+:is(.labs-board, .lf-board) :is(.skel-line, .skel-block, .skel-dot) { background: rgba(var(--lx-rgb), .12); }
+.lf-skel { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--sp-3, 12px); }
+.lf-skel .skel-block { height: 96px; }
 .board-me { margin: var(--sp-3, 12px) 0 0; font-size: .84rem; color: var(--lx-soft, rgba(var(--lx-rgb), .75)); }
 .board-tabs { display: inline-flex; gap: var(--sp-1, 4px); margin-top: var(--sp-4, 16px); padding: var(--sp-1, 4px); border-radius: 999px; background: rgba(var(--lx-rgb), .06); border: 1px solid rgba(var(--lx-rgb), .1); }
 .board-tabs button { border: 0; background: transparent; color: var(--lx-soft, rgba(var(--lx-rgb), .75)); padding: var(--sp-2, 8px) var(--sp-4, 16px); border-radius: 999px; font-weight: 600; font-size: .8rem; cursor: pointer; }
