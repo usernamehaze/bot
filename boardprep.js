@@ -387,7 +387,7 @@
     on('[data-size]', async (b) => {
       const full = b.dataset.size === 'full';
       if (full && fullLocked()) { boardProAsk(close); return; }
-      if (going && !(await sure({ title: `End your ${fullName(ex)} simulation in progress?`, text: `Your answers up to question ${s.i + 1} of ${s.n} go, and this can’t be undone.`, yes: 'End it and start new', no: 'Keep going' }))) return;
+      if (going && !(await sure({ title: `End your ${fullName(ex)} simulation in progress?`, text: `Your answers up to question ${s.i + 1} of ${s.n} go, and this can’t be undone.`, yes: 'End it and start new', no: 'Keep answering' }))) return;
       const n = full ? fn : MINI;
       P().sims[ex] = { size: full ? 'full' : 'mini', n, qs: [], i: 0, picks: {}, flags: {}, left: Math.round((fm / fn) * n) * 60, fin: false, at: Date.now() };
       save(); track('feature', 'board-sim-' + (full ? 'full' : 'mini'));
