@@ -2807,7 +2807,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=296'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=297'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2829,7 +2829,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=296'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=297'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -3105,7 +3105,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=296').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=297').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -7461,7 +7461,7 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=296')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=297')));
 // a real photo needs Gemini pictures (Cassie's server or the student's key); the free service draws toys and models
 const realPhotoOk = () => !!((SERVER && serverPictures) || (state.geminiKey && !geminiImageOff));
 // a drawing inside a chat bubble (a new one draws itself; one from history shows finished)
@@ -8752,7 +8752,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=296');
+      exploreMod = await import('./explore/cell3d.js?v=297');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -8802,7 +8802,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=296');
+      labsMod = await import('./labs/labs.js?v=297');
       islandRest();
     }
     labsMod.open({
@@ -9267,6 +9267,7 @@ function setPage(page, { back = false } = {}) {
   secs.hidden = !(page === 'all' || SET_TITLES[page] && !['profile', 'plans'].includes(page));
   if (page !== 'all' && setSearch.value) { setSearch.value = ''; filterSettings(); }
   if (page === 'profile') fillYou();
+  if (page === 'plans') paintTrial(); // (v297)
   if (appxShows(page)) appxOpen(); // (v255: snapshot the committed appearance, so preview can be reviewed or discarded)
   if (page === 'language' || page === 'all') renderLang();
   if (page === 'notifications' || page === 'study' || page === 'all') renderRemind();
@@ -9321,7 +9322,7 @@ function fillYou() {
     voice: vg ? (vg.value === 'man' ? 'Chris' : 'Jessica') : '',
     appearance: pick('#appx-theme [aria-pressed="true"]'),
     language: { auto: 'Auto', en: 'English', fil: 'Filipino', tl: 'Taglish' }[(settingsPanel.querySelector('#lang-list [aria-checked="true"]') || {}).dataset?.lang] || '',
-    plan: { plus: 'Plus', pro: 'Pro' }[planName()] || 'Free',
+    plan: onTrial() ? `Plus trial, ${trialDaysLeft()} ${trialDaysLeft() === 1 ? 'day' : 'days'} left` : { plus: 'Plus', pro: 'Pro' }[planName()] || 'Free',
   };
   settingsPanel.querySelectorAll('.set-val[data-val]').forEach((v) => { v.textContent = vals[v.dataset.val] || ''; });
 }
@@ -10767,10 +10768,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=296').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=297').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=296', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=297', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
@@ -11043,18 +11044,21 @@ function frPaywall(done) {
   const showCur = payPrices && cur === 'usd' ? 'US dollars' : 'Philippine pesos'; // (the fallback prices are in pesos: say so)
   const PLUS = ['100 questions a day to your exam', 'Up to 5 exam plans, even from your notes', 'All the 3D, and save or print your notes'];
   const PRO = ['Every lesson of your exam course: LET, CPALE, NCLEX-RN, IELTS and more', 'Cassie’s smartest model, 150 questions a day', 'Everything in Plus'];
+  // (v297) trial first: one main button, the free 14-day Plus trial; buying and Free stay right there
+  const trial = canTrial();
   const planCard = (plan, name, lines) => `<div class="fr-plan fr-plan-up">
       <div class="fr-plan-top"><b>${name}${plan === 'plus' && frPayBill === 'sem' ? ' <span class="fr-pass">Pasado Pass</span>' : ''}</b><span class="fr-plan-price">${frPayTag(plan, frPayBill)}</span></div>
       <ul>${lines.map((l) => `<li>${l}</li>`).join('')}</ul>
-      <button type="button" class="fr-go fr-get" data-plan="${plan}">Get ${name}</button></div>`;
+      <button type="button" class="fr-go fr-get${trial ? ' fr-get-2' : ''}" data-plan="${plan}">Get ${name}</button></div>`;
   const render = () => {
     el.querySelector('.fr-plans-dyn').innerHTML = planCard('plus', 'Plus', PLUS) + planCard('pro', 'Pro', PRO);
     el.querySelectorAll('.fr-bill button').forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.bill === 's') === (frPayBill === 'sem'))));
     el.querySelectorAll('.fr-get').forEach((b) => b.addEventListener('click', () => { frSave(null); frClose(); buyPlan(b.dataset.plan, frPayBill); }));
   };
   el.innerHTML = `<section class="fr-pay" aria-live="polite">
-    <h1 class="fr-h">Cassie is free. Go further when you want.</h1>
-    <p class="fr-sub">Prices in ${showCur}, by where you are. One account, every device.</p>
+    <h1 class="fr-h">${trial ? 'Try Plus free for 14 days' : 'Cassie is free. Go further when you want.'}</h1>
+    <p class="fr-sub">${trial ? 'No card, nothing charged, and it ends by itself. Cassie stays free after.' : `Prices in ${showCur}, by where you are. One account, every device.`}</p>
+    ${trial ? '<button type="button" class="fr-go fr-trial">Start my free trial</button>' : ''}
     <div class="fr-bill bill-seg" role="group" aria-label="How to pay"><button type="button" data-bill="m" aria-pressed="true">Monthly</button><button type="button" data-bill="s" aria-pressed="false">Semester<small>save 20%</small></button></div>
     <div class="fr-plans">
       <div class="fr-plan"><div class="fr-plan-top"><b>Free</b><span class="fr-plan-tag">You’re on it</span></div>
@@ -11062,12 +11066,13 @@ function frPaywall(done) {
       <div class="fr-plans-dyn"></div>
     </div>
     <button type="button" class="fr-skip-pay">Continue with Free</button>
-    <p class="fr-pay-foot">One payment, and it never renews. 7 days to change your mind. Your plan belongs to your account, not this device.</p>
+    <p class="fr-pay-foot">${trial ? `Or buy a plan: prices in ${showCur}. ` : ''}One payment, and it never renews. 7 days to change your mind. Your plan belongs to your account, not this device.</p>
   </section>`;
   render();
   el.querySelector('.fr-bill').addEventListener('click', (e) => { const b = e.target.closest('[data-bill]'); if (!b) return; frPayBill = b.dataset.bill === 's' ? 'sem' : 'month'; render(); });
   el.querySelector('.fr-skip-pay').addEventListener('click', () => { frSave(null); frClose(); done(); });
-  setTimeout(() => { const s = el.querySelector('.fr-skip-pay'); if (s) s.focus({ preventScroll: true }); }, 60);
+  el.querySelector('.fr-trial')?.addEventListener('click', () => { frSave(null); frClose(); done(); startTrial(); });
+  setTimeout(() => { const s = el.querySelector('.fr-trial') || el.querySelector('.fr-skip-pay'); if (s) s.focus({ preventScroll: true }); }, 60);
 }
 // straight to the ask box (a phone: the Chat tab; a computer: the chat page)
 var frHome = false; // (Skip setup: land on Home, not the ask box)
@@ -11249,7 +11254,7 @@ let planAsked = 0;
 function refreshPlan(force) {
   if (!accountsOn() || !authToken() || (!force && Date.now() - planAsked < 60e3)) return Promise.resolve();
   planAsked = Date.now();
-  return authCall('/auth/me', null, 'GET').then((r) => { if (r && r.plan) { state.plan = r.plan; save(); renderAccountRow(); voiceAgain(); } })
+  return authCall('/auth/me', null, 'GET').then((r) => { if (r && r.plan) { state.plan = r.plan; if (r.plan.trial) state.trialUsed = true; save(); renderAccountRow(); voiceAgain(); trialHeadsUp(); } })
     .catch((e) => { if (e.status === 401) signedOutLocally(); });
 }
 // Plans: Get it early opens the early list
@@ -11287,6 +11292,54 @@ function payLabels() {
     const pro = b.dataset.early === 'pro';
     b.innerHTML = pro ? 'Get Pro' : '<span class="bill-m">Get Plus</span><span class="bill-s">Get the Pasado Pass</span>';
   });
+}
+/* (v297) the free Plus trial: 14 days, no card, once per account; it ends by itself and nothing is charged.
+   A guest signs in first (the trial belongs to the account), then it starts. */
+const TRIAL_DAYS = 14;
+const onTrial = () => !!(state.plan && state.plan.trial && planName() === 'plus');
+const trialDaysLeft = () => (onTrial() ? Math.max(0, Math.ceil((state.plan.until - Date.now()) / 864e5)) : 0);
+const trialUsed = () => !!state.trialUsed;
+const canTrial = () => !!(SERVER && accountsOn() && !isSubscriber() && !trialUsed());
+async function startTrial() {
+  await configReady;
+  if (!SERVER || !accountsOn()) { plusSheet('', '', 'plans', 'Get the Pasado Pass first'); return; }
+  if (!authToken()) {
+    try { sessionStorage.setItem(BUY_KEY, JSON.stringify({ trial: true })); } catch (e) { /* storage blocked */ }
+    if (!state.profile) { frSave({ step: 'auth' }); frClose(); }
+    openAuth({ first: !state.profile, mode: 'signup' });
+    try { mascotSay('Make your free account first, so your trial has somewhere to live.', 4000); } catch (e) { /* the little helper is a bonus */ }
+    return;
+  }
+  let r = null, j = {};
+  try { r = await fetch(SERVER + '/trial/start', { method: 'POST', headers: chatHeaders(), body: '{}' }); j = await r.json().catch(() => ({})); } catch (e) { r = null; }
+  if (r && r.ok && j.plan) {
+    state.plan = j.plan; state.trialUsed = true; save(); renderAccountRow(); voiceAgain(); updateModelPill();
+    track('feature', 'trial-start');
+    trialNote('Your free Plus trial has started', `You have Plus for ${TRIAL_DAYS} days: 100 questions a day, up to 5 exam plans and all the 3D. It ends by itself, and nothing is ever charged.`, 'Start studying');
+    return;
+  }
+  if (j.code === 'trial_used' || j.code === 'has_plan') { state.trialUsed = true; save(); if (j.plan) { state.plan = j.plan; save(); } }
+  trialNote('The trial didn’t start', (j && j.error) || CassieErrors.say('network'), 'Okay');
+}
+// a plain note with one button (the payment sheet's look)
+function trialNote(title, text, btn) { const s = paySheet(title, text); s.set(title, text, `<button type="button" class="plus-ok">${escapeHtml(btn)}</button>`); return s; }
+// (v297) Plans in Settings: Start my free trial while it can start; on the trial, the days left
+function paintTrial() {
+  const box = document.querySelector('.set-trial'); if (!box) return;
+  const can = canTrial(), on = onTrial();
+  box.hidden = !can && !on;
+  box.querySelector('.set-trial-go').hidden = !can;
+  box.querySelector('.set-trial-h').textContent = on ? `You’re on the free Plus trial: ${trialDaysLeft()} ${trialDaysLeft() === 1 ? 'day' : 'days'} left` : `Try Plus free for ${TRIAL_DAYS} days`;
+  box.querySelector('.set-trial-p').textContent = on ? 'It ends by itself, nothing is charged, and everything you made stays.' : 'No card, nothing charged, and it ends by itself. Once per account.';
+}
+document.querySelector('.set-trial-go')?.addEventListener('click', async () => { await startTrial(); paintTrial(); });
+// (v297) two days before the trial ends, once: a plain heads-up, never a pressure screen
+function trialHeadsUp() {
+  if (!onTrial()) return;
+  const left = trialDaysLeft();
+  if (left > 2 || state.trialWarned === state.plan.until) return;
+  state.trialWarned = state.plan.until; save();
+  trialNote(left <= 1 ? 'Your Plus trial ends tomorrow' : `Your Plus trial ends in ${left} days`, 'After that you are back on Free, with everything you made kept. Nothing is charged. If you want Plus to stay, you can get it in Plans.', 'Okay');
 }
 async function buyPlan(plan = 'plus', bill = 'month', cur = payCur()) {
   await configReady;
@@ -11521,7 +11574,8 @@ function afterSignIn(res) {
   signedIn(res.token, res.account, res.plan);
   let waiting = null;
   try { waiting = JSON.parse(sessionStorage.getItem(BUY_KEY) || 'null'); sessionStorage.removeItem(BUY_KEY); } catch (e) { /* storage blocked */ }
-  if (waiting) setTimeout(() => buyPlan(waiting.plan, waiting.bill, waiting.cur), 300); // (signed in to buy: on to the checkout)
+  if (waiting && waiting.trial) setTimeout(() => startTrial(), 300); // (signed in to start the free trial: start it)
+  else if (waiting) setTimeout(() => buyPlan(waiting.plan, waiting.bill, waiting.cur), 300); // (signed in to buy: on to the checkout)
   if (res.account.data && res.account.data.profile) {
     const firstHere = !!frLoad(); // (signing in was this device's first run)
     frSave(null); // (the account already knows them: no questions)
@@ -12389,7 +12443,7 @@ window.addEventListener('pageshow', (e) => {
 // signed in: fetch the latest profile from the account (another device may have changed it)
 if (accountsOn() && authToken()) {
   planAsked = Date.now(); // (this asks for the plan too: refreshPlan needn't ask again for a minute)
-  authCall('/auth/me', null, 'GET').then((r) => { if (r.account) { state.account = accountOf(r.account); if (r.plan) { state.plan = r.plan; save(); } if (r.account.data) applyAccountData(r.account.data); else syncAccount(true); renderProfileSummary(); } })
+  authCall('/auth/me', null, 'GET').then((r) => { if (r.account) { state.account = accountOf(r.account); if (r.plan) { state.plan = r.plan; if (r.plan.trial) state.trialUsed = true; save(); setTimeout(trialHeadsUp, 1500); } if (r.account.data) applyAccountData(r.account.data); else syncAccount(true); renderProfileSummary(); } })
     .catch((e) => { if (e.status === 401) signedOutLocally(); });
 }
 requestAnimationFrame(() => {
