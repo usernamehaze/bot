@@ -208,7 +208,7 @@
       return;
     }
     if (t.dataset.del) {
-      if (!(await sure({ title: `Delete the deck “${t.dataset.del}”?`, text: `All ${all().filter((c) => c.deck === t.dataset.del).length} of its cards and their review history go. This can’t be undone.`, yes: 'Delete deck' }))) return;
+      if (!(await sure({ title: `Delete the deck “${t.dataset.del}”?`, text: `All ${all().filter((c) => c.deck === t.dataset.del).length} of its cards go, and this can’t be undone.`, yes: 'Delete deck', no: 'Keep deck' }))) return;
       const keep = all().filter((c) => c.deck !== t.dataset.del);
       ctx.state().cards = keep; changed(); return;
     }

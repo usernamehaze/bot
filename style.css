@@ -2304,6 +2304,9 @@ input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="
 .plus-actions .sure-danger:active { background: var(--danger-fill-down); border-color: var(--danger-fill-down); }
 .plus-actions .sure-danger:focus-visible { outline: 2px solid var(--danger-fill); outline-offset: 2px; }
 .sure-card h3 { overflow-wrap: anywhere; }
+/* (v289) the one line under the question is plain words, not a grey box: 8px under the title, 24px above the buttons */
+.sure-card h3 { margin-bottom: var(--sp-2, 8px); }
+.sure-card .plus-why { background: none; padding: 0; border-radius: 0; font-weight: 400; color: var(--muted); margin: 0 0 var(--sp-5, 24px) !important; }
 .sure-card .plus-actions > * { flex: 1 1 40%; }
 .plus-foot .plus-linkish { display: inline-flex; align-items: center; min-height: var(--tap, 48px); padding: 0; border: 0; background: none; color: var(--text); font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; } /* (v246: the semester price, a line, not a third button) */
 .plus-actions > * { font-size: var(--fs-md); }
