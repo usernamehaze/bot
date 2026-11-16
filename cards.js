@@ -284,7 +284,7 @@
     session = null;
     ui.querySelector('.fc-back').hidden = false;
     if (ctx.track) ctx.track('feature', 'flashcards:listen');
-    // one decision for the whole deck: Bella reads every card, or Cassie shows them and says so once
+    // one decision for the whole deck: Jessica reads every card, or Cassie shows them and says so once
     if (deckVoice) deckVoice.end();
     deckVoice = ctx.session ? ctx.session(list.map((c) => c.f + '. ' + c.b).join(' ')) : null;
     let i = 0, stopped = false, wait = 0, skipNow = null;

@@ -4647,7 +4647,7 @@ test('Teach me and Ask Cassie in the extension: she speaks, points at the right 
         return JSON.stringify({ steps: [{ say: 'The chart shows sales going up.', point: { x: 0.05, y: 0.5 }, draw: [{ shape: 'circle', x: 0.05, y: 0.5, r: 0.03 }] }, { say: 'It rises faster at the end.', point: { x: 0.8, y: 0.2 } }] });
       };
     });
-    // Bella's studio voice, faked in the background: what's left (self.__voice.left), and each sentence as a
+    // Jessica's studio voice, faked in the background: what's left (self.__voice.left), and each sentence as a
     // tiny WAV, failing from the failFrom-th one on
     const wav = (() => { const n = 800, buf = Buffer.alloc(44 + n * 2); buf.write('RIFF', 0); buf.writeUInt32LE(36 + n * 2, 4); buf.write('WAVEfmt ', 8); buf.writeUInt32LE(16, 16); buf.writeUInt16LE(1, 20); buf.writeUInt16LE(1, 22); buf.writeUInt32LE(8000, 24); buf.writeUInt32LE(16000, 28); buf.writeUInt16LE(2, 32); buf.writeUInt16LE(16, 34); buf.write('data', 36); buf.writeUInt32LE(n * 2, 40); return buf; })();
     await sw.evaluate((b64) => {
@@ -4713,7 +4713,7 @@ test('Teach me and Ask Cassie in the extension: she speaks, points at the right 
     expect(/1 of 3/.test(cardText), 'bad steps are skipped with nothing on screen: ' + cardText);
 
     let cl = await clips();
-    expect(cl.length === 1 && cl[0].ok && cl[0].text === 'This page is about photosynthesis.', 'step 1 was said in Bella’s voice: ' + JSON.stringify(cl));
+    expect(cl.length === 1 && cl[0].ok && cl[0].text === 'This page is about photosynthesis.', 'step 1 was said in Jessica’s voice: ' + JSON.stringify(cl));
     expect(await card.locator('.ct-vnote').isHidden(), 'no line when she can speak');
 
     // 6. Escape removes the layer, the arrow and the card
@@ -4721,7 +4721,7 @@ test('Teach me and Ask Cassie in the extension: she speaks, points at the right 
     await tabPage.waitForTimeout(300);
     expect(await tabPage.evaluate(() => !document.querySelector('[id^="cassie-teach"]') && !document.querySelector('.ct-card, .ct-cursor, canvas.ct-ink')), 'Escape leaves no trace of the lesson on the page');
 
-    // Bella only: too little left for the lesson, so every step is typed and the card says so once
+    // Jessica only: too little left for the lesson, so every step is typed and the card says so once
     const LINE = await panel.evaluate(() => CassieErrors.say('voice_typing'));
     await sw.evaluate(() => { self.__voice.left = 20; });
     let n0 = (await clips()).length;
@@ -4735,7 +4735,7 @@ test('Teach me and Ask Cassie in the extension: she speaks, points at the right 
     expect(l.step === '1' && l.spoken === '0' && (await clips()).length === n0, 'nothing spoken, and Next moves on: ' + JSON.stringify(l));
     await tabPage.keyboard.press('Escape');
     await asked();
-    // Bella fails at step 2: tried once more, then the rest is typed with the line; no other voice
+    // Jessica fails at step 2: tried once more, then the rest is typed with the line; no other voice
     await sw.evaluate(() => { self.__voice.left = 9000; self.__voice.failFrom = self.__clips.length + 1; });
     n0 = (await clips()).length;
     await panel.click('#t-teach');
@@ -7646,8 +7646,8 @@ test.slow('Explore 3D: turn a cell, tap a part, ask Cassie about it, then quiz o
 });
 
 // A stand-in microphone and speaker: tests can "say" things and read what Cassie said aloud.
-// Bella's studio voice, switched on in a page that is already open (a tiny WAV for each sentence): for
-// tests that open the voice screen, which only opens when Bella can speak
+// Jessica's studio voice, switched on in a page that is already open (a tiny WAV for each sentence): for
+// tests that open the voice screen, which only opens when Jessica can speak
 const studioOn = (page) => page.evaluate(() => {
   if (window.__studioOn) return window.CassieVoice.studio.refresh();
   window.__studioOn = true;
@@ -7664,7 +7664,7 @@ const studioOn = (page) => page.evaluate(() => {
 });
 const FAKE_VOICE = (opts) => {
   window.__spoken = []; window.__recs = []; window.__shown = [];
-  // Bella's studio voice, faked in the page: GET /speak says what's left (window.__studioCfg.left), POST
+  // Jessica's studio voice, faked in the page: GET /speak says what's left (window.__studioCfg.left), POST
   // /speak answers with a tiny WAV and is logged in window.__studio ({ text, ok }); from the
   // failFrom-th sentence on it fails. Every "Cassie types instead" line shown is counted in __notes.
   window.__studio = []; window.__notes = [];
@@ -7688,7 +7688,7 @@ const FAKE_VOICE = (opts) => {
     };
     addEventListener('DOMContentLoaded', () => { if (window.CassieVoice) window.CassieVoice.studio.setup({ server: 'https://studio.test', uid: 'test-uid-0001' }); });
   }
-  // what Cassie says on the voice screen (Bella speaks it, or it's shown while her voice downloads)
+  // what Cassie says on the voice screen (Jessica speaks it, or it's shown while her voice downloads)
   new MutationObserver(() => { const el = document.querySelector('.vc-cassie'); const t = el && el.textContent; if (t && t !== window.__lastShown) { window.__lastShown = t; window.__shown.push(t); } })
     .observe(document, { subtree: true, childList: true, characterData: true });
   const synth = { speaking: false, cancelled: 0, getVoices: () => [{ name: 'Test Voice (Natural)', lang: 'en-US' }], addEventListener() {},
@@ -7706,9 +7706,9 @@ const FAKE_VOICE = (opts) => {
   window.__say = (text) => { const r = window.__recs.filter((x) => x.live).at(-1); const res = [{ transcript: text }]; res.isFinal = true; r.onresult({ resultIndex: 0, results: [res] }); };
 };
 
-// Cassie speaks only in Bella's studio voice. A session (a lesson, a Listen, a voice chat) uses her only
+// Cassie speaks only in Jessica's studio voice. A session (a lesson, a Listen, a voice chat) uses her only
 // when what's left of the month covers all of it; otherwise she types from the start and says so once.
-// If Bella fails partway, the rest is typed with the same line. No other voice, no Keep going, ever.
+// If Jessica fails partway, the rest is typed with the same line. No other voice, no Keep going, ever.
 test('every stylesheet is whole: its braces balance and no rule is cut off (a broken one silently drops the rules after it)', async () => {
   const sheets = ['style.css', 'labs/labs.css', 'landing/landing.css'].filter((f) => fs.existsSync(path.join(ROOT, f)));
   for (const f of sheets) {
@@ -7721,7 +7721,7 @@ test('every stylesheet is whole: its braces balance and no rule is cut off (a br
   }
 });
 
-test.slow('Bella only: a 7-step lesson and a long Listen in Bella’s voice when there is enough left; too little left types with one line; Bella failing midway types the rest; the device voice is never used; no Keep going anywhere; Settings says when she is back', async (b) => {
+test.slow('Jessica only: a 7-step lesson and a long Listen in Jessica’s voice when there is enough left; too little left types with one line; Jessica failing midway types the rest; the device voice is never used; no Keep going anywhere; Settings says when she is back', async (b) => {
   const LONG = Array.from({ length: 12 }, (_, i) => `Sentence ${i + 1} says mitochondria turn food into energy the cell can use.`).join(' ');
   const steps = Array.from({ length: 7 }, (_, i) => ({ say: `Step ${i + 1} is here.`, point: 0 }));
   const cards = [{ id: 'c1', f: 'Powerhouse of the cell?', b: 'Mitochondria', deck: 'Biology', box: 0, due: 0, at: 0 }];
@@ -7738,19 +7738,19 @@ test.slow('Bella only: a 7-step lesson and a long Listen in Bella’s voice when
   const setLeft = (left, extra = {}) => page.evaluate(([l, x]) => { Object.assign(window.__studioCfg, { left: l, ...x }); return window.CassieVoice.studio.refresh(); }, [left, extra]);
   const settingsLine = async () => { await page.evaluate(() => openSettings()); const t = await page.locator('#hv-state').innerText(); await page.evaluate(() => closeSettings && closeSettings()).catch(() => {}); return t; };
 
-  // Settings, Voice: Bella is ready
+  // Settings, Voice: Jessica is ready
   expect(/^Jessica’s voice is ready\./.test(await settingsLine()), 'Settings says Jessica is ready: ' + await page.locator('#hv-state').innerText());
   await page.keyboard.press('Escape');
 
-  // 1. a long Listen with enough left: every sentence in Bella's voice, no line
+  // 1. a long Listen with enough left: every sentence in Jessica's voice, no line
   await ask(page, 'What do mitochondria do?');
   await page.click('.bubble-assistant .listen-btn');
   await page.waitForFunction(() => !document.querySelector('.bubble-assistant .listen-btn.on'), null, { timeout: 20000 });
   let st = await studio();
-  expect(st.length >= 3 && st.every((x) => x.ok && x.voice === 'woman') && /Sentence 1 /.test(st[0].text) && /Sentence 12 /.test(st.at(-1).text), 'the whole answer went to Bella: ' + JSON.stringify(st.map((x) => x.text.slice(0, 14))));
+  expect(st.length >= 3 && st.every((x) => x.ok && x.voice === 'woman') && /Sentence 1 /.test(st[0].text) && /Sentence 12 /.test(st.at(-1).text), 'the whole answer went to Jessica: ' + JSON.stringify(st.map((x) => x.text.slice(0, 14))));
   expect((await notes()).length === 0, 'no line when she can speak');
   let played = await page.evaluate(() => window.CassieVoice.played());
-  expect(played.length === st.length && played.every((x) => x.kind === 'studio' && x.voice === 'bella'), 'only Bella spoke: ' + JSON.stringify(played));
+  expect(played.length === st.length && played.every((x) => x.kind === 'studio' && x.voice === 'bella'), 'only Jessica spoke: ' + JSON.stringify(played));
 
   // 2. too little left: nothing is spoken, the words stay, the one line shows once
   await setLeft(50);
@@ -7777,18 +7777,18 @@ test.slow('Bella only: a 7-step lesson and a long Listen in Bella’s voice when
   expect(await page.evaluate(() => document.activeElement && document.activeElement.id === 'prompt-input'), 'the typed chat is ready to type in');
   expect((await studio()).length === n0, 'still nothing spoken');
 
-  // 3. flashcards, enough left: the deck is read in Bella's voice
+  // 3. flashcards, enough left: the deck is read in Jessica's voice
   await clearNote(); await setLeft(9000);
   await page.evaluate(() => window.CassieCards.open());
   await page.click('[data-listen="Biology"]');
   await page.waitForSelector('.fc-listening .fc-text >> text=Mitochondria', { timeout: 15000 });
   await page.click('[data-lstop]');
   st = await studio();
-  expect(st.some((x) => /Powerhouse of the cell/.test(x.text)) && st.some((x) => /^Mitochondria/.test(x.text)), 'the cards went to Bella: ' + JSON.stringify(st.slice(-2)));
+  expect(st.some((x) => /Powerhouse of the cell/.test(x.text)) && st.some((x) => /^Mitochondria/.test(x.text)), 'the cards went to Jessica: ' + JSON.stringify(st.slice(-2)));
   await page.click('.fc-back').catch(() => {});
   await page.keyboard.press('Escape');
 
-  // 4. a 7-step lesson with enough left: every step in Bella's voice
+  // 4. a 7-step lesson with enough left: every step in Jessica's voice
   await page.evaluate(() => openLabs('atom'));
   await page.waitForSelector('.lab-view:not([hidden])[data-lab="atom"] .lab-controls > *', { timeout: 15000 });
   n0 = (await studio()).length;
@@ -7797,10 +7797,10 @@ test.slow('Bella only: a 7-step lesson and a long Listen in Bella’s voice when
   await sevenOfSeven();
   await page.waitForFunction((n) => window.__studio.length >= n + 7, n0, { timeout: 10000 });
   st = (await studio()).slice(n0);
-  expect(st.length === 7 && st.every((x, i) => x.ok && x.text === `Step ${i + 1} is here.`), 'all 7 steps in Bella’s voice: ' + JSON.stringify(st));
+  expect(st.length === 7 && st.every((x, i) => x.ok && x.text === `Step ${i + 1} is here.`), 'all 7 steps in Jessica’s voice: ' + JSON.stringify(st));
   expect((await notes()).length === 2, 'no line in a lesson she can say');
 
-  // 5. Bella fails at step 4: tried once more in her voice, then the rest is typed with the line; no other voice
+  // 5. Jessica fails at step 4: tried once more in her voice, then the rest is typed with the line; no other voice
   await page.click('.tut-x');
   n0 = (await studio()).length;
   await page.evaluate((n) => { window.__studioCfg.failFrom = n + 3; }, n0);
@@ -7947,7 +7947,7 @@ test.slow('the tour: never pops up after the first questions (they go straight t
   expect(!errors.length, 'page errors: ' + errors.join('; '));
   await ctx.close();
 
-  // 2. signed in, on a computer: offered once, the tour with Bella's voice, finished and synced to the account
+  // 2. signed in, on a computer: offered once, the tour with Jessica's voice, finished and synced to the account
   ({ ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, state: null }));
   await ctx.addInitScript(FAKE_VOICE, {});
   await page.reload();
@@ -7964,7 +7964,7 @@ test.slow('the tour: never pops up after the first questions (they go straight t
   const computerSays = stops.map((x) => x.say);
   expect(JSON.stringify(stops.map((s) => s.id)) === JSON.stringify(PHONE), 'the computer’s stops (the top bar, the sidebar and Home): ' + stops.map((s) => s.id).join(', '));
   studio = await page.evaluate(() => window.__studio.filter((x) => x.ok).length);
-  expect(studio >= stops.length && (await page.evaluate(() => window.__spoken.length)) === 0, `voice on: Bella said the stops (${studio}), never the device voice`);
+  expect(studio >= stops.length && (await page.evaluate(() => window.__spoken.length)) === 0, `voice on: Jessica said the stops (${studio}), never the device voice`);
   expect(await tourGone(page), 'Done leaves nothing on screen');
   expect(await page.evaluate(() => accountData().tour === 'done'), 'the finished tour goes with the account');
   await page.reload();
@@ -9173,7 +9173,7 @@ test('Cassie’s live drawing in the extension (3.67): Ctrl twice opens “Ask C
   } finally { await X.close(); }
 });
 
-test('Cassie’s live drawing, the rest: a follow-up adds to the drawing or starts a new one, from the same picture (care first, typed or said); Open on the board hands the finished drawing to the board; the drawing is kept in Your lessons without the picture of the screen; “draw it” on a lesson step and in her answer box draws; Bella says each beat when she can, else it is typed; replies that can’t be used say so in plain words with Try again', async () => {
+test('Cassie’s live drawing, the rest: a follow-up adds to the drawing or starts a new one, from the same picture (care first, typed or said); Open on the board hands the finished drawing to the board; the drawing is kept in Your lessons without the picture of the screen; “draw it” on a lesson step and in her answer box draws; Jessica says each beat when she can, else it is typed; replies that can’t be used say so in plain words with Try again', async () => {
   const X = await liveExt();
   const { page, sw, replies, prompts, shots, card, tap, until, ask, toEnd, gone, fixture, LIVE, LESSON, EXT } = X;
   try {
@@ -9284,7 +9284,7 @@ test('Cassie’s live drawing, the rest: a follow-up adds to the drawing or star
     expect((await prompts()).length === 2, 'unusable, then good: 2 calls and the drawing');
     await gone();
 
-    // 5. Bella's studio voice: each beat is said, and lasts as long as she says it; too little left: typed, said once
+    // 5. Jessica's studio voice: each beat is said, and lasts as long as she says it; too little left: typed, said once
     const wav = (() => { const n = 800, buf = Buffer.alloc(44 + n * 2); buf.write('RIFF', 0); buf.writeUInt32LE(36 + n * 2, 4); buf.write('WAVEfmt ', 8); buf.writeUInt32LE(16, 16); buf.writeUInt16LE(1, 20); buf.writeUInt16LE(1, 22); buf.writeUInt32LE(8000, 24); buf.writeUInt32LE(16000, 28); buf.writeUInt16LE(2, 32); buf.writeUInt16LE(16, 34); buf.write('data', 36); buf.writeUInt32LE(n * 2, 40); return buf; })();
     await sw.evaluate((b64) => {
       self.__voice = { left: 9000 };
@@ -9298,7 +9298,7 @@ test('Cassie’s live drawing, the rest: a follow-up adds to the drawing or star
     for (let i = 0; i < 60; i++) { c = await card(); if (c.status === 'speaking' && c.says === await say('live_speaking')) spoke = true; if (c.status === 'done') break; await page.waitForTimeout(60); }
     c = await card();
     const clips = await sw.evaluate(() => self.__clips.slice());
-    expect(spoke && c.status === 'done' && c.spoken === '3' && clips.join('|') === 'This is a leaf.|Light comes in.|Sugar is made.' && c.drawn === '5', 'each beat is said in Bella’s voice, and the line says she is speaking: ' + JSON.stringify([spoke, c.status, c.spoken, clips]));
+    expect(spoke && c.status === 'done' && c.spoken === '3' && clips.join('|') === 'This is a leaf.|Light comes in.|Sugar is made.' && c.drawn === '5', 'each beat is said in Jessica’s voice, and the line says she is speaking: ' + JSON.stringify([spoke, c.status, c.spoken, clips]));
     expect(await page.evaluate((h) => document.querySelector(h).shadowRoot.querySelector('.lv-vnote').hidden, LIVE), 'no line when she can speak');
     // the voice switch is the same one as her lessons
     await tap('.lv-voice');
@@ -15089,7 +15089,7 @@ test.slow('Monochrome (Graphite) is everyone’s main colour unless Blush & Sage
     for (const [act, , opened] of BOXES.filter(([k]) => have.includes(k))) {
       if (act === 'room') { await ctx.close(); ({ ctx, page, errors } = await start({ server: true })); }
       else { await page.goto(APP); await page.waitForTimeout(400); await page.evaluate((ph) => { if (ph) CassieNative.go('home'); else createNewChat(); }, phone); await page.waitForSelector(hub + ' .hub-boxes', { timeout: 10000 }); }
-      if (act === 'talk') await studioOn(page); // (the voice screen opens only when Bella can speak)
+      if (act === 'talk') await studioOn(page); // (the voice screen opens only when Jessica can speak)
       await page.click(`${hub} .hub-box[data-hub="${act}"]`);
       const ok = await opened(page).then(() => true, () => false);
       expect(ok, `${size}: the ${act} box opens its feature`);

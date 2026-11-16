@@ -3,7 +3,7 @@
    it gets a soft ring, and a card says what it is and when to use it (1 or 2 sentences). On a phone the
    stops follow the tab bar; on a computer, the top bar, the sidebar and Home. Only what is on this
    device is shown. The tour only points: it never opens a paid flow or changes a setting by itself.
-   Her voice is Bella's studio voice or typing, never another voice (voice.js), and nothing waits.
+   Her voice is Jessica's studio voice or typing, never another voice (voice.js), and nothing waits.
    Escape or Skip puts the app back exactly where it was. Uses app.js's state, save, syncAccount,
    detourToElement, resumeFollowing, openSettings, closeSettings, voiceGender and cleanForSpeech.
    After the tour, on a computer, a short video shows how the Chrome extension works (once; again from
@@ -97,7 +97,7 @@
     run = { stops, at: -1, before, veil, ring, card, timer: 0, talking: null, voice: null, target: null };
     const setVoice = (on) => { run.voiceOn = on; const b = $('.tour-voice'); b.setAttribute('aria-pressed', String(on)); b.textContent = on ? 'Voice on' : 'Voice off'; };
     setVoice(state.tourVoice !== 'off');
-    // Bella's voice for the whole tour, or typing with one plain line (voice.js decides once, for all of it)
+    // Jessica's voice for the whole tour, or typing with one plain line (voice.js decides once, for all of it)
     const newVoice = () => {
       if (run.voice) run.voice.end();
       const CV = window.CassieVoice;

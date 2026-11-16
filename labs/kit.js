@@ -18,7 +18,7 @@ export const errorWords = (key, vars) => (window.CassieErrors ? window.CassieErr
 // a message about what someone typed, already in plain words (shown as it is)
 export const inputError = (words) => Object.assign(new Error(words), { friendly: true });
 export const errorWordsFor = (e, key) => (window.CassieErrors ? window.CassieErrors.explain(e, key) : '');
-// (v285) the games and the little ones' labs speak in Cassie's own studio voice (Bella, ElevenLabs), as
+// (v285) the games and the little ones' labs speak in Cassie's own studio voice (Jessica, ElevenLabs), as
 // everywhere else; a new line stops the one before. With no voice left she types: the words are on screen.
 let sayNow = null, toldOnce = false;
 export function sayAloud(t) {

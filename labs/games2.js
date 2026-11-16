@@ -5,7 +5,7 @@ import { loadWorld } from './puzzles.js';
 import { animalSvg, homeSvg, shapeFace } from './cartoons.js';
 
 const rand = Math.random;
-const say = sayAloud; // (v285) Bella, her studio voice
+const say = sayAloud; // (v285) Jessica, her studio voice
 
 /* ---------- (v286) one at a time: one big picture, three big choices, then Next ---------- */
 // items: [{ id, html, label, to, why }]; choicesFor(item): three [{ id, html, label }], the right one among them.
