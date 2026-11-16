@@ -259,6 +259,48 @@ function langInstruction() {
   if (l === 'tl') return '\n\nAlways reply in Taglish, a natural English and Filipino mix, even when the student writes in pure English or pure Filipino. Keep technical terms in English.';
   return '';
 }
+// (v295) Cassie's grammar and vocabulary, fitted to the student: by their age or grade, then by how they
+// themselves write in this chat. Her own grammar is always correct; she never corrects theirs unless asked.
+const LANG_BANDS = {
+  little: 'Language for a very young child: sentences of about 5 to 8 words, one idea in each, the everyday words a 5 to 7 year old uses, no idioms. If a new word is needed, say what it means right away in simple words.',
+  kid: 'Language for a child about 8 to 11: short, clear sentences (about 8 to 14 words), common words, at most two new subject words in an answer, each one explained in the same sentence or the next.',
+  teen: 'Language for a young teen (junior high): clear standard English, a mix of short and medium sentences, the subject terms they meet in class, each with a short plain explanation the first time.',
+  shs: 'Language for a senior high student: correct, natural academic English, precise subject vocabulary (define a term only when it is new at this level), varied sentences, no slang unless they use it.',
+  adult: 'Language for a college student or adult: precise, concise and fluent, the proper technical terms of the field, well formed sentences, no padding.',
+};
+function langBand(p) {
+  p = p || {};
+  if (p.role === 'pro') return 'adult';
+  const g = String(p.grade || ''), n = +(g.match(/\bGrade (\d+)/) || [])[1] || 0;
+  const age = +p.age || (n ? n + 5 : 0);
+  if (/^(Nursery|Kindergarten)$/.test(g) || (age && age < 8)) return 'little';
+  if (g === 'Elementary' || (age && age < 12)) return 'kid';
+  if (g === 'Junior High' || (age && age < 16)) return 'teen';
+  if (g === 'Senior High' || (age && age < 19)) return 'shs';
+  if (/College|Graduate|Board/.test(g) || age) return 'adult';
+  return null;
+}
+// how they write, from their last messages here: short and simple, or long and rich
+function writingSignal() {
+  try {
+    const c = (state.chats || []).find((x) => x.id === state.currentId);
+    const said = (c && c.messages ? c.messages : []).filter((m) => m.role === 'user' && typeof m.content === 'string').slice(-6).map((m) => m.content.replace(/```[\s\S]*?```/g, ' ').trim()).filter((t) => t.length > 3);
+    if (said.length < 2) return '';
+    const words = said.join(' ').split(/\s+/).filter((w) => /[a-z]/i.test(w));
+    const sentences = said.reduce((n, t) => n + Math.max(1, t.split(/[.!?]+\s|\n+/).filter((s) => s.trim()).length), 0); // (each message is at least one sentence)
+    const perSentence = words.length / sentences, long = words.filter((w) => w.replace(/[^a-z]/gi, '').length >= 9).length / Math.max(1, words.length);
+    if (perSentence <= 8 && long < 0.08) return 'This student writes in short, simple sentences: keep yours short and your words simple, and build up only if they ask for more.';
+    if (perSentence >= 16 || long >= 0.16) return 'This student writes in long sentences with a rich vocabulary: you may match that with precise, more advanced words, still clear.';
+  } catch (e) { /* no signal */ }
+  return '';
+}
+function languageFit() {
+  const band = langBand(state.profile), lvl = { elementary: 'kid', middle: 'teen', high: 'shs', college: 'adult' }[state.level];
+  const pick = lvl || band; // (an explanation level picked in Settings comes first)
+  const parts = [pick ? LANG_BANDS[pick] : '', writingSignal(),
+    'Your own grammar is always correct and consistent (tense, agreement, articles, punctuation), in English, Filipino or Taglish. Prefer the plain word over the fancy one. Never correct the student’s grammar or spelling unless they ask, or they are practising English writing; then show the corrected sentence kindly and say why in one line.'];
+  return '\n\nLanguage: ' + parts.filter(Boolean).join(' ');
+}
 function buildSystemPrompt({ tutor = false, mode = null } = {}) {
   let sp = SYSTEM_PROMPT;
   sp += langInstruction();
@@ -270,6 +312,7 @@ function buildSystemPrompt({ tutor = false, mode = null } = {}) {
     sp += `\n\nWhen you cite sources or format references, use ${state.citationStyle} style.`;
   }
   if (state.profile) sp += `\n\n${profileLine(state.profile)}`;
+  sp += languageFit(); // (v295) grammar and vocabulary fitted to this student
   if (workMode()) sp += `\n\n${PRO_INSTRUCTION}`;
   if (STYLE_INSTRUCTION[state.answerStyle] && mode !== 'voice' && mode !== 'teach') sp += `\n\n${STYLE_INSTRUCTION[state.answerStyle]}`; // (how they like to learn, from the first questions)
   if (tutor && counselorMode) sp += `\n\n${COUNSELOR_INSTRUCTION}`;
@@ -505,7 +548,17 @@ const LOOK_3D_TO_2D = { neutral: 'idle', thinking: 'thinking', happy: 'greeting'
 const EMOTE_TO_2D = { 'emote-happy': 'greeting', 'emote-love': 'love', 'emote-star': 'proud', 'emote-surprised': 'surprised', 'emote-wink': 'wink', 'emote-sleepy': 'sleeping', 'emote-focused': 'thinking', 'emote-cool': 'wink', 'emote-sad': 'sad', 'emote-dizzy': 'dizzy' };
 const OUTFIT_TO_2D = { classic: null, professor: 'glasses', graduate: 'gradcap', coder: 'pencil', heart: 'bow' };
 // (v283) her everyday outfits, picked in Settings (state.outfit): [accessory, its name]
-const OUTFITS = [['auto', 'Auto'], ['scarf', 'Scarf'], ['headphones', 'Headphones'], ['bow', 'Bow'], ['beanie', 'Beanie'], ['sampaguita', 'Flower'], ['none', 'Nothing']];
+// (v295) more to pick from; a holiday still dresses her up by itself whatever is picked (cassieSeasonal)
+const OUTFITS = [['auto', 'Auto'], ['scarf', 'Scarf'], ['headphones', 'Headphones'], ['bow', 'Bow'], ['beanie', 'Beanie'], ['sampaguita', 'Flower'],
+  ['cap', 'Cap'], ['glasses', 'Glasses'], ['sunglasses', 'Sunglasses'], ['bowtie', 'Bow tie'], ['star', 'Star clip'], ['crown', 'Crown'], ['salakot', 'Salakot'], ['party', 'Party hat'], ['pencil', 'Pencil'], ['none', 'Nothing']];
+// what each holiday's own accessory is called, for the note under the outfits
+const HOLIDAY_WEAR = { santa: 'Santa hat', witch: 'witch hat', party: 'party hat', gradcap: 'grad cap', pumpkin: 'pumpkin', candle: 'candle', flag: 'flag', heart: 'heart', apple: 'apple', leaf: 'leaf', lantern: 'lantern', ribbon: 'ribbon' };
+// the next holiday from today (Philippine time), within a year: { name, acc, days }
+function nextHoliday() {
+  if (!window.CassieBot || !window.CassieBot.holiday) return null;
+  for (let n = 0; n < 370; n++) { let h = null; try { h = window.CassieBot.holiday(new Date(Date.now() + n * 864e5)); } catch (e) { return null; } if (h) return { ...h, days: n }; }
+  return null;
+}
 // Cursor Cassie is everyone's Cassie. (The 3D felt Cassie was removed from Settings; an old
 // saved choice of her is forgotten.)
 if (state.look) { delete state.look; save(); }
@@ -912,7 +965,13 @@ function paintOutfits() {
   }
   grid.querySelectorAll('.of-opt').forEach((o) => { const on = o.dataset.of === pick; o.classList.toggle('on', on); o.setAttribute('aria-checked', String(on)); });
   const note = document.getElementById('of-note');
-  if (note) { const auto = (() => { const was = state.outfit; state.outfit = 'auto'; const a = cassieSeasonal(); state.outfit = was; return String(a || '').split('+').find((x) => x !== 'tassel'); })(); note.textContent = pick === 'auto' ? `Auto: by the season${auto && auto !== 'scarf' ? `, now the ${(OUTFITS.find(([k]) => k === auto) || [0, ({ santa: 'Santa hat', witch: 'witch hat', party: 'party hat', gradcap: 'grad cap', pumpkin: 'pumpkin', candle: 'candle', flag: 'flag', heart: 'heart', apple: 'apple', leaf: 'leaf', lantern: 'lantern', ribbon: 'ribbon' })[auto] || auto])[1].toLowerCase()}` : ''}. On plain days she wears her scarf.` : 'Holidays and graduations still dress her up.'; }
+  if (note) {
+    const auto = (() => { const was = state.outfit; state.outfit = 'auto'; const a = cassieSeasonal(); state.outfit = was; return String(a || '').split('+').find((x) => x !== 'tassel'); })();
+    // (v295) holidays dress her up by themselves, whatever is picked: today's, or the next one and what she'll wear
+    const nh = nextHoliday(), wear = (k) => HOLIDAY_WEAR[k] || String((OUTFITS.find(([o]) => o === k) || [0, k])[1]).toLowerCase(); // (Santa keeps its capital)
+    const hol = nh ? (nh.days === 0 ? `Today is ${nh.name}, so she wears the ${wear(nh.acc)}.` : `Next holiday: ${nh.name} in ${nh.days === 1 ? '1 day' : nh.days + ' days'}; she’ll wear the ${wear(nh.acc)} by herself.`) : '';
+    note.textContent = (pick === 'auto' ? `Auto: by the season${auto && auto !== 'scarf' ? `, now the ${wear(auto)}` : ''}. On plain days she wears her scarf. ` : 'Holidays and graduations still dress her up by themselves. ') + hol;
+  }
 }
 // (v283) Settings, Study offline: Learn's code and pictures, the 3D code and the 3D Cassie, fetched once so the
 // service worker keeps them (offline-files.json); the student's cards, notes and chats are already on the phone
@@ -2748,7 +2807,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=295'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=296'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2770,7 +2829,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=295'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=296'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -3046,7 +3105,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=295').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=296').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -7402,7 +7461,7 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=295')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=296')));
 // a real photo needs Gemini pictures (Cassie's server or the student's key); the free service draws toys and models
 const realPhotoOk = () => !!((SERVER && serverPictures) || (state.geminiKey && !geminiImageOff));
 // a drawing inside a chat bubble (a new one draws itself; one from history shows finished)
@@ -8693,7 +8752,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=295');
+      exploreMod = await import('./explore/cell3d.js?v=296');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -8743,7 +8802,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=295');
+      labsMod = await import('./labs/labs.js?v=296');
       islandRest();
     }
     labsMod.open({
@@ -10708,10 +10767,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=295').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=296').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=295', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=296', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
