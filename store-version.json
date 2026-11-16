@@ -1,0 +1,4 @@
+{
+  "_what": "The extension version that is live in the Chrome Web Store. The Version under Add to Chrome on the home page shows this, because that button installs the store's copy. Change it when Google approves a new upload.",
+  "chrome": "3.68.0"
+}
