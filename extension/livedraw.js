@@ -65,7 +65,7 @@ function shapePoints(sh) {
   return [];
 }
 // (round by nature: a plain circle is the real shape)
-const ROUND_THINGS = /\b(?:sun|moon|star|planet|earth|ball|atom|nucleus|drop|droplet|bubble|molecule|wheel|coin|pupil|egg|cell\s+membrane|o2|co2|h2o|ion|electron|proton|neutron)\b/i;
+const ROUND_THINGS = /\b(?:sun|moon|star|planet|earth|ball|atom|nucleus|drop|droplet|bubble|molecule|wheel|coin|pupil|egg|cell\s+membrane|o2|co2|h2o|ion|electron|proton|neutron)s?\b/i;
 // the box of a part's main shape: the shape its anchor sits in, else its first shape
 function shapeOf(p) {
   const boxes = p.shapes.map((sh) => { const pts = shapePoints(sh).filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y)); if (!pts.length) return null; const xs = pts.map((q) => q[0]), ys = pts.map((q) => q[1]); return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]; });
@@ -84,10 +84,55 @@ function valentine(sh) {
   if (Math.abs(low[0] - cx) > w * .12) return false;
   return pts.some(([x, y]) => Math.abs(x - cx) < w * .08 && y - y0 > h * .06 && y - y0 < h * .4 && pts.some((q) => q[0] < x - w * .15 && q[1] < y - h * .04) && pts.some((q) => q[0] > x + w * .15 && q[1] < y - h * .04));
 }
-export function check(spec) {
+// (v290) the parts a textbook figure of a common subject always shows. A drawing that leaves one out is sent back
+// with the names it is missing. A part counts when its name is a label, is said, or is written on the picture.
+const MUST = [
+  { is: /\b(bicycles?|bikes?|cycling)\b/i, not: /\b(motor ?bike|motorcycle|e-?bike motor)\b/i, what: 'a bicycle', need: [['frame'], ['wheel', 'tyre', 'tire'], ['saddle', 'seat'], ['handlebar'], ['pedal'], ['crank'], ['chain\\b'], ['chainring', 'front gear', 'front sprocket', 'chain ring'], ['rear gear', 'rear sprocket', 'cog', 'cassette', 'freewheel'], ['fork'], ['brake']] },
+  { is: /\b(heart|hearts|puso)\b/i, not: /\b(valentine|symbol|emoji|love|card|heartbeat on|heart rate)\b/i, what: 'the heart', need: [['right atrium'], ['left atrium'], ['right ventricle'], ['left ventricle'], ['aorta'], ['pulmonary'], ['vena cava'], ['valve'], ['septum']] },
+  { is: /\bwater cycle\b|\bhydrologic(al)? cycle\b|\bsiklo ng tubig\b/i, what: 'the water cycle', need: [['sun'], ['evaporat'], ['condens', 'cloud'], ['precipitat', 'rain', 'snow'], ['runoff', 'run off', 'river', 'collection', 'collects'], ['ocean', 'sea', 'lake']] },
+  { is: /\bphotosynthesis\b|\bpotosintesis\b/i, what: 'photosynthesis', need: [['sun', 'light'], ['carbon dioxide', 'co2'], ['water', 'h2o'], ['oxygen', 'o2'], ['glucose', 'sugar'], ['chloroplast', 'chlorophyll'], ['stomata', 'stoma'], ['root']] },
+  { is: /\bplant cells?\b/i, what: 'a plant cell', need: [['cell wall'], ['membrane'], ['nucleus'], ['cytoplasm'], ['chloroplast'], ['vacuole'], ['mitochondri']] },
+  { is: /\banimal cells?\b|\bhuman cells?\b/i, what: 'an animal cell', need: [['membrane'], ['nucleus'], ['cytoplasm'], ['mitochondri'], ['ribosome'], ['golgi'], ['endoplasmic', 'er\\b']] },
+  { is: /\bvolcano(es)?\b|\bbulkan\b/i, what: 'a volcano', need: [['magma chamber', 'magma'], ['vent', 'conduit'], ['crater'], ['lava'], ['ash', 'gas'], ['layer', 'crust', 'rock']] },
+  { is: /\bflowers?\b|\bbulaklak\b/i, not: /\bflower ?pot\b/i, what: 'a flower', need: [['petal'], ['sepal'], ['stamen', 'anther', 'filament'], ['pistil', 'carpel', 'stigma'], ['ovary'], ['stem', 'receptacle']] },
+  { is: /\b(lungs?|respiratory system|breathing)\b|\bbaga\b/i, what: 'the lungs', need: [['trachea', 'windpipe'], ['bronch'], ['lung'], ['alveol', 'air sac'], ['diaphragm']] },
+  { is: /\b(human )?eyes?\b(?! ?(drop|glass|liner|shadow))|\bmata\b/i, not: /\b(eye of the storm|hurricane|needle)\b/i, what: 'the eye', need: [['cornea'], ['iris'], ['pupil'], ['lens'], ['retina'], ['optic nerve']] },
+  { is: /\bdigestive (system|tract)\b|\bdigestion\b/i, what: 'the digestive system', need: [['mouth'], ['oesophagus', 'esophagus', 'food pipe'], ['stomach'], ['liver'], ['small intestine'], ['large intestine', 'colon']] },
+  { is: /\b(electric(al)? )?circuits?\b/i, not: /\bcircuit training\b/i, what: 'a circuit', need: [['battery', 'cell', 'power'], ['wire'], ['switch'], ['bulb', 'lamp', 'resistor', 'load'], ['current']] },
+  { is: /\batoms?\b|\batomic structure\b/i, not: /\batomic bomb\b/i, what: 'an atom', need: [['nucleus'], ['proton'], ['neutron'], ['electron'], ['shell', 'orbit', 'cloud']] },
+  { is: /\bsolar system\b/i, what: 'the solar system', need: [['sun'], ['mercury'], ['venus'], ['earth'], ['mars'], ['jupiter'], ['saturn'], ['uranus'], ['neptune']] },
+  { is: /\b(layers of the earth|earth'?s layers|inside the earth|earth'?s interior|structure of the earth)\b/i, what: 'the Earth', need: [['crust'], ['mantle'], ['outer core'], ['inner core']] },
+  { is: /\b(tooth|teeth|ngipin)\b/i, what: 'a tooth', need: [['enamel'], ['dentin'], ['pulp'], ['root'], ['gum']] },
+];
+const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function missingParts(spec, asked) {
+  const about = `${spec.title} ${asked || ''}`;
+  const rule = MUST.find((r) => r.is.test(about) && !(r.not && r.not.test(about)));
+  if (!rule) return null;
+  const said = spec.parts.map((p) => `${p.label} ${p.id} ${p.say} ${p.shapes.map((sh) => (sh && sh.text) || '').join(' ')}`).join(' ').toLowerCase();
+  const said2 = `${said} ${spec.intro || ''} ${spec.summary || ''}`.toLowerCase();
+  const gone = rule.need.filter((alts) => !alts.some((a) => new RegExp(`\\b${a.includes('\\b') ? a : esc(a)}`, 'i').test(said2)));
+  return gone.length ? { what: rule.what, gone: gone.map((alts) => alts[0].replace(/\\b/g, '')) } : null;
+}
+// (v290) an arrow that says "falls" must point down, and one that says "rises" must point up
+const FALLS = /\b(falls?|falling|rain|precipitat|sinks?|sinking|drops? down|downward|flows? down|gravity|weight)\b/i;
+const RISES = /\b(rises?|rising|evaporat|transpir|goes up|upward|lifts?|lift|floats? up|buoyan)\b/i;
+function wrongWay(p) {
+  const arrows = p.shapes.filter((sh) => String(sh.t || sh.type || '').toLowerCase() === 'arrow').map((sh) => +sh.y2 - +sh.y1).filter((dy) => Number.isFinite(dy) && Math.abs(dy) > 6);
+  if (!arrows.length) return '';
+  const name = `${p.label} ${p.id}`, words_ = `${name} ${p.say}`;
+  const down = FALLS.test(name) || (FALLS.test(words_) && !RISES.test(words_)), up = RISES.test(name) || (RISES.test(words_) && !FALLS.test(words_));
+  if (down && !up && arrows.every((dy) => dy < 0)) return `"${p.label || p.id}" says it goes down, but its arrows point up; turn them round so their heads are lower than their tails (y2 bigger than y1)`;
+  if (up && !down && arrows.every((dy) => dy > 0)) return `"${p.label || p.id}" says it goes up, but its arrows point down; turn them round so their heads are higher than their tails (y2 smaller than y1)`;
+  return '';
+}
+export function check(spec, asked = '') {
   const out = [];
   if (spec && spec.mode === '3d') return check3d(spec);
   if (!spec || spec.mode !== '2d') return out;
+  const lack = missingParts(spec, asked);
+  if (lack) out.push(`a textbook figure of ${lack.what} shows ${lack.gone.length > 1 ? 'these parts' : 'this part'}, and your drawing leaves ${lack.gone.length > 1 ? 'them' : 'it'} out: ${lack.gone.join(', ')}. Draw ${lack.gone.length > 1 ? 'each one' : 'it'} in its real place and shape, and name it (a part of its own, or in the "say" of the part it belongs to)`);
+  for (const p of spec.parts) { const w = wrongWay(p); if (w) out.push(w); }
   const boxes = [];
   for (const p of spec.parts) {
     const pts = p.shapes.flatMap(shapePoints).filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y));

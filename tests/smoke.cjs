@@ -9034,7 +9034,7 @@ test('Cassie’s live drawing in the extension (3.67): Ctrl twice opens “Ask C
     // every control: 44px, a real button or box (so the keyboard reaches it), named; her words are announced
     const controls = await page.evaluate((h) => { const r = document.querySelector(h).shadowRoot; return [...r.querySelectorAll('.lv-card button, .lv-card input')].filter((b) => b.offsetParent).map((b) => { const q = b.getBoundingClientRect(); return { name: (b.getAttribute('aria-label') || b.textContent || '').trim(), tag: b.tagName, w: Math.round(q.width), h: Math.round(q.height), tab: b.tabIndex }; }); }, LIVE);
     expect(controls.length >= 11 && controls.every((b) => b.w >= 44 && b.h >= 44 && b.name && b.tab >= 0), 'every control is 44px, named and reachable by keyboard: ' + JSON.stringify(controls));
-    for (const name of ['Voice on', 'Move this card to the other side', 'Close', 'Back', 'Play', 'Next', 'Replay', 'Clear', 'Open on the board', 'Ask a follow-up', 'Say it instead of typing', 'Ask']) expect(controls.some((b) => b.name === name), 'the card has ' + name + ': ' + controls.map((b) => b.name).join(', '));
+    for (const name of ['Voice on', 'Move this card to the other side', 'Resize the card', 'Close', 'Back', 'Play', 'Next', 'Replay', 'Clear', 'Open on the board', 'Ask a follow-up', 'Say it instead of typing', 'Ask']) expect(controls.some((b) => b.name === name), 'the card has ' + name + ': ' + controls.map((b) => b.name).join(', '));
     expect(await page.evaluate((h) => { const r = document.querySelector(h).shadowRoot; return r.querySelector('.lv-words').getAttribute('aria-live') === 'polite' && r.querySelector('.lv-status').getAttribute('aria-live') === 'polite' && r.querySelector('.lv-card').getAttribute('role') === 'dialog' && /How a jet engine pushes/.test(r.querySelector('.lv-svg').getAttribute('aria-label')); }, LIVE), 'her words and what she is doing are announced, and the drawing has a name');
     // contrast, in light and in dark: words 4.5:1, every line she draws 3:1 on its paper
     const contrast = () => page.evaluate((h) => {
@@ -9063,6 +9063,45 @@ test('Cassie’s live drawing in the extension (3.67): Ctrl twice opens “Ask C
     await tap('.lv-side');
     c = await card();
     expect(c.side === 'left' && c.box.left < 20 && c.box.right < 640, 'the button moves it to the other side: ' + JSON.stringify(c.box));
+    // (v290) drag the top bar to move it anywhere; drag the corner (or use the arrow keys on it) to size it; it stays in the window
+    const spotOf = (s) => page.evaluate(([h, q]) => { const b = document.querySelector(h).shadowRoot.querySelector(q).getBoundingClientRect(); return { x: b.left, y: b.top, w: b.width, h: b.height }; }, [LIVE, s]);
+    const drag = async (from, dx, dy) => { await page.mouse.move(from.x, from.y); await page.mouse.down(); for (let k = 1; k <= 6; k++) await page.mouse.move(from.x + dx * k / 6, from.y + dy * k / 6); await page.mouse.up(); await page.waitForTimeout(80); };
+    let hd = await spotOf('.lv-status');
+    const before = (await card()).box;
+    await drag({ x: hd.x + 40, y: hd.y + hd.h / 2 }, 300, 120);
+    c = await card();
+    expect(Math.abs(c.box.left - before.left - 300) < 3 && Math.abs(c.box.top - before.top - 120) < 3 && c.box.width === before.width, 'dragging the top bar moves the card: ' + JSON.stringify([before, c.box]));
+    hd = await spotOf('.lv-status');
+    await drag({ x: hd.x + 40, y: hd.y + hd.h / 2 }, 3000, 3000);
+    c = await card();
+    expect(c.box.right <= 1280 - 7 && c.box.top <= 800 - 63 && c.box.left >= 8, 'dragged too far, its top bar stays in the window: ' + JSON.stringify(c.box));
+    hd = await spotOf('.lv-status');
+    await drag({ x: hd.x + 40, y: hd.y + hd.h / 2 }, -3000, -3000);
+    c = await card();
+    expect(c.box.left === 8 && c.box.top === 8, 'and to the top left corner: ' + JSON.stringify(c.box));
+    const g = await spotOf('.lv-size'), wide = c.box.width;
+    expect(g.w >= 44 && g.h >= 44 && Math.abs(g.x + g.w - c.box.right) < 2 && Math.abs(g.y + g.h - c.box.bottom) < 2, 'the size grip sits in the bottom right corner: ' + JSON.stringify(g));
+    await drag({ x: g.x + g.w - 10, y: g.y + g.h - 10 }, 200, -100);
+    c = await card();
+    expect(Math.abs(c.box.width - wide - 200) < 3 && c.box.height > 280, 'dragging the corner makes it wider: ' + JSON.stringify([wide, c.box]));
+    await drag({ x: c.box.right - 10, y: c.box.bottom - 10 }, -2000, -2000);
+    c = await card();
+    expect(c.box.width === 320 && c.box.height === 280, 'never smaller than 320 by 280: ' + JSON.stringify(c.box));
+    await page.evaluate((h) => document.querySelector(h).shadowRoot.querySelector('.lv-size').focus(), LIVE);
+    await page.keyboard.press('ArrowRight'); await page.keyboard.press('ArrowDown');
+    c = await card();
+    expect(c.box.width === 336 && c.box.height === 296, 'the arrow keys on the grip size it too: ' + JSON.stringify(c.box));
+    await drag({ x: c.box.right - 10, y: c.box.bottom - 10 }, 400, 360);
+    if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/live-moved.png' });
+    expect(await page.evaluate((h) => { const r = document.querySelector(h).shadowRoot, b = r.querySelector('.lv-body'); return b.scrollHeight >= b.clientHeight && getComputedStyle(b).overflowY === 'auto'; }, LIVE), 'a small card scrolls its words');
+    await tap('.lv-side');
+    c = await card();
+    expect(c.side === 'right' && c.box.right > 1280 - 20 && Math.round(c.box.width) === 736, 'the side button docks it again, at the size they chose: ' + JSON.stringify(c.box));
+    hd = await spotOf('.lv-status');
+    await page.mouse.dblclick(hd.x + 40, hd.y + hd.h / 2);
+    c = await card();
+    expect(c.box.right > 1280 - 20 && Math.round(c.box.width) === Math.round(before.width) && Math.round(c.box.height) === Math.round(before.height), 'a double click on the top bar puts it back as it was: ' + JSON.stringify([before, c.box]));
+    await tap('.lv-side');
     // the layer never blocks the page: only her card takes taps
     expect(await page.evaluate((h) => getComputedStyle(document.querySelector(h)).pointerEvents === 'none', LIVE), 'her layer lets taps through to the page');
 
