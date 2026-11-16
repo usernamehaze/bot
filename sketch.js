@@ -1459,13 +1459,13 @@
       const fw = clamp(num(d.w, 1600) | 0, 200, 4000), fh = clamp(num(d.h, 1000) | 0, 150, 4000);
       if (typeof d.image === 'string' && PIC_SRC.test(d.image)) list.unshift({ tool: 'image', x: 0, y: 0, w: fw, h: fh, src: d.image, mode: 'background', z: -1 });
       if (room) {
-        if (!list.length || !(await sure({ title: `Add ${list.length} drawings, notes and cards to the room?`, text: 'Everyone here will see them.', yes: 'Add to the room', danger: false }))) return;
+        if (!list.length || !(await sure({ title: `Add ${list.length} drawings, notes and cards to the room?`, text: 'Everyone here will see them.', yes: 'Add to the room', no: 'Don’t add', danger: false }))) return;
         for (const st of list) { if (isPic(st)) { st.src = await roomPicture(st.src); if (!st.src) continue; } }
         list.filter((st) => !isPic(st) || st.src).forEach((st) => { st.id = rid(); delete st.u; if (!isPic(st)) st.z = ++zTop; strokes.push(st); share(st); });
         redo.length = 0; redraw(); toast('Added to the board for everyone');
         return;
       }
-      if (strokes.length && !(await sure({ title: 'Replace your board with this file?', text: 'What’s on your board now goes. Save it first if you want to keep it.', yes: 'Replace my board' }))) return;
+      if (strokes.length && !(await sure({ title: 'Replace your board with this file?', text: 'What’s on your board now goes, so save it first to keep it.', yes: 'Replace my board', no: 'Keep my board' }))) return;
       sheet = PAPERS.some((q) => q[0] === d.paper) ? d.paper : d.image ? 'blank' : d.grid !== false ? 'graph' : 'blank';
       fixedSize = { w: fw, h: fh };
       strokes.length = 0; redo.length = 0; sel = null; imgs.clear();
@@ -1541,11 +1541,11 @@
       else if (act === 'clear') {
         if (room) {
           const mine = strokes.filter((x) => x.mine && !(isPic(x) && x.mode === 'background'));
-          if (mine.length && await sure({ title: 'Clear what you drew?', text: `Your ${mine.length} ${mine.length === 1 ? 'drawing goes' : 'drawings go'} from the room. Your classmates’ drawings stay.`, yes: 'Clear my drawings' })) {
+          if (mine.length && await sure({ title: 'Clear what you drew?', text: `Your ${mine.length} ${mine.length === 1 ? 'drawing goes' : 'drawings go'} from the room. Your classmates’ drawings stay.`, yes: 'Clear my drawings', no: 'Keep my drawings' })) {
             for (let i = strokes.length - 1; i >= 0; i--) if (mine.includes(strokes[i])) strokes.splice(i, 1);
             redo.length = 0; redraw(); room.send({ t: 'del', ids: mine.map((x) => x.id) });
           }
-        } else if (strokes.some((x) => !x._base) && await sure({ title: 'Clear everything you drew?', text: 'Every drawing, note and card on the board goes. A locked background picture stays.', yes: 'Clear the board' })) { // (a locked background picture stays)
+        } else if (strokes.some((x) => !x._base) && await sure({ title: 'Clear everything you drew?', text: 'Every drawing, note and card on the board goes. A locked background picture stays.', yes: 'Clear the board', no: 'Keep the board' })) { // (a locked background picture stays)
           for (let i = strokes.length - 1; i >= 0; i--) if (!(isPic(strokes[i]) && strokes[i].mode === 'background')) strokes.splice(i, 1);
           sel = null; redo.length = 0; redraw();
         }

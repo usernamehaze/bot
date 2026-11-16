@@ -106,8 +106,13 @@ function renderLessons() {
     if (list.length) {
       const all = document.createElement('button');
       all.type = 'button'; all.className = 'btn ghost tall lessons-clear'; all.textContent = 'Delete all lessons';
-      all.addEventListener('click', () => { if (confirm('Delete all your saved lessons?')) chrome.storage.local.set({ teachLessons: [] }); });
-      box.appendChild(all);
+      // (v289) asked in the panel, not the browser's OK and Cancel box: the real question, one line, buttons that say what they do
+      const ask = document.createElement('div'); ask.className = 'lessons-sure'; ask.hidden = true; ask.setAttribute('role', 'alertdialog'); ask.setAttribute('aria-labelledby', 'ls-h');
+      ask.innerHTML = `<h3 id="ls-h">Delete all ${list.length} ${list.length === 1 ? 'lesson' : 'lessons'}?</h3><p>They go from this browser, and this can’t be undone.</p><div class="row"><button type="button" class="btn ghost ls-keep">Keep lessons</button><button type="button" class="btn ls-del">Delete all</button></div>`;
+      all.addEventListener('click', () => { all.hidden = true; ask.hidden = false; ask.querySelector('.ls-keep').focus(); });
+      ask.querySelector('.ls-keep').addEventListener('click', () => { ask.hidden = true; all.hidden = false; all.focus(); });
+      ask.querySelector('.ls-del').addEventListener('click', () => chrome.storage.local.set({ teachLessons: [] }));
+      box.append(all, ask);
     }
   });
 }
@@ -291,7 +296,7 @@ async function snip() {
   }
   view.innerHTML = `<p class="hint">Drag over the part you want Cassie to read.</p>
     <div class="crop"><img alt="Screenshot of the tab"><div class="sel"></div></div>
-    <div class="row"><button class="btn ghost" id="whole">Use the whole screen</button><button class="btn ghost" id="cancel">Cancel</button></div>`;
+    <div class="row"><button class="btn ghost" id="whole">Use the whole screen</button><button class="btn ghost" id="cancel">Don’t snip</button></div>`;
   const wrap = view.querySelector('.crop'), img = wrap.querySelector('img'), sel = wrap.querySelector('.sel');
   img.src = out.dataUrl;
   await new Promise((res) => { if (img.complete) res(); else img.onload = res; });

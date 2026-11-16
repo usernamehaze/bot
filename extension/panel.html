@@ -38,6 +38,13 @@
   .row input { flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 10px; padding: 8px 10px; font: inherit; }
   .btn { border: 1px solid var(--pri); background: var(--pri); color: var(--pri-ink); border-radius: 10px; padding: 8px 12px; font: 600 13px/1 inherit; font-family: inherit; cursor: pointer; }
   .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+  /* (v289) Delete all lessons, asked here: 24px on every side, two buttons that say what they do */
+  .lessons-sure { margin-top: 8px; padding: 24px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); }
+  .lessons-sure[hidden] { display: none; }
+  .lessons-sure h3 { margin: 0 0 8px; font-size: 15px; }
+  .lessons-sure p { margin: 0 0 16px; font-size: 13px; line-height: 1.4; }
+  .lessons-sure .row { margin: 0; gap: 8px; }
+  .lessons-sure .btn { flex: 1; min-height: 44px; }
   .crop { position: relative; user-select: none; touch-action: none; cursor: crosshair; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); }
   .crop img { display: block; width: 100%; height: auto; pointer-events: none; }
   .crop .sel { position: absolute; border: 2px solid #fff; outline: 1px dashed #000; box-shadow: 0 0 0 2000px rgba(0,0,0,.45); display: none; }

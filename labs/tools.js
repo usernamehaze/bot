@@ -936,7 +936,7 @@ const thesisLab = {
     const testBtn = button(r, 'Cassie, stress-test my argument', () => test(), 'main');
     button(r, 'Copy reference list', plusOnly('Copying your reference list', () => copyRefs()));
     const r2 = row(panel);
-    button(r2, 'Start a new map', async () => { if (await sure({ title: 'Clear this argument map?', text: 'Its claim, reasons and evidence go, and an empty map starts. This can’t be undone.', yes: 'Clear the map' })) { map = BLANK_MAP(); save(); draw(); } });
+    button(r2, 'Start a new map', async () => { if (await sure({ title: 'Clear this argument map?', text: 'Its claim, reasons and evidence go, and this can’t be undone.', yes: 'Clear the map', no: 'Keep the map' })) { map = BLANK_MAP(); save(); draw(); } });
     button(r2, 'Load the example', () => { map = JSON.parse(JSON.stringify(SAMPLE_MAP)); save(); draw(); });
     const fb = el('p', 'tl-msg'); fb.hidden = true; panel.appendChild(fb);
     const sources = () => { const out = []; map.reasons.forEach((rs) => rs.ev.forEach((e) => out.push(e))); return out; };
@@ -1012,7 +1012,7 @@ const thesisLab = {
     page.addEventListener('click', async (e) => {
       const b = e.target.closest('button'); if (!b) return;
       if (b.dataset.addr != null) { map.reasons.push({ text: '', ev: [] }); save(); draw(); return; }
-      if (b.dataset.delr != null) { if (!map.reasons[+b.dataset.delr].ev.length || await sure({ title: 'Remove this reason?', text: `It and its ${map.reasons[+b.dataset.delr].ev.length} ${map.reasons[+b.dataset.delr].ev.length === 1 ? 'piece' : 'pieces'} of evidence go.`, yes: 'Remove reason' })) { map.reasons.splice(+b.dataset.delr, 1); save(); draw(); } return; }
+      if (b.dataset.delr != null) { if (!map.reasons[+b.dataset.delr].ev.length || await sure({ title: 'Remove this reason?', text: `It and its ${map.reasons[+b.dataset.delr].ev.length} ${map.reasons[+b.dataset.delr].ev.length === 1 ? 'piece' : 'pieces'} of evidence go.`, yes: 'Remove reason', no: 'Keep reason' })) { map.reasons.splice(+b.dataset.delr, 1); save(); draw(); } return; }
       if (b.dataset.adde != null) { editing = [+b.dataset.adde, null]; draw(); page.querySelector('.tl-form textarea').focus(); return; }
       if (b.dataset.edit != null) { editing = b.dataset.edit.split('.').map(Number); draw(); return; }
       if (b.dataset.dele != null) { const [i, j] = b.dataset.dele.split('.').map(Number); map.reasons[i].ev.splice(j, 1); save(); draw(); return; }

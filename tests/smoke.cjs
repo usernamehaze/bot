@@ -3825,7 +3825,7 @@ test('v247: the 8 button rules: labels say what happens, one filled button per s
   await page.evaluate(() => document.getElementById('clear-chat-btn').click()); await page.waitForSelector('.sure-sheet');
   const sure = await page.evaluate(() => { const w = document.querySelector('.sure-sheet'), y = w.querySelector('.sure-yes'), n = w.querySelector('.sure-no'); const bg = getComputedStyle(y).backgroundColor, want = getComputedStyle(document.documentElement).getPropertyValue('--danger-fill').trim(); const c = document.createElement('canvas').getContext('2d'); c.fillStyle = want; return { h: w.querySelector('h3').textContent, p: w.querySelector('p').textContent, yes: y.textContent, no: n.textContent, red: c.fillStyle, bg, focus: document.activeElement === n, role: w.getAttribute('role') }; });
   const rgb = (h) => 'rgb(' + [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)).join(', ') + ')';
-  expect(sure.h === 'Clear “Ethics”?' && /can’t be undone/.test(sure.p) && sure.yes === 'Clear chat' && sure.no === 'Cancel' && sure.bg === rgb(sure.red) && sure.focus && sure.role === 'alertdialog', '6. clearing a chat names it, says it can’t be undone, and the button is red and says Clear chat (Cancel has focus): ' + JSON.stringify(sure));
+  expect(sure.h === 'Clear “Ethics”?' && /can’t be undone/.test(sure.p) && sure.yes === 'Clear chat' && sure.no === 'Keep chat' && sure.bg === rgb(sure.red) && sure.focus && sure.role === 'alertdialog', '6. clearing a chat names it, says it can’t be undone, and the button is red and says Clear chat (v289: the other says Keep chat, and has focus): ' + JSON.stringify(sure));
   const sMany = (await uxRuleIssues(page)).many; expect(!sMany.length, '2. the confirm sheet has one filled button: ' + sMany.join(' | '));
   // 4 and 5: AA in every state of the confirm's buttons and the plan sheet's, light and dark
   const states = async (sel, tag) => {
@@ -5068,8 +5068,14 @@ test('Cursor Cassie on the page (like Clicky): her cursor follows the mouse when
     await first.locator('[data-del]').click();
     await panel.waitForFunction(() => document.querySelectorAll('.lessons .lesson').length === 1);
     expect((await store('teachLessons')).length === 1, 'Delete removes one lesson');
-    panel.once('dialog', (d) => d.accept());
+    // (v289) asked in the panel: the real question, one line, Keep lessons (keeps them) and Delete all
+    let dialogs = 0; panel.on('dialog', (d) => { dialogs++; d.dismiss(); });
     await panel.click('.lessons-clear');
+    const ask = await panel.evaluate(() => { const s = document.querySelector('.lessons-sure'); return s && !s.hidden ? { h: s.querySelector('h3').textContent, p: s.querySelector('p').textContent, b: [...s.querySelectorAll('button')].map((x) => x.textContent) } : null; });
+    expect(ask && ask.h === 'Delete all 1 lesson?' && /can’t be undone/.test(ask.p) && ask.b.join('|') === 'Keep lessons|Delete all' && !dialogs, 'Delete all asks in the panel, with buttons that say what they do: ' + JSON.stringify(ask));
+    await panel.click('.ls-keep');
+    expect((await store('teachLessons')).length === 1 && await panel.evaluate(() => !document.querySelector('.lessons-clear').hidden), 'Keep lessons keeps it');
+    await panel.click('.lessons-clear'); await panel.click('.ls-del');
     await panel.waitForFunction(() => !document.querySelector('.lessons .lesson'));
     expect((await store('teachLessons')).length === 0, 'Delete all removes every lesson');
   } finally { await ctx.close(); fs.rmSync(profile, { recursive: true, force: true }); }
@@ -12304,7 +12310,7 @@ test('v283: with no internet a question waits on the phone (with Cancel, kept af
   await ctx.setOffline(true); await page.evaluate(() => window.dispatchEvent(new Event('offline')));
   await page.fill('#prompt-input', 'What is mitosis?'); await page.click('#send-btn'); await page.waitForTimeout(300);
   let w = await page.evaluate(() => ({ n: document.querySelectorAll('.q-wait').length, text: (document.querySelector('.q-wait') || {}).innerText, q: (state.offlineQueue || []).map((x) => x.text), sent: state.messages.length }));
-  expect(w.n === 1 && /What is mitosis\?/.test(w.text) && /Waiting for the internet\. Cassie answers as soon as you’re back online\./.test(w.text) && /Cancel/.test(w.text) && w.q.join() === 'What is mitosis?' && w.sent === 2 && !calls.length, 'offline: the question waits, with Cancel, and nothing is sent: ' + JSON.stringify(w));
+  expect(w.n === 1 && /What is mitosis\?/.test(w.text) && /Waiting for the internet\. Cassie answers as soon as you’re back online\./.test(w.text) && /Don’t send/.test(w.text) && w.q.join() === 'What is mitosis?' && w.sent === 2 && !calls.length, 'offline: the question waits, with Don’t send (v289), and nothing is sent: ' + JSON.stringify(w));
   // Cancel takes it away; a second one is kept after a reload
   await page.click('.q-cancel'); expect(await page.evaluate(() => !document.querySelector('.q-wait') && !(state.offlineQueue || []).length), 'Cancel takes it away');
   await page.fill('#prompt-input', 'What is meiosis?'); await page.click('#send-btn'); await page.waitForTimeout(200);

@@ -1247,7 +1247,7 @@
     if (ptBackdrop) return;
     ptBackdrop = document.createElement('div'); ptBackdrop.className = 'pt-backdrop'; ptBackdrop.hidden = true;
     ptHint = document.createElement('div'); ptHint.className = 'pt-hint'; ptHint.hidden = true;
-    ptHint.innerHTML = '<span>Drag to snip a graph, picture or question, or tap one</span><span class="x" role="button" aria-label="Cancel">&times;</span>';
+    ptHint.innerHTML = '<span>Drag to snip a graph, picture or question, or tap one</span><span class="x" role="button" aria-label="Stop snipping">&times;</span>';
     snipRect = document.createElement('div'); snipRect.className = 'snip-rect'; snipRect.hidden = true;
     annSvg = document.createElementNS(SVGNS, 'svg'); annSvg.setAttribute('class', 'ann-svg'); annSvg.style.display = 'none';
     boardCard = document.createElement('div'); boardCard.className = 'board-card'; boardCard.hidden = true;

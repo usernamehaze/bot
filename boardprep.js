@@ -387,7 +387,7 @@
     on('[data-size]', async (b) => {
       const full = b.dataset.size === 'full';
       if (full && fullLocked()) { boardProAsk(close); return; }
-      if (going && !(await sure({ title: `End your ${fullName(ex)} simulation in progress?`, text: `You are on question ${s.i + 1} of ${s.n}. Its answers so far go, and a new one starts. This can’t be undone.`, yes: 'End it and start new' }))) return;
+      if (going && !(await sure({ title: `End your ${fullName(ex)} simulation in progress?`, text: `Your answers up to question ${s.i + 1} of ${s.n} go, and this can’t be undone.`, yes: 'End it and start new', no: 'Keep going' }))) return;
       const n = full ? fn : MINI;
       P().sims[ex] = { size: full ? 'full' : 'mini', n, qs: [], i: 0, picks: {}, flags: {}, left: Math.round((fm / fn) * n) * 60, fin: false, at: Date.now() };
       save(); track('feature', 'board-sim-' + (full ? 'full' : 'mini'));
@@ -501,7 +501,7 @@
       <input type="file" class="bp-file" accept=".pdf,.docx,.txt,image/*" hidden>
       <div class="letc-row"><button type="button" class="letc-line bp-attach">Attach a PDF, Word file or photo</button></div>
       <p class="letc-note bp-fmsg" role="status"></p>
-      <div class="letc-row"><button type="submit" class="letc-go bp-savenote">Save note</button><button type="button" class="letc-line bp-out">Cancel</button></div>
+      <div class="letc-row"><button type="submit" class="letc-go bp-savenote">Save note</button><button type="button" class="letc-line bp-out">Don’t save</button></div>
       <p class="letc-note">Saved on this device only. Only add notes and reviewers that are yours or that you’re allowed to use.</p></form>`);
     const form = body.querySelector('.bp-form'), file = form.querySelector('.bp-file'), ta = form.querySelector('.bp-ta'), ti = form.querySelector('#bp-ntitle'), msg = form.querySelector('.bp-fmsg');
     on('.bp-attach', () => file.click());
@@ -557,7 +557,7 @@
     body.querySelector('.bp-notetext').textContent = n.text;
     on('.bp-nquiz', () => go({ v: 'quiz', ex, t: n.title, note: n.id }));
     on('.bp-ndel', async () => {
-      if (!(await sure({ title: `Delete “${n.title}”?`, text: 'The note and its quiz results go from this device. This can’t be undone.', yes: 'Delete note' }))) return;
+      if (!(await sure({ title: `Delete “${n.title}”?`, text: 'It and its quiz results go, and this can’t be undone.', yes: 'Delete note', no: 'Keep note' }))) return;
       P().notes[ex] = notesOf(ex).filter((x) => x.id !== n.id); delete P().quiz[key(ex, 'note:' + n.id)]; save(); goBack();
     });
   }

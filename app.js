@@ -2747,7 +2747,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=288'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=289'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2769,7 +2769,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=288'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=289'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -2880,7 +2880,7 @@ function openSubjectFolder(id, opts = {}) {
   w.querySelector('.lessons-back').addEventListener('click', () => { closeLessons(); back(); });
   const del = w.querySelector('.subject-del');
   if (del) del.addEventListener('click', () => {
-    askSure({ title: 'Delete this subject?', text: `“${f.name}” and its files will be removed from this device. This can’t be undone.`, yes: 'Delete' }).then((ok) => { if (ok) { state.subjects = mySubjects().filter((x) => x.id !== id); save(); closeLessons(); back(); } });
+    askSure({ title: `Delete “${f.name}”?`, text: 'Its files go from this device, and this can’t be undone.', yes: 'Delete subject', no: 'Keep subject' }).then((ok) => { if (ok) { state.subjects = mySubjects().filter((x) => x.id !== id); save(); closeLessons(); back(); } });
   });
   w.querySelector('.subject-upload').addEventListener('click', () => subjectUpload(id, note, render));
   w.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeLessons(); back(); } });
@@ -3045,7 +3045,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=288').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=289').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -3785,7 +3785,7 @@ function deskChats() {
     card.querySelector('.dk-chat-q').textContent = String(first.display || first.content || '').replace(/\s+/g, ' ').slice(0, 140);
     card.querySelector('.dk-open').setAttribute('aria-label', `Open ${card.querySelector('b').textContent}`);
     card.querySelector('.dk-open').addEventListener('click', () => selectChat(c.id));
-    card.querySelector('.dk-del').addEventListener('click', async () => { if (!(await askSure({ title: `Delete “${card.querySelector('b').textContent}”?`, text: 'The chat and its messages go from this device. This can’t be undone.', yes: 'Delete chat' }))) return; state.chats = state.chats.filter((x) => x.id !== c.id); if (!state.chats.length) state.chats.push(makeChat()); if (!state.chats.some((x) => x.id === state.currentId)) { state.currentId = state.chats[0].id; state.messages = curChat().messages; } save(); renderChatList(); renderHistory(); });
+    card.querySelector('.dk-del').addEventListener('click', async () => { if (!(await askSure({ title: `Delete “${card.querySelector('b').textContent}”?`, text: 'Its messages go, and this can’t be undone.', yes: 'Delete chat', no: 'Keep chat' }))) return; state.chats = state.chats.filter((x) => x.id !== c.id); if (!state.chats.length) state.chats.push(makeChat()); if (!state.chats.some((x) => x.id === state.currentId)) { state.currentId = state.chats[0].id; state.messages = curChat().messages; } save(); renderChatList(); renderHistory(); });
     grid.appendChild(card);
   });
   if (!list.length) grid.replaceWith(cassieEmpty(CassieErrors.empty({ title: all.length ? 'No chats here' : 'No chats yet', text: all.length ? 'Nothing matches this filter.' : 'Ask Cassie anything and your chat shows up here.', action: all.length ? 'Show all chats' : 'Ask Cassie', onAction: () => { if (all.length) { deskChatsFilter = 'all'; renderHistory(); } else deskAct('ask'); } }), all.length ? 'filter' : 'chats'));
@@ -4618,7 +4618,7 @@ function examSection() {
     const allBtn = card.querySelector('.ex-all');
     allBtn.addEventListener('click', () => { ol.hidden = !ol.hidden; allBtn.setAttribute('aria-expanded', String(!ol.hidden)); allBtn.textContent = ol.hidden ? 'See the whole plan' : 'Hide the whole plan'; });
     card.querySelector('.ex-del').addEventListener('click', async () => {
-      if (!(await askSure({ title: `Delete your plan for ${e.name}?`, text: 'Its days and what you ticked off go. This can’t be undone.', yes: 'Delete plan' }))) return;
+      if (!(await askSure({ title: `Delete your plan for ${e.name}?`, text: 'Its days and what you ticked off go, and this can’t be undone.', yes: 'Delete plan', no: 'Keep plan' }))) return;
       state.exams = examsNow().filter((x) => x.id !== e.id); save(); refreshHub();
     });
     wrap.appendChild(card);
@@ -4672,7 +4672,7 @@ function openExamSheet(pre = null) {
       ${recent.length ? '<div class="ex-chips" role="group" aria-label="Topics you’ve been studying"></div>' : ''}
       <div class="ex-file"><button type="button" class="ex-file-btn">Use my notes (Plus)</button><input type="file" accept=".pdf,.docx,.pptx,.txt" hidden><small class="ex-file-name"></small></div>
       <p class="ex-status" aria-live="polite"></p>
-      <div class="plus-actions"><button type="submit" class="plus-go ex-make">Make my plan</button><button type="button" class="plus-ok ex-cancel">Cancel</button></div>
+      <div class="plus-actions"><button type="submit" class="plus-go ex-make">Make my plan</button><button type="button" class="plus-ok ex-cancel">Not now</button></div>
     </form>`;
   const f = w.querySelector('form'), chips = w.querySelector('.ex-chips'), status = w.querySelector('.ex-status');
   if (window.CassieMic) window.CassieMic.attach(f.topics); // (said topics stay in the box to edit)
@@ -6263,7 +6263,7 @@ function importBackupFile(file) {
     let data;
     try { data = JSON.parse(reader.result); } catch (e) { alert('That file isn’t valid JSON. It may be corrupted.'); return; }
     if (!data || data.app !== 'cassie' || data.kind !== 'backup') { alert('That doesn’t look like a Cassie backup file.'); return; }
-    if (!(await askSure({ title: 'Replace your chats and memory with this backup?', text: 'The memory and chats on this device are replaced by the backup’s. Your saved API keys stay as they are. This can’t be undone.', yes: 'Replace with backup' }))) return;
+    if (!(await askSure({ title: 'Replace your chats and memory with this backup?', text: 'The chats and memory on this device are replaced, and this can’t be undone.', yes: 'Replace with backup', no: 'Keep mine' }))) return;
     try { if (data.memory) localStorage.setItem(MEM_KEY, JSON.stringify(data.memory)); } catch (e) { /* ignore */ }
     try {
       if (data.state) {
@@ -6586,7 +6586,7 @@ function reviewMistakes(all = false) {
 /* (v247) "Are you sure?" the clear way: the sheet names what goes and whether it comes back, Cancel is outlined and
    the action is a red button that says what it does ("Delete chat"). Resolves true or false. A danger: false sheet
    uses the usual filled button. */
-function askSure({ title, text = '', yes, no = 'Cancel', danger = true } = {}) {
+function askSure({ title, text = '', yes, no = 'Go back', danger = true } = {}) { // (v289: the safe button says what it keeps, like Keep chat, never a bare Cancel)
   return new Promise((resolve) => {
     document.querySelector('.sure-sheet')?.remove();
     const w = document.createElement('div');
@@ -6745,8 +6745,8 @@ function renderQueued() {
     const note = document.createElement('p'); note.className = 'q-note'; note.setAttribute('role', 'status');
     note.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span></span>';
     note.querySelector('span').textContent = CassieErrors.say('offline_waiting');
-    const cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'q-cancel'; cancel.textContent = 'Cancel';
-    cancel.setAttribute('aria-label', 'Cancel this question');
+    const cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'q-cancel'; cancel.textContent = 'Don’t send';
+    cancel.setAttribute('aria-label', 'Don’t send this question');
     cancel.addEventListener('click', () => { state.offlineQueue = (state.offlineQueue || []).filter((x) => x.id !== q.id); save(); wrap.remove(); promptInput.focus(); });
     wrap.append(b, note, cancel); chatLog.appendChild(wrap);
   });
@@ -7399,7 +7399,7 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=288')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=289')));
 // a real photo needs Gemini pictures (Cassie's server or the student's key); the free service draws toys and models
 const realPhotoOk = () => !!((SERVER && serverPictures) || (state.geminiKey && !geminiImageOff));
 // a drawing inside a chat bubble (a new one draws itself; one from history shows finished)
@@ -8376,7 +8376,7 @@ function openTalk() {
     const st = e.target.closest('.tk-study');
     if (st) { close(); if (onPhoneHome() || !document.documentElement.classList.contains('tab-chat')) { try { window.CassieNative.go('chat'); } catch (er) { /* a computer */ } } promptInput.value = st.dataset.q; promptInput.dispatchEvent(new Event('input')); promptInput.focus(); return; }
     if (e.target.closest('.tk-clear')) {
-      if (!(await askSure({ title: 'Clear this talk with Cassie?', text: 'Every message here goes from this phone. This can’t be undone.', yes: 'Clear talk' }))) return;
+      if (!(await askSure({ title: 'Clear this talk with Cassie?', text: 'Every message here goes, and this can’t be undone.', yes: 'Clear talk', no: 'Keep talk' }))) return;
       try { localStorage.removeItem(TALK_KEY); } catch (er) { /* */ }
       close(); openTalk();
     }
@@ -8690,7 +8690,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=288');
+      exploreMod = await import('./explore/cell3d.js?v=289');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -8740,7 +8740,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=288');
+      labsMod = await import('./labs/labs.js?v=289');
       islandRest();
     }
     labsMod.open({
@@ -9383,7 +9383,7 @@ if (memoryPanel) {
       return;
     }
     if (e.target.closest('#mem-clear')) {
-      if (await askSure({ title: 'Clear everything Cassie remembers about you?', text: 'Your name, facts, topics and review history go from this device. This can’t be undone.', yes: 'Clear memory' })) {
+      if (await askSure({ title: 'Clear everything Cassie remembers about you?', text: 'Your name, facts and topics go, and this can’t be undone.', yes: 'Clear memory', no: 'Keep memory' })) {
         window.CassieMemory.clearAll(); renderMemory(); updateMemoryDot();
       }
     }
@@ -9541,7 +9541,7 @@ if (memoryPanel) {
 
 clearChatBtn.addEventListener('click', async () => {
   const nm = curChat().title || deriveTitle(curChat().messages) || 'this chat';
-  if (!(await askSure({ title: `Clear “${nm}”?`, text: 'Every message in this chat goes. This can’t be undone.', yes: 'Clear chat' }))) return;
+  if (!(await askSure({ title: `Clear “${nm}”?`, text: 'Every message in it goes, and this can’t be undone.', yes: 'Clear chat', no: 'Keep chat' }))) return;
   const c = curChat();
   c.messages.length = 0;
   c.title = '';
@@ -10703,10 +10703,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=288').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=289').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=288', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=289', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
@@ -11857,7 +11857,7 @@ document.getElementById('account-row')?.addEventListener('click', async (e) => {
   if (act === 'signin') { settingsPanel.hidden = true; openAuth({ mode: 'signin' }); return; }
   if (act === 'signout') { await signOutNow(); return; }
   if (act === 'delete') {
-    if (!(await askSure({ title: 'Delete your Cassie account?', text: 'Your account, profile and saved mistakes are removed from the server. What’s on this device stays. This can’t be undone.', yes: 'Delete account' }))) return;
+    if (!(await askSure({ title: 'Delete your Cassie account?', text: 'It leaves the server for good. What’s on this device stays.', yes: 'Delete account', no: 'Keep account' }))) return;
     try { await authCall('/auth/delete', {}); signedOutLocally(); mascotSay('Account deleted.', 2500); } catch (e2) { alert(CassieErrors.explain(e2)); }
   }
 });
@@ -11895,7 +11895,7 @@ function openReport() {
     <p class="pf-sub">What happened? What did you expect? Please don’t include personal info like your full name, phone number, or passwords.</p>
     <label class="pf-field"><span>What went wrong</span><textarea name="text" rows="5" maxlength="1200" placeholder="e.g. The graph didn't show when I asked for y = x^2"></textarea></label>
     <p class="pf-err" role="alert" hidden></p>
-    <div class="pf-row"><button type="button" class="new-chat-btn pf-cancel">Cancel</button><button type="submit" class="pf-go">Send report</button></div>
+    <div class="pf-row"><button type="button" class="new-chat-btn pf-cancel">Don’t send</button><button type="submit" class="pf-go">Send report</button></div>
   </form>`;
   document.body.appendChild(wrap);
   const f = wrap.querySelector('form');
