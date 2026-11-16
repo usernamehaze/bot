@@ -314,6 +314,7 @@ const appEl = document.getElementById('app');
 function applyReading() {
   if (!appEl) return;
   appEl.setAttribute('data-textsize', state.textSize || 'normal');
+  document.documentElement.setAttribute('data-textsize', state.textSize || 'normal'); // (v295: every word in the app grows, Settings and the preview included, at once)
   appEl.setAttribute('data-easyread', state.easyRead ? 'on' : 'off');
   applyUiStyle();
 }
@@ -2747,7 +2748,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=294'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=295'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2769,7 +2770,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=294'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=295'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -3045,7 +3046,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=294').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=295').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -3728,7 +3729,7 @@ function placeApps() {
 placeApps();
 sideWide.addEventListener('change', () => { placeApps(); deskChrome(); });
 document.getElementById('top-timer').addEventListener('click', goHome);
-document.getElementById('top-me').addEventListener('click', () => openSettings('all'));
+document.getElementById('top-me').addEventListener('click', () => openSettings('profile'));
 // the bell: today's reminders (the same list the phone's Home has)
 const topBell = document.getElementById('top-bell'), topRemind = document.getElementById('top-remind');
 function closeTopRemind() { topRemind.hidden = true; topBell.setAttribute('aria-expanded', 'false'); }
@@ -7401,7 +7402,7 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=294')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=295')));
 // a real photo needs Gemini pictures (Cassie's server or the student's key); the free service draws toys and models
 const realPhotoOk = () => !!((SERVER && serverPictures) || (state.geminiKey && !geminiImageOff));
 // a drawing inside a chat bubble (a new one draws itself; one from history shows finished)
@@ -8692,7 +8693,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=294');
+      exploreMod = await import('./explore/cell3d.js?v=295');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -8742,7 +8743,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=294');
+      labsMod = await import('./labs/labs.js?v=295');
       islandRest();
     }
     labsMod.open({
@@ -8977,7 +8978,7 @@ function appxBar() {
   const bar = document.getElementById('appx-bar'); if (!bar) return;
   const n = appxCount();
   bar.hidden = n === 0;
-  if (n) document.getElementById('appx-bar-n').textContent = n === 1 ? '1 change' : n + ' changes';
+  if (n) document.getElementById('appx-bar-n').textContent = n === 1 ? '1 change to apply' : n + ' changes to apply';
 }
 function appxPreview(key, value) {
   if (!appxEntry) appxEntry = appxSnap();
@@ -8992,17 +8993,27 @@ function appxOpen() {
 function appxReview() {
   save(); // commit the previewed values under their usual keys
   appxEntry = appxSnap();
+  appxApplyLive(); // (v295: and they take effect everywhere: theme, colour, text size and style)
   appxBar(); updateModelPill();
   track('feature', 'appearance-review');
-  islandShow && islandShow('done', 'Saved', 1600);
+  islandShow && islandShow('done', 'Applied', 1600);
 }
 function appxRevert() {
   if (!appxEntry) return;
   APPX_KEYS.forEach((k) => { state[k] = appxEntry[k]; });
+  save(); // (v295: what is kept is what was there before, even when the rest of Settings saved meanwhile)
   appxApplyLive(); appxSyncControls(); appxBar();
 }
-// leaving the page or closing Settings with pending changes: put them back (nothing half-chosen persists)
-function appxLeave() { if (appxCount() > 0) appxRevert(); appxEntry = null; }
+// (v295) leaving the page or closing Settings with changes not applied yet: ask, Apply or Discard, so a
+// change is never lost without the student choosing that (before, it was quietly put back)
+let appxAsking = false;
+function appxLeave() {
+  const n = appxCount();
+  if (!n || appxAsking) { if (!appxAsking) appxEntry = null; return; }
+  appxAsking = true;
+  askSure({ title: n === 1 ? 'Apply your change?' : `Apply your ${n} changes?`, text: 'You changed how Cassie looks. Apply keeps it everywhere; Discard puts it back.', yes: 'Apply', no: 'Discard', danger: false })
+    .then((ok) => { appxAsking = false; if (ok) appxReview(); else appxRevert(); appxEntry = null; });
+}
 document.getElementById('appx-colors')?.addEventListener('click', (e) => { const b = e.target.closest('.appx-sw'); if (b) appxPreview('accent', b.dataset.accent); });
 document.getElementById('appx-textsize')?.addEventListener('click', (e) => { const b = e.target.closest('button[data-size]'); if (b) appxPreview('textSize', b.dataset.size); });
 document.getElementById('appx-uistyle')?.addEventListener('click', (e) => { const b = e.target.closest('.appx-style'); if (b) appxPreview('uiStyle', b.dataset.style); });
@@ -9024,7 +9035,7 @@ document.getElementById('lang-list')?.addEventListener('click', (e) => {
   state.lang = b.dataset.lang; save(); track('feature', 'language'); renderLang();
 });
 
-function openSettings(page = 'all') {
+function openSettings(page = 'profile') { // (v295: Settings opens on You; the full list is only search results now)
   deskCloseOthers('settings');
   if (settingsPanel.hidden) setTrail = [];
   groqKeyInput.value = state.groqKey;
@@ -9178,7 +9189,7 @@ settingsPanel.addEventListener('change', (e) => { if (!e.target.closest('.profil
    "profile": who you are, a few numbers and the parts of Settings about you; "all": every setting
    in grouped glass lists, with search; a section ("account", "study", "voice", "privacy" ...) on its
    own with a back arrow; "plans": Free and Plus. */
-const SET_TITLES = { profile: 'You', all: 'Settings', plans: 'Plans', account: 'Account', study: 'Study', appearance: 'Appearance', language: 'Language', notifications: 'Notifications', voice: 'Voice and sound', privacy: 'Privacy and data', help: 'Help' };
+const SET_TITLES = { profile: 'You', all: 'Settings', plans: 'Plans', account: 'Account', study: 'Study', appearance: 'Appearance', language: 'Language', notifications: 'Notifications', voice: 'Voice and sound', privacy: 'Privacy and data', help: 'Help', advanced: 'Advanced' };
 const setCard = settingsPanel.querySelector('.settings-card');
 const setSearch = document.getElementById('settings-search');
 let setTrail = [];
@@ -9192,7 +9203,7 @@ function setPage(page, { back = false } = {}) {
   settingsPanel.querySelector('.set-back').hidden = !setTrail.length;
   // a section page shows that section alone; the full list shows them all
   settingsPanel.querySelectorAll('.set-sec').forEach((sec) => { sec.hidden = page === 'all' ? false : sec.dataset.sec !== page; });
-  settingsPanel.querySelectorAll('[data-page-only]').forEach((el) => { el.hidden = el.dataset.pageOnly !== page; });
+  settingsPanel.querySelectorAll('[data-page-only]').forEach((el) => { el.hidden = !el.dataset.pageOnly.split(' ').includes(page); });
   const secs = settingsPanel.querySelector('.set-secs');
   secs.hidden = !(page === 'all' || SET_TITLES[page] && !['profile', 'plans'].includes(page));
   if (page !== 'all' && setSearch.value) { setSearch.value = ''; filterSettings(); }
@@ -9226,7 +9237,8 @@ function filterSettings() {
   });
   document.getElementById('settings-none').hidden = any;
 }
-setSearch.addEventListener('input', filterSettings);
+// (v295) the search sits at the top of You: typing shows the matching settings from every part, Back returns to You
+setSearch.addEventListener('input', () => { if (setCard.dataset.page !== 'all' && setSearch.value.trim()) { const v = setSearch.value; setPage('all'); setSearch.value = v; try { setSearch.focus({ preventScroll: true }); } catch (e) { /* fine */ } } filterSettings(); });
 // the numbers on You: questions asked this week, cards learned, the study streak
 function fillYou() {
   const p = state.profile || {};
@@ -9687,38 +9699,15 @@ document.addEventListener('keydown', (e) => {
 
 /* ---------- voice input ---------- */
 const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
-if (SpeechRecognitionCtor) {
-  micBtn.hidden = false;
-  const recognizer = new SpeechRecognitionCtor();
-  recognizer.continuous = false;
-  recognizer.interimResults = false;
-
-  let listening = false;
-  micBtn.addEventListener('click', () => {
-    if (listening) { recognizer.stop(); return; }
-    try {
-      recognizer.start();
-      track('feature', 'voice-in');
-      listening = true;
-      micBtn.classList.add('primary');
-      detourToElement(micBtn, { click: true, resumeAfter: 700 });
-    } catch (e) { /* already started */ }
-  });
-  recognizer.addEventListener('result', (e) => {
-    const text = e.results[0][0].transcript;
-    promptInput.value = text;
-    autoGrow();
-    handleSend(text);
-  });
-  recognizer.addEventListener('end', () => {
-    listening = false;
-    micBtn.classList.remove('primary');
-  });
-  recognizer.addEventListener('error', () => {
-    listening = false;
-    micBtn.classList.remove('primary');
-  });
-}
+// (v295) the ask box's mic is the one every box uses (mic.js): the words appear in the box as they are said,
+// the button turns red with Stop and a pulsing "Listening… speak now" line while it records, a blocked or
+// failing mic says why, and where the browser can't listen (some phone apps) Cassie records and writes it down.
+// When the student stops talking, the question is sent.
+setTimeout(() => {
+  if (!window.CassieMic || !micBtn) return;
+  window.CassieMic.attach(promptInput, { button: micBtn, row: promptInput.closest('.composer-row') || null, send: (text) => { autoGrow(); track('feature', 'voice-in'); handleSend(text); } });
+  promptInput.addEventListener('input', autoGrow);
+}, 0);
 
 /* ---------- voice output ---------- */
 let readAloud = null; // the answer being read aloud right now
@@ -10719,10 +10708,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=294').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=295').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=294', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=295', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.

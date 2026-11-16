@@ -108,6 +108,7 @@
     voice_mine: 'You’ve used this month’s studio voice, so Cassie types her answers. It comes back on {date}.',
     voice_not_set_up: 'Cassie’s voice isn’t switched on yet, so she types her answers.',
     mic_blocked: 'Cassie can’t hear you because the microphone is blocked for this site. Allow the microphone, then tap the mic.',
+    mic_nothing: 'Cassie didn’t hear anything. Tap the mic and speak a little louder.',
     not_heard: 'Cassie couldn’t hear that clearly. Try again, or type it.',
     cant_listen: 'This browser can’t listen here, so talking won’t work. Type your question instead.',
     no_mic_browser: 'This browser can’t use the microphone, so talking won’t work here. Try Chrome, Edge or Safari.',
