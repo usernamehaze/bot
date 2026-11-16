@@ -1332,8 +1332,6 @@ html.lite .hub-say { animation: none; }
   .auth-brand { position: static; }
   .auth-title { font-size: 1.3rem; }
 }
-.acct-btns { display: flex; gap: var(--sp-2, 8px); margin: 2px 0 var(--sp-3, 12px); }
-.acct-btns .new-chat-btn { flex: 1; }
 
 /* ---------- Cassie Island: a pill that drops from the top bar while she works ---------- */
 .topbar { position: relative; z-index: 8; } /* the island floats over the chat */
@@ -2733,6 +2731,16 @@ html.lite .auth-busy { -webkit-backdrop-filter: none; backdrop-filter: none; bac
 .set-lt small { color: var(--muted); font-size: .8rem; }
 .set-chev { width: 18px; height: 18px; flex: none; fill: none; stroke: var(--muted); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 .set-link:hover .set-chev { stroke: var(--text); }
+/* (v291) You: its rows in titled groups; each row shows what it is set to; Delete account last, on its own, in red */
+.set-you-h { margin: 0 var(--sp-1, 4px) var(--sp-2, 8px); font-size: .74rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.set-val { flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: .9rem; }
+.set-val:empty { display: none; }
+.set-leave.is-off { display: none !important; }
+.set-leave .set-link { min-height: var(--tap, 48px); justify-content: center; text-align: center; }
+.set-leave .set-lt { flex: none; }
+.set-leave .set-row { padding: 0; }
+.set-danger, .set-danger b { color: var(--danger-ink); }
+.set-danger:hover { background: color-mix(in srgb, var(--danger) 8%, transparent); }
 /* Plans */
 .set-plans-sub { margin: 0 2px var(--sp-4, 16px); color: var(--muted); }
 .plan-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--sp-3, 12px); margin: 0 0 var(--sp-4, 16px); }

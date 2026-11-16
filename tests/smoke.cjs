@@ -612,6 +612,13 @@ test('accounts: sign up, profile syncs, sign in on another device gets it back',
   expect(await page.locator('.profile-overlay, .fr').count() === 0, 'asked the profile questions again');
   await tapSettings(page);
   expect(/Signed in as/.test(await page.locator('#account-row').textContent()), 'settings should say signed in');
+  // (v291) signed in: Sign out, then Delete account on its own and in red, end You, the Account page and All settings
+  for (const pg of ['profile', 'account', 'all']) {
+    await page.evaluate((x) => openSettings(x), pg);
+    const end = await page.evaluate((x) => { const box = x === 'profile' ? document.querySelector('.set-profile') : document.querySelector('.set-secs'); const shown = [...box.querySelectorAll('button, a, input, select, summary')].filter((n) => n.offsetParent); const d = box.querySelector('.set-danger'); return { last: shown.slice(-2).map((n) => n.textContent.trim()), red: d ? getComputedStyle(d).color : '', alone: d ? d.closest('.set-group').querySelectorAll('button').length : 0 }; }, pg);
+    expect(end.last.join('|') === 'Sign out|Delete account' && end.alone === 1 && /^rgb\((1[5-9]\d|2\d\d), (\d|[1-5]\d), (\d|[1-5]\d)\)$/.test(end.red), `${pg}: Sign out, then Delete account alone in red, at the end: ` + JSON.stringify(end));
+  }
+  expect(await page.locator('.set-val[data-val="account"]').textContent() === 'Signed in', 'You says Signed in');
   await ctx.close();
 });
 
@@ -15424,10 +15431,29 @@ test.slow('Home, You, Settings and Plans: the new and the returning home, every 
     for (const [row, title, inside] of [['account', 'Account', '#edit-profile-btn'], ['study', 'Study', '#level-select'], ['voice', 'Voice and sound', '#voice-gender-select'], ['privacy', 'Privacy and data', '#share-usage-toggle']]) {
       await page.click(`.set-link[data-open="${row}"]`);
       expect(await page.locator('#set-title').innerText() === title && await page.locator(inside).isVisible() && await page.locator('.set-back').isVisible(), `${size}: ${row} opens on its own, with Back`);
-      expect(await page.locator('.set-sec:not([hidden])').count() === 1, `${size}: only the ${row} section`);
+      expect(await page.locator('.set-sec:not([hidden]):not(.is-off)').count() === 1, `${size}: only the ${row} section`);
       await page.click('.set-back');
       expect(await page.locator('#set-title').innerText() === 'You', `${size}: Back returns to You`);
     }
+    // (v291) its rows sit under titles; each shows what it is set to now; every row that opens a screen has its arrow;
+    // Sign out and Delete account (in red, on its own) come last, only when signed in
+    const yr = await page.evaluate(() => ({
+      heads: [...document.querySelectorAll('.set-profile .set-you-h')].map((h) => h.textContent),
+      vals: Object.fromEntries([...document.querySelectorAll('.set-profile .set-val')].map((v) => [v.dataset.val, v.textContent])),
+      noArrow: [...document.querySelectorAll('.set-profile .set-link:is([data-open], [data-cal])')].filter((l) => !l.querySelector('.set-chev')).map((l) => l.innerText),
+      leave: [...document.querySelectorAll('.set-leave')].map((x) => getComputedStyle(x).display),
+      lastSec: [...document.querySelectorAll('.set-secs > .set-sec')].pop().classList.contains('set-leave'),
+      red: (() => { const d = document.querySelector('.set-profile .set-danger'); return d && d.textContent.trim() === 'Delete account' && d.closest('.set-group').children.length === 1; })(),
+    }));
+    expect(yr.heads.join() === 'Settings,More', `${size}: You has titled groups: ` + yr.heads);
+    expect(yr.vals.study === 'Auto' && yr.vals.voice === 'Jessica' && yr.vals.appearance === 'Auto' && yr.vals.language === 'Auto' && yr.vals.plan === 'Pro', `${size}: each row shows its value: ` + JSON.stringify(yr.vals));
+    expect(!yr.noArrow.length, `${size}: every row that opens a screen has an arrow: ` + yr.noArrow);
+    expect(yr.leave.every((d) => d === 'none') && yr.lastSec && yr.red, `${size}: signed out, no Sign out or Delete account; signed in, they end the page, Delete account alone: ` + JSON.stringify(yr));
+    await page.click('.set-link[data-open="language"]');
+    await page.click('.lang-opt[data-lang="en"]');
+    await page.click('.set-back');
+    expect(await page.locator('.set-val[data-val="language"]').innerText() === 'English', `${size}: a change shows in its row`);
+    await page.click('.set-link[data-open="language"]'); await page.click('.lang-opt[data-lang="auto"]'); await page.click('.set-back');
     for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(1000); /* (the moving background eases into its dark colours) */ const { bad } = await contrastIssues(page, '#settings-panel'); expect(!bad.length, `${size} You (${scheme}): ` + bad.join(' | ')); }
     await page.emulateMedia({ colorScheme: 'light' });
     // Plans: Free and Plus side by side, Plus best for school, the early list, and nothing that takes a payment

@@ -13,8 +13,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Cassie">
-<link rel="stylesheet" href="style.css?v=290">
-<link rel="stylesheet" href="rewards.css?v=290">
+<link rel="stylesheet" href="style.css?v=291">
+<link rel="stylesheet" href="rewards.css?v=291">
 </head>
 <body>
 
@@ -273,16 +273,24 @@
           <div><b id="st-cards">0</b><small>cards learned</small></div>
           <div><b id="st-streak">0</b><small>day streak</small></div>
         </div>
-        <div class="set-group set-links">
-          <button type="button" class="set-link" data-open="account"><span class="set-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg></span><span class="set-lt"><b>Account</b><small>Sign in, profile and API keys</small></span><svg class="set-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
-          <button type="button" class="set-link" data-open="study"><span class="set-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M2 9l10-5 10 5-10 5zM6 11v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/></svg></span><span class="set-lt"><b>Study</b><small>How Cassie explains and cites</small></span><svg class="set-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
-          <button type="button" class="set-link" data-open="voice"><span class="set-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/></svg></span><span class="set-lt"><b>Voice</b><small>Her voice and reading aloud</small></span><svg class="set-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+        <h3 class="set-you-h" id="set-you-h1">Settings</h3>
+        <div class="set-group set-links" role="group" aria-labelledby="set-you-h1">
+          <button type="button" class="set-link" data-open="account"><span class="set-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg></span><span class="set-lt"><b>Account</b><small>Sign in and profile</small></span><span class="set-val" data-val="account"></span><svg class="set-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+          <button type="button" class="set-link" data-open="study"><span class="set-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M2 9l10-5 10 5-10 5zM6 11v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/></svg></span><span class="set-lt"><b>Study</b><small>How Cassie explains</small></span><span class="set-val" data-val="study"></span><svg class="set-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+          <button type="button" class="set-link" data-open="voice"><span class="set-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/></svg></span><span class="set-lt"><b>Voice</b><small>Reading aloud</small></span><span class="set-val" data-val="voice"></span><svg class="set-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+          <button type="button" class="set-link" data-open="appearance"><span class="set-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor"/></svg></span><span class="set-lt"><b>Appearance</b><small>Theme and text size</small></span><span class="set-val" data-val="appearance"></span><svg class="set-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+          <button type="button" class="set-link" data-open="language"><span class="set-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.4 3.5 5.2 3.5 8.5s-1.1 6.1-3.5 8.5c-2.4-2.4-3.5-5.2-3.5-8.5s1.1-6.1 3.5-8.5z"/></svg></span><span class="set-lt"><b>Language</b><small>How Cassie replies</small></span><span class="set-val" data-val="language"></span><svg class="set-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
           <button type="button" class="set-link" data-open="privacy"><span class="set-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><span class="set-lt"><b>Privacy</b><small>What is shared, and your chats</small></span><svg class="set-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
         </div>
-        <div class="set-group set-links">
-          <button type="button" class="set-link" data-cal="open"><span class="set-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="5.5" width="16" height="14.5" rx="2.5"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/></svg></span><span class="set-lt"><b>Calendar</b><small>Your exams, quizzes and notes, day by day</small></span></button>
-          <button type="button" class="set-link" data-open="plans"><span class="set-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6-5.3-3-5.3 3 1.2-6L3.4 9.3l6-.7z"/></svg></span><span class="set-lt"><b>Plans</b><small>Free and Plus</small></span><svg class="set-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+        <h3 class="set-you-h" id="set-you-h2">More</h3>
+        <div class="set-group set-links" role="group" aria-labelledby="set-you-h2">
+          <button type="button" class="set-link" data-cal="open"><span class="set-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="5.5" width="16" height="14.5" rx="2.5"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/></svg></span><span class="set-lt"><b>Calendar</b><small>Exams and notes by day</small></span><svg class="set-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+          <button type="button" class="set-link" data-open="plans"><span class="set-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6-5.3-3-5.3 3 1.2-6L3.4 9.3l6-.7z"/></svg></span><span class="set-lt"><b>Plans</b><small>Free, Plus and Pro</small></span><span class="set-val" data-val="plan"></span><svg class="set-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
           <button type="button" class="set-link" data-open="all"><span class="set-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg></span><span class="set-lt"><b>All settings</b><small>Everything, with search</small></span><svg class="set-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+        </div>
+        <div class="set-leave is-off">
+          <div class="set-group set-links"><button type="button" class="set-link set-out" data-act="signout"><span class="set-lt"><b>Sign out</b></span></button></div>
+          <div class="set-group set-links"><button type="button" class="set-link set-danger" data-act="delete"><span class="set-lt"><b>Delete account</b></span></button></div>
         </div>
       </section>
 
@@ -608,6 +616,12 @@
       </details>
         </div>
       </section>
+      <!-- (v291) the risky one last: Sign out, then Delete account on its own, in red. It ends the Account page and All settings; shown only when signed in -->
+      <section class="set-sec set-leave is-off" data-sec="account" aria-labelledby="set-h-leave">
+        <h3 class="set-sec-h sr-only" id="set-h-leave">Sign out or delete your account</h3>
+        <div class="set-group set-links"><div class="set-row" data-k="sign out log out logout"><button type="button" class="set-link set-out" data-act="signout"><span class="set-lt"><b>Sign out</b></span></button></div></div>
+        <div class="set-group set-links"><div class="set-row" data-k="delete account remove close account"><button type="button" class="set-link set-danger" data-act="delete"><span class="set-lt"><b>Delete account</b></span></button></div></div>
+      </section>
       </div>
 
       <!-- Plans: Free, Plus and Pro (paid plans are coming: nothing here takes a payment) -->
@@ -695,26 +709,26 @@
 
 </div>
 
-<script src="extlink.js?v=290"></script>
-<script src="errors.js?v=290"></script>
-<script src="mic.js?v=290"></script>
-<script src="care.js?v=290"></script>
-<script src="memory.js?v=290"></script>
-<script src="rewards.js?v=290"></script>
-<script src="board.js?v=290"></script>
-<script src="export.js?v=290"></script>
-<script src="sketch.js?v=290"></script>
-<script src="config.js?v=290"></script>
-<script src="cassie-bot.js?v=290"></script>
-<script src="cards.js?v=290"></script>
-<script src="cite.js?v=290"></script>
-<script src="voice.js?v=290"></script>
+<script src="extlink.js?v=291"></script>
+<script src="errors.js?v=291"></script>
+<script src="mic.js?v=291"></script>
+<script src="care.js?v=291"></script>
+<script src="memory.js?v=291"></script>
+<script src="rewards.js?v=291"></script>
+<script src="board.js?v=291"></script>
+<script src="export.js?v=291"></script>
+<script src="sketch.js?v=291"></script>
+<script src="config.js?v=291"></script>
+<script src="cassie-bot.js?v=291"></script>
+<script src="cards.js?v=291"></script>
+<script src="cite.js?v=291"></script>
+<script src="voice.js?v=291"></script>
 <nav id="tabbar" class="tabbar" aria-label="Sections"><button type="button" class="tab" data-tab="home" aria-label="Home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 10.5 12 4l8.5 6.5V20a1 1 0 0 1-1 1H15v-6H9v6H4.5a1 1 0 0 1-1-1z"/></svg><span>Home</span></button><button type="button" class="tab" data-tab="chat" aria-label="Chat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5H9l-5 4z"/></svg><span>Chat</span></button><button type="button" class="tab" data-tab="labs" aria-label="Learn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6M10 3v6.2L4.8 18.4A1.8 1.8 0 0 0 6.4 21h11.2a1.8 1.8 0 0 0 1.6-2.6L14 9.2V3M7.5 14h9"/></svg><span>Learn</span></button><button type="button" class="tab" data-tab="games" aria-label="Games"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8h10a4 4 0 0 1 4 4v1.5a3.5 3.5 0 0 1-6.3 2.1L14 14.5h-4l-.7 1.1A3.5 3.5 0 0 1 3 13.5V12a4 4 0 0 1 4-4zM8 10.5v3M6.5 12h3M15.5 11.5h.01M17.5 13.5h.01"/></svg><span>Games</span></button><button type="button" class="tab" data-tab="you" aria-label="You"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4.5 21a7.5 7.5 0 0 1 15 0"/></svg><span>You</span></button></nav>
-<script src="app.js?v=290"></script>
-<script src="native.js?v=290"></script>
-<script src="listen.js?v=290"></script>
-<script src="tour.js?v=290"></script>
-<script src="study-room.js?v=290"></script>
-<script src="gradient.js?v=290"></script>
+<script src="app.js?v=291"></script>
+<script src="native.js?v=291"></script>
+<script src="listen.js?v=291"></script>
+<script src="tour.js?v=291"></script>
+<script src="study-room.js?v=291"></script>
+<script src="gradient.js?v=291"></script>
 </body>
 </html>

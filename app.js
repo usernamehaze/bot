@@ -2747,7 +2747,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=290'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=291'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2769,7 +2769,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=290'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=291'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -3045,7 +3045,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=290').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=291').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -7401,7 +7401,7 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=290')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=291')));
 // a real photo needs Gemini pictures (Cassie's server or the student's key); the free service draws toys and models
 const realPhotoOk = () => !!((SERVER && serverPictures) || (state.geminiKey && !geminiImageOff));
 // a drawing inside a chat bubble (a new one draws itself; one from history shows finished)
@@ -8692,7 +8692,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=290');
+      exploreMod = await import('./explore/cell3d.js?v=291');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -8742,7 +8742,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=290');
+      labsMod = await import('./labs/labs.js?v=291');
       islandRest();
     }
     labsMod.open({
@@ -9214,6 +9214,7 @@ function filterSettings() {
   const q = setSearch.value.trim().toLowerCase();
   let any = false;
   settingsPanel.querySelectorAll('.set-sec').forEach((sec) => {
+    if (sec.classList.contains('is-off')) { sec.hidden = true; return; } // (signed out: Sign out and Delete account are not there)
     const title = sec.querySelector('.set-sec-h').textContent.toLowerCase();
     let shown = 0;
     sec.querySelectorAll('.set-row').forEach((r) => {
@@ -9239,6 +9240,19 @@ function fillYou() {
   { const q = document.getElementById('st-questions'), l = q && q.nextElementSibling; if (l) l.textContent = asked === 1 ? 'question this week' : 'questions this week'; } // (v244: one question, not one questions)
   document.getElementById('st-cards').textContent = (state.cards || []).filter((c) => (c.box || 0) >= 4).length;
   document.getElementById('st-streak').textContent = window.CassieMemory ? window.CassieMemory.stats().streak : 0;
+  // (v291) each row shows what it is set to now, so nobody opens a page just to see it
+  try { renderLang(); } catch (e) { /* (its list paints its own tick) */ }
+  const pick = (sel) => { const n = settingsPanel.querySelector(sel); return n ? n.textContent.trim() : ''; };
+  const lvl = document.getElementById('level-select'), vg = document.getElementById('voice-gender-select');
+  const vals = {
+    account: accountsOn() ? (state.account && authToken() ? 'Signed in' : 'Signed out') : '',
+    study: lvl && lvl.selectedOptions[0] ? lvl.selectedOptions[0].textContent.replace(/\s*\(.*$/, '').trim() : '',
+    voice: vg ? (vg.value === 'man' ? 'Chris' : 'Jessica') : '',
+    appearance: pick('#appx-theme [aria-pressed="true"]'),
+    language: { auto: 'Auto', en: 'English', fil: 'Filipino', tl: 'Taglish' }[(settingsPanel.querySelector('#lang-list [aria-checked="true"]') || {}).dataset?.lang] || '',
+    plan: { plus: 'Plus', pro: 'Pro' }[planName()] || 'Free',
+  };
+  settingsPanel.querySelectorAll('.set-val[data-val]').forEach((v) => { v.textContent = vals[v.dataset.val] || ''; });
 }
 // Favorite-colour swatches: preset click, "None", or a custom colour.
 settingsPanel.addEventListener('click', (e) => {
@@ -10705,10 +10719,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=290').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=291').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=290', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=291', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
@@ -11849,12 +11863,15 @@ function renderAccountRow() {
   const a = state.account && authToken() ? state.account : null;
   row.innerHTML = a
     ? `<p class="field-hint">Signed in as <b>${escapeHtml(a.email || a.name || 'you')}</b>${(a.providers || (a.google ? ['google'] : [])).length ? ` (${(a.providers || ['google']).map((p) => PROVIDER_NAME[p]).join(' and ')})` : ''}. Your profile and saved mistakes sync to your account. Plan: <b>${{ plus: 'Plus', pro: 'Pro' }[planName()] || 'Free'}</b>.</p>
-       <div class="acct-btns"><button type="button" class="new-chat-btn" data-act="signout">Sign out</button><button type="button" class="new-chat-btn acct-del" data-act="delete">Delete account</button></div>`
+`
     : `<p class="field-hint">Sign in to keep your profile and progress on every device.</p>
        <button type="button" class="new-chat-btn" data-act="signin">Sign in or create an account</button>`;
+  // (v291) Sign out, then Delete account on its own in red, at the very end of You, the Account page and All settings
+  document.querySelectorAll('#settings-panel .set-leave').forEach((x) => x.classList.toggle('is-off', !(a && accountsOn())));
 }
-document.getElementById('account-row')?.addEventListener('click', async (e) => {
-  const act = e.target.closest('[data-act]')?.dataset.act;
+settingsPanel.addEventListener('click', async (e) => {
+  const b = e.target.closest('#account-row [data-act], .set-leave [data-act]');
+  const act = b && b.dataset.act;
   if (!act) return;
   if (act === 'signin') { settingsPanel.hidden = true; openAuth({ mode: 'signin' }); return; }
   if (act === 'signout') { await signOutNow(); return; }
