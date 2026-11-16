@@ -2747,7 +2747,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=289'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=290'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2769,7 +2769,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=289'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=290'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -3045,7 +3045,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=289').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=290').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -7293,7 +7293,7 @@ const LIVE_SOFT_RE = /\b(heart|lungs?|brain|kidneys?|liver|stomach|intestines?|e
 function liveDrawPrompt(want3d, opts = {}) {
   const seen = opts.picture ? `The student sent a picture with the question. Look at it first. If the thing they ask about is in it (a photo, a figure, a diagram, their own sketch), ${want3d ? 'build' : 'draw'} THAT one: its true outline and proportions, the side it is seen from, its real colours, and the parts you can see, each where it really is.\n` : '';
   const flatNote = opts.flatNote ? `They asked for 3D, but a 3D model here is built from simple solids and would look wrong for something soft, living or a process, so draw it flat, and say that in a few words at the start of "intro".\n` : '';
-  const care = `Students learn from this: every fact, label, direction and count MUST be correct. If you are not sure of something, leave that part out.`;
+  const care = `Students learn from this: every fact, label, direction and count MUST be correct. Show every main part a textbook figure of it shows, each in its real place (a bicycle: frame, both wheels, saddle, handlebars, pedals and cranks, chain, chainring, rear gear, fork and brakes; arrows for rain point down and for evaporation point up). Leave out only a small detail you are not sure of.`;
   const tail = `Use the student's language (English, Filipino or Taglish). No dashes in the words. No emojis.`;
   // (v253) 3D: no worked example of one subject; she plans the real structure from what she knows, and the app checks the model against her plan
   if (want3d) return `You are Cassie, a careful tutor for students who explains by DRAWING, here by building a 3D model. Reply with ONLY one JSON object, "mode": "3d".
@@ -7353,8 +7353,8 @@ const ldJson = (t) => { const s = String(t || ''), a = s.indexOf('{'), b = s.las
 function liveDrawLookAsk(question, spec) {
   return `This picture is a ${spec.mode === '3d' ? '3D model' : 'drawing'} for a student, meant to show: "${question}" (titled "${spec.title}").
 Its numbered names are: ${spec.parts.map((p, i) => `${i + 1} = ${p.label}`).join('; ')}.
-For EACH number, check that its line points at that very thing in the picture (not something else). For each part, check that its shape looks like the real thing, as in a textbook figure: a part drawn as a symbol or icon (a valentine heart for a real heart, a star, a lightning bolt) is NOT ok. Check every fact, arrow direction and count (blood is never blue: say oxygen poor blood).
-Reply {"labels":[{"n":1,"ok":true or false,"points_at":"what number 1 really points at"}],"shapes":[{"n":1,"ok":true or false,"why":"what is wrong with its shape"}],"facts":[{"ok":false,"fix":"a wrong fact and the right one"}]} with an entry for every number.`;
+For EACH number, check that its line points at that very thing in the picture (not something else). For each part, check that its shape looks like the real thing, as in a textbook figure: a part drawn as a symbol or icon (a valentine heart for a real heart, a star, a lightning bolt) is NOT ok. Check every fact, arrow direction and count (blood is never blue: say oxygen poor blood). List every main part a good textbook figure of it shows that this picture leaves out (for a bicycle: the saddle, handlebars, pedals, cranks, chainring, rear gear, fork and brakes).
+Reply {"missing":["each main part it leaves out"],"labels":[{"n":1,"ok":true or false,"points_at":"what number 1 really points at"}],"shapes":[{"n":1,"ok":true or false,"why":"what is wrong with its shape"}],"facts":[{"ok":false,"fix":"a wrong fact and the right one"}]} with an entry for every number.`;
 }
 function liveDrawFixes(verdict, spec) {
   if (!verdict || typeof verdict !== 'object') return [];
@@ -7363,6 +7363,8 @@ function liveDrawFixes(verdict, spec) {
   for (const sh of Array.isArray(verdict.shapes) ? verdict.shapes : []) if (sh && sh.ok === false) out.push(`number ${sh.n} ("${name(sh.n)}") does not look like a real ${name(sh.n)}: ${String(sh.why || 'draw its real outline').slice(0, 120)}`);
   for (const f of Array.isArray(verdict.facts) ? verdict.facts : []) if (f && f.ok === false && f.fix) out.push(`fact: ${String(f.fix).slice(0, 160)}`);
   if (verdict.ok === false && Array.isArray(verdict.wrong)) verdict.wrong.forEach((w) => out.push(String(w).slice(0, 160)));
+  const gone = (Array.isArray(verdict.missing) ? verdict.missing : []).map((x) => String(x).slice(0, 40)).filter(Boolean).slice(0, 8);
+  if (gone.length) out.unshift(`it leaves out parts the real thing has: ${gone.join(', ')}; draw each one in its real place and name it`);
   return out.slice(0, 10);
 }
 // the first drawing: as soon as one passes the app's own checks (re-asked once with what is wrong); shown at once
@@ -7373,7 +7375,7 @@ async function liveDrawFirst(question, want3d, image = null) {
   const messages = [{ role: 'system', content: liveDrawPrompt(want3d, { picture: !!image, flatNote: soft }) }, { role: 'user', content: question }];
   let { text, simple } = await liveDrawCall(messages, true, image); // (the drawing is the one question it counts as)
   let spec = m.clean(text);
-  const issues = (sp) => (!sp ? ['the reply was not one valid JSON object in the schema'] : [...(!want3d && sp.mode === '3d' ? ['it must be a flat 2d pen drawing, mode "2d"'] : []), ...m.check(sp)]);
+  const issues = (sp) => (!sp ? ['the reply was not one valid JSON object in the schema'] : [...(!want3d && sp.mode === '3d' ? ['it must be a flat 2d pen drawing, mode "2d"'] : []), ...m.check(sp, question)]);
   let wrong = issues(spec);
   if (wrong.length) {
     const again = await liveDrawCall([...messages, { role: 'assistant', content: String(text).slice(0, 12000) }, { role: 'user', content: `Your drawing has these problems:\n- ${wrong.join('\n- ')}\nSend the whole corrected JSON object again.` }], false, image);
@@ -7399,7 +7401,7 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=289')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=290')));
 // a real photo needs Gemini pictures (Cassie's server or the student's key); the free service draws toys and models
 const realPhotoOk = () => !!((SERVER && serverPictures) || (state.geminiKey && !geminiImageOff));
 // a drawing inside a chat bubble (a new one draws itself; one from history shows finished)
@@ -8690,7 +8692,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=289');
+      exploreMod = await import('./explore/cell3d.js?v=290');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -8740,7 +8742,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=289');
+      labsMod = await import('./labs/labs.js?v=290');
       islandRest();
     }
     labsMod.open({
@@ -10703,10 +10705,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=289').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=290').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=289', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=290', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.

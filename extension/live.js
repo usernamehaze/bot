@@ -274,7 +274,7 @@
     return m;
   }).catch((e) => { lib3d = null; throw e; })));
   // what she is told about building in 3D: the plan-first guide is the Cassie app's own (liveDrawPrompt in app.js)
-  const GUIDE_3D = `Students learn from this: every fact, label, direction and count MUST be correct. If you are not sure of something, leave that part out.
+  const GUIDE_3D = `Students learn from this: every fact, label, direction and count MUST be correct. Show every main part a textbook figure of it shows, each in its real place (a bicycle: frame, both wheels, saddle, handlebars, pedals and cranks, chain, chainring, rear gear, fork and brakes; arrows for rain point down and for evaporation point up). Leave out only a small detail you are not sure of.
   Look at the picture of their screen first. If the thing they ask about is shown there (a photo, a figure, a diagram, a product), build THAT one: its true outline and proportions, the side it is seen from, its real colours, and the parts you can see, each where it really is. If it is not shown, build it the way the real thing looks, in its real colours. In "answer", describe it accurately in plain words: what it is, what its main parts are and what each one does.
   Make it look like the real thing, not like toy blocks: give every part its real colour and "finish":"metal"|"plastic"|"rubber"|"wood" (what it is really made of), and its real profile: a lathe for anything turned or rounded (a nozzle, a bottle, a nose cone, a wheel), a plate for a flat cut shape, a pipe for a hose, wire or tube, a capsule for a rounded body. A plain cylinder or box only where the real part is one.
   First think how the real object is built: its real parts, which part holds or contains which, how big each one is against the whole, and how they line up and connect. Then build the model to match that plan:
@@ -299,9 +299,8 @@
   Draw REAL outlines, the way a textbook figure looks: a leaf with a pointed tip, a midrib and side veins; a heart with its curved walls, its four chambers and its vessels; an engine with its real profile. Never a plain circle or box for a real object, and never a cartoon symbol (no valentine heart for a real heart, no lightning zigzag for electricity). The main object is drawn large, about half the picture, with long curved paths (C and Q curves) for its true outline, and each of its inner parts is a part of its own, in its own colour, lightly filled ("fill":true) so the student can tell the parts apart. 5 to 8 parts in drawing order, 3 to 24 strokes each, 30 or more strokes in the whole drawing, each part's strokes in pen order. Arrows show what moves and which way. Each part is drawn, then named, while its "say" is said, so the student always knows what they are looking at.
   {"answer":the direct answer in one or two short sentences,"about":[x,y,w,h] the box around the thing on their screen the question is about, as shares of the picture from 0 to 1, or null,"title":2 to 6 words,"mode":"2d","layout","intro":one sentence,"summary":one sentence,"parts":[{"id","label":1 to 3 words,"say":1 or 2 short, natural spoken sentences,"color":"#hex","box","anchor","shapes":[...]}]}
   2d shapes: {"t":"line","x1","y1","x2","y2"}, {"t":"arrow",...same} for movement, {"t":"path","d":"M L Q C Z, CAPITAL letters only"}, {"t":"poly","pts":[[x,y],...]}, {"t":"rect","x","y","w2","h"}, {"t":"circle","cx","cy","r"}, {"t":"ellipse","cx","cy","rx","ry"}, {"t":"text","x","y","text"} for values only ("H2O"); "fill":true, "dash":true. Never write a part's name as text: the card does.
-  Students learn from this: every fact, label, direction and count MUST be correct. If you are not sure of something, leave that part out.
+  Students learn from this: every fact, label, direction and count MUST be correct. Show every main part a textbook figure of it shows, each in its real place (a bicycle: frame, both wheels, saddle, handlebars, pedals and cranks, chain, chainring, rear gear, fork and brakes; arrows for rain point down and for evaporation point up). Leave out only a small detail you are not sure of.
 ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No dashes in the words. No emojis.`;
-  const CARD_SHAPE = '{"answer":"the direct answer in one or two short sentences","about":[0.3,0.2,0.4,0.5],"title":"2 to 6 words","caption":"what the drawing shows, in under 10 words","view":"Side view","beats":[{"say":"one or two short, natural spoken sentences","draw":[{"shape":"outline","points":[[30,22],[62,22],[68,58],[24,58]]}]}]}';
   const CARD_HELP = `Give 3 to 6 beats. "about" is the box [x, y, w, h] around the thing on their screen that the question is about, as shares of the picture from 0 to 1 (null when it is about nothing on the screen). "view" says how the thing is seen: Side view, Front view, Top view, Cut-away or Diagram.
   The drawing is made on a card ${GW} units wide and ${GH} tall, and (0, 0) is its top left corner. It grows while you talk: each beat adds 1 to 5 new parts ("draw") while its sentence is said. Draw the main outline first, then its parts in colour, then arrows, then labels. The parts you can draw:
   {"shape":"outline","points":[[30,22],[62,22],[68,58],[24,58]],"fill":"blue"} (a closed smooth shape through 3 to 12 points; add "sharp":1 for straight edges; "fill" is optional)
@@ -334,9 +333,10 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
   The student asks: "${q}"
   Answer like a kind tutor, and draw while you explain. Reply with ONLY minified JSON, no other text, in one of two ways:
   To add to the drawing on the card: {"keep":true,"answer":"the direct answer in one or two short sentences","beats":[{"say":"one or two short, natural spoken sentences","draw":[]}]} with only the new beats. New parts go in the empty space around what is already there.
-  To start a new drawing: ${CARD_SHAPE}
   Give 1 to 5 beats.
   ${CARD_HELP.replace(/^Give 3 to 6 beats\. /, '')}
+  To start a new drawing (always, when they ask about a different thing from the drawing on the card), reply in the full drawing form below instead, with every part the real thing has.
+  ${FLAT_GUIDE}
   ${truth}`;
     }
     const seen = `A student is looking at their screen right now (the picture)${title}.\n  ${text}${sofar}The student asks: "${q}"`;
@@ -397,7 +397,7 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
         if (wrong.length) { last = got; nudge = `\n  IMPORTANT: your model has these problems:\n  - ${wrong.join('\n  - ')}\n  Send the whole corrected JSON object again.`; continue; }
       }
       if (got.kind === 'card' && got.scene.dim === 'flat' && !tries) {
-        const m = await load3d().catch(() => null), spec = m && m.clean(got.scene.spec), wrong = !m ? [] : spec ? m.check(spec) : ['the reply was not one valid JSON object in the schema'];
+        const m = await load3d().catch(() => null), spec = m && m.clean(got.scene.spec), wrong = !m ? [] : spec ? m.check(spec, (String(ask).match(/The student asks: "([^"]*)"/) || [])[1] || '') : ['the reply was not one valid JSON object in the schema'];
         if (wrong.length) { last = got; nudge = `\n  IMPORTANT: your drawing has these problems:\n  - ${wrong.slice(0, 8).join('\n  - ')}\n  Send the whole corrected JSON object again.`; continue; }
       }
       if (got.kind === 'card' && (got.scene.dim === 'flat' || got.scene.dim === '3d') && !tries) {
@@ -497,6 +497,7 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
 
   /* ---------- the card ---------- */
   const ICON = {
+    size: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 10L10 20M20 15l-5 5M20 4L4 20"/></svg>',
     side: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h13M13 4l4 4-4 4M20 16H7M11 12l-4 4 4 4"/></svg>',
     x: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
   };
@@ -509,6 +510,17 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
     .lv-card { position: fixed; top: 16px; right: 16px; width: min(432px, calc(100vw - 32px)); max-height: calc(100vh - 32px); box-sizing: border-box; display: flex; flex-direction: column; pointer-events: auto;
       background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 16px 48px rgba(0,0,0,.28); overflow: hidden; }
     .lv-card[data-side="left"] { right: auto; left: 16px; }
+    /* (v290) on a page the card moves: drag its top bar anywhere; drag the corner (or use the arrow keys on it) to size it */
+    .lv-on-page .lv-head { cursor: grab; touch-action: none; -webkit-user-select: none; user-select: none; }
+    .lv-on-page .lv-card.is-moving .lv-head { cursor: grabbing; }
+    .lv-on-page .lv-card.is-moving, .lv-on-page .lv-card.is-sizing { -webkit-user-select: none; user-select: none; }
+    .lv-on-page:not(.lv-cleared) .lv-body { padding-bottom: 44px; }
+    .lv-cleared .lv-size { display: none !important; } /* (a cleared card is only its question box: nothing to size) */
+    .lv .lv-size { position: absolute; right: 0; bottom: 0; z-index: 3; min-width: 44px; min-height: 44px; width: 44px; height: 44px; border: 0; border-radius: 0 0 16px 0; background: transparent;
+      align-items: flex-end; justify-content: flex-end; padding: 0 8px 8px 0; cursor: nwse-resize; touch-action: none; color: var(--mute); }
+    .lv .lv-size:hover { color: var(--ink); }
+    .lv .lv-size svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+    .lv .lv-size:focus-visible { outline: 2px solid var(--ink); outline-offset: -4px; }
     .lv-card:focus { outline: none; }
     .lv-in-panel .lv-card { position: static; width: auto; max-width: 560px; max-height: none; box-shadow: none; }
     .lv-head { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 16px; border-bottom: 1px solid var(--line); }
@@ -597,6 +609,7 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
   `;
 
   let current = null;
+  let spot = null; // (v290) where the student last put her card and how big they made it, for the next card on this page
   const store = {
     get: (k) => new Promise((res) => { try { chrome.storage.local.get(k, (o) => res(o || {})); } catch (e) { res({}); } }),
     set: (o) => { try { chrome.storage.local.set(o); } catch (e) { /* not kept */ } },
@@ -680,14 +693,16 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
   const LOOK_SYSTEM = 'You check drawings made for students. Be strict and specific. Reply with ONLY one JSON object.';
   const lookAsk = (q, spec) => `This picture is a ${spec.mode === '3d' ? '3D model' : 'drawing'} for a student, meant to show: "${q}" (titled "${spec.title}").
   Its numbered names are: ${spec.parts.map((p, i) => `${i + 1} = ${p.label}`).join('; ')}.
-  For EACH number, check that its line points at that very thing in the picture (not something else). For each part, check that its shape looks like the real thing, as in a textbook figure: a part drawn as a symbol or icon (a valentine heart for a real heart, a star, a lightning bolt) is NOT ok. Check every fact, arrow direction and count (blood is never blue: say oxygen poor blood).
-  Reply {"labels":[{"n":1,"ok":true or false,"points_at":"what number 1 really points at"}],"shapes":[{"n":1,"ok":true or false,"why":"what is wrong with its shape"}],"facts":[{"ok":false,"fix":"a wrong fact and the right one"}]} with an entry for every number.`;
+  For EACH number, check that its line points at that very thing in the picture (not something else). For each part, check that its shape looks like the real thing, as in a textbook figure: a part drawn as a symbol or icon (a valentine heart for a real heart, a star, a lightning bolt) is NOT ok. Check every fact, arrow direction and count (blood is never blue: say oxygen poor blood). List every main part a good textbook figure of it shows that this picture leaves out (for a bicycle: the saddle, handlebars, pedals, cranks, chainring, rear gear, fork and brakes).
+  Reply {"missing":["each main part it leaves out"],"labels":[{"n":1,"ok":true or false,"points_at":"what number 1 really points at"}],"shapes":[{"n":1,"ok":true or false,"why":"what is wrong with its shape"}],"facts":[{"ok":false,"fix":"a wrong fact and the right one"}]} with an entry for every number.`;
   function lookFixes(verdict, spec) {
     if (!verdict || typeof verdict !== 'object') return [];
     const name = (n) => (spec.parts[n - 1] || {}).label || `part ${n}`, out = [];
     for (const l of Array.isArray(verdict.labels) ? verdict.labels : []) if (l && l.ok === false) out.push(`number ${l.n} ("${name(l.n)}") points at ${String(l.points_at || 'the wrong thing').slice(0, 80)}; move its anchor onto the ${name(l.n)} itself`);
     for (const sh of Array.isArray(verdict.shapes) ? verdict.shapes : []) if (sh && sh.ok === false) out.push(`number ${sh.n} ("${name(sh.n)}") does not look like a real ${name(sh.n)}: ${String(sh.why || 'give it its real outline').slice(0, 120)}`);
     for (const f of Array.isArray(verdict.facts) ? verdict.facts : []) if (f && f.ok === false && f.fix) out.push(`fact: ${String(f.fix).slice(0, 160)}`);
+    const gone = (Array.isArray(verdict.missing) ? verdict.missing : []).map((x) => String(x).slice(0, 40)).filter(Boolean).slice(0, 8);
+    if (gone.length) out.unshift(`it leaves out parts the real thing has: ${gone.join(', ')}; draw each one in its real place and name it`);
     return out.slice(0, 10);
   }
   async function lookAt(scene, q) {
@@ -756,6 +771,7 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
             ${opts.send ? '<form class="lv-ask" autocomplete="off"><input type="text" placeholder="Ask a follow-up" aria-label="Ask a follow-up" maxlength="300" enterkeyhint="send"><button type="submit" class="lv-send">Ask</button></form>' : ''}
           </div>
         </div>
+        ${inPanel ? '' : `<button type="button" class="lv-size" aria-label="Resize the card" title="Drag to resize. Arrow keys work too. Double click the top bar to reset.">${ICON.size}</button>`}
       </div>
       <div class="lv-float" hidden><div class="lv-stage lv-stage-float" role="img"></div><button type="button" class="lv-clear3">Clear</button></div>`;
     root.appendChild(wrapEl);
@@ -1234,7 +1250,7 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
       cancelAnimationFrame(raf); clearTimeout(gap); hush();
       end3d();
       if (actx) { try { actx.close(); } catch (e) { /* ignore */ } }
-      removeEventListener('keydown', onKey, true); removeEventListener('resize', placeFloat);
+      removeEventListener('keydown', onKey, true); removeEventListener('resize', placeFloat); removeEventListener('resize', onResize);
       if (mic && mic.stop) mic.stop();
       host.remove();
       if (current && current.host === host) current = null;
@@ -1245,6 +1261,8 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
     const onKey = (e) => { if (e.key !== 'Escape' || !alive) return; e.stopPropagation(); if (cleared) close(); else clear(); };
     addEventListener('keydown', onKey, true);
     addEventListener('resize', placeFloat);
+    const onResize = () => keepIn();
+    addEventListener('resize', onResize);
 
     /* the side of the window that covers least of what the question is about */
     function aboutRect() {
@@ -1271,7 +1289,56 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
     $('.lv-clear3').addEventListener('click', clear);
     $('.lv-open').addEventListener('click', () => { if (model && model.view.open) { model.view.open(); paint3d(); } });
     $('.lv-apart').addEventListener('click', () => { if (!model || !model.view.explode) return; const on = model.view.explode(), b = $('.lv-apart'); b.textContent = on ? 'Put it back' : 'Pull apart'; b.setAttribute('aria-pressed', String(on)); });
-    if ($('.lv-side')) $('.lv-side').addEventListener('click', () => setSide(card.dataset.side === 'left' ? 'right' : 'left'));
+    if ($('.lv-side')) $('.lv-side').addEventListener('click', () => { Object.assign(card.style, { left: '', top: '', right: '' }); if (spot) spot.x = spot.y = null; setSide(card.dataset.side === 'left' ? 'right' : 'left'); });
+
+    /* (v290) move it and size it: the top bar drags the card anywhere in the window; the corner sizes it */
+    const M = 8, MIN_W = 320, MIN_H = 280;
+    const moved = () => !!card.style.left;
+    function pin() { const r = card.getBoundingClientRect(); Object.assign(card.style, { left: Math.round(r.left) + 'px', top: Math.round(r.top) + 'px', right: 'auto' }); return r; }
+    function putAt(x, y) {
+      const w = card.offsetWidth;
+      card.style.left = Math.round(clamp(x, M, Math.max(M, innerWidth - w - M))) + 'px';
+      card.style.top = Math.round(clamp(y, M, Math.max(M, innerHeight - 64))) + 'px'; // (its top bar always stays in the window)
+    }
+    function sizeTo(w, h) {
+      const r = card.getBoundingClientRect();
+      card.style.width = Math.round(clamp(w, Math.min(MIN_W, innerWidth - 2 * M), Math.max(MIN_W, innerWidth - r.left - M))) + 'px';
+      card.style.height = Math.round(clamp(h, Math.min(MIN_H, innerHeight - 2 * M), Math.max(MIN_H, innerHeight - r.top - M))) + 'px';
+      card.style.maxHeight = 'none';
+    }
+    function settle() {
+      const r = card.getBoundingClientRect(), side = r.left + r.width / 2 < innerWidth / 2 ? 'left' : 'right';
+      card.dataset.side = side; host.dataset.side = side;
+      spot = { x: moved() ? r.left : null, y: moved() ? r.top : null, w: card.style.width ? r.width : null, h: card.style.height ? r.height : null };
+      placeFloat();
+    }
+    function dragWith(handle, cls, onMove) {
+      handle.addEventListener('pointerdown', (e) => {
+        if (e.button !== 0 || (handle === head && e.target.closest('button'))) return;
+        e.preventDefault();
+        const r = pin(), from = { x: e.clientX, y: e.clientY, r };
+        try { handle.setPointerCapture(e.pointerId); } catch (er) { /* fine */ }
+        card.classList.add(cls);
+        const move = (ev) => onMove(ev.clientX - from.x, ev.clientY - from.y, from.r);
+        const up = () => { handle.removeEventListener('pointermove', move); handle.removeEventListener('pointerup', up); handle.removeEventListener('pointercancel', up); card.classList.remove(cls); settle(); };
+        handle.addEventListener('pointermove', move); handle.addEventListener('pointerup', up); handle.addEventListener('pointercancel', up);
+      });
+    }
+    const head = $('.lv-head'), grip = $('.lv-size');
+    if (!inPanel) {
+      dragWith(head, 'is-moving', (dx, dy, r) => putAt(r.left + dx, r.top + dy));
+      dragWith(grip, 'is-sizing', (dx, dy, r) => sizeTo(r.width + dx, r.height + dy));
+      // (a double tap on the top bar: back to its own size and side)
+      head.addEventListener('dblclick', (e) => { if (e.target.closest('button')) return; Object.assign(card.style, { left: '', top: '', right: '', width: '', height: '', maxHeight: '' }); spot = null; setSide(bestSide()); });
+      grip.addEventListener('keydown', (e) => {
+        const k = { ArrowRight: [16, 0], ArrowLeft: [-16, 0], ArrowDown: [0, 16], ArrowUp: [0, -16] }[e.key];
+        if (!k) return;
+        e.preventDefault(); e.stopPropagation();
+        const r = pin(); sizeTo(r.width + k[0], r.height + k[1]); settle();
+      });
+    }
+    // (a smaller window: the card stays inside it)
+    const keepIn = () => { if (inPanel || !alive) return; if (card.style.width || card.style.height) { const r = card.getBoundingClientRect(); sizeTo(r.width, r.height); } if (moved()) { const r = card.getBoundingClientRect(); putAt(r.left, r.top); } };
     if ($('.lv-board')) $('.lv-board').addEventListener('click', () => {
       let canvas = null;
       try { canvas = toCanvas(1600); } catch (e) { canvas = null; }
@@ -1339,7 +1406,12 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
 
     current = { host, close };
     if (window.CassieTeach && window.CassieTeach.follow) window.CassieTeach.follow.hide(true); // (her cursor beside the mouse waits while she draws)
-    if (!inPanel) setSide(bestSide());
+    if (!inPanel) {
+      if (spot && spot.w) { card.style.width = spot.w + 'px'; }
+      if (spot && spot.h) { card.style.height = spot.h + 'px'; card.style.maxHeight = 'none'; }
+      if (spot && spot.x != null) { Object.assign(card.style, { right: 'auto' }); putAt(spot.x, spot.y); settle(); keepIn(); }
+      else setSide(bestSide());
+    }
     setStatus('drawing'); paintNav();
     try { card.focus({ preventScroll: true }); } catch (e) { /* not focusable here */ }
     const ready = build().then((ok) => (ok ? null : flatInstead()));
