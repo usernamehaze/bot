@@ -452,14 +452,25 @@ button.sidebar-section { min-height: 40px; } /* (v233: the Study tools toggle is
 .bubble.intro { color: var(--muted); }
 .bubble.error { border-color: var(--text); color: var(--text); font-weight: 500; }
 
-.typing-dots { display: inline-flex; gap: var(--sp-1, 4px); align-items: center; padding: var(--sp-1, 4px) 0; }
-.typing-dots span {
-  width: 6px; height: 6px; border-radius: 50%;
-  background: var(--muted);
-  animation: bounce 1.2s infinite ease-in-out;
-}
-.typing-dots span:nth-child(2) { animation-delay: .15s; }
-.typing-dots span:nth-child(3) { animation-delay: .3s; }
+/* (v288) waiting, by how long: under a second nothing shows; then a skeleton of what is coming (grey lines in
+   its shape, a soft pulse, still with Reduce Motion); a long wait shows how far along it is and the time left. */
+.skel-wait { animation: waitFade .25s ease 1s both; }
+@keyframes waitFade { from { opacity: 0; } to { opacity: 1; } }
+.skel-line { display: block; height: 12px; border-radius: 99px; background: color-mix(in srgb, var(--text) 12%, transparent); animation: skelPulse 1.4s ease-in-out infinite; }
+.skel-block { display: block; border-radius: 16px; background: color-mix(in srgb, var(--text) 9%, transparent); animation: skelPulse 1.4s ease-in-out infinite; }
+@keyframes skelPulse { 50% { opacity: .55; } }
+.skel-list { display: grid; gap: var(--sp-3, 12px); }
+.skel-row { display: flex; align-items: center; gap: var(--sp-3, 12px); }
+.skel-row .skel-dot { flex: none; width: 36px; height: 36px; border-radius: 50%; background: color-mix(in srgb, var(--text) 12%, transparent); animation: skelPulse 1.4s ease-in-out infinite; }
+.skel-row .skel-text { flex: 1; display: grid; gap: var(--sp-2, 8px); }
+.skel-row .skel-line:nth-child(1) { width: 62%; } .skel-row .skel-line:nth-child(2) { width: 38%; height: 10px; }
+.wait-bar { height: 6px; border-radius: 99px; background: color-mix(in srgb, var(--text) 12%, transparent); overflow: hidden; margin: var(--sp-2, 8px) 0; }
+.wait-bar i { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--text); transition: width .3s ease; }
+/* Cassie's answer on its way: three grey lines in the bubble, after a second */
+.bubble:has(> .typing-dots) { animation: waitFade .25s ease 1s both; }
+.typing-dots { display: grid; gap: var(--sp-2, 8px); width: min(280px, 62vw); padding: var(--sp-1, 4px) 0; }
+.typing-dots span { display: block; height: 12px; border-radius: 99px; background: color-mix(in srgb, var(--text) 12%, transparent); animation: skelPulse 1.4s ease-in-out infinite; }
+.typing-dots span:nth-child(1) { width: 92%; } .typing-dots span:nth-child(2) { width: 78%; animation-delay: .15s; } .typing-dots span:nth-child(3) { width: 52%; animation-delay: .3s; }
 @keyframes bounce {
   0%, 60%, 100% { transform: translateY(0); opacity: .5; }
   30% { transform: translateY(-4px); opacity: 1; }
@@ -2107,12 +2118,15 @@ html.lite {
 .btn:focus-visible { outline: none; box-shadow: var(--ring); }
 .btn:active:not(:disabled, [aria-disabled="true"], .is-loading, [aria-busy="true"]) { transform: scale(.97); }
 .btn:disabled, .btn[aria-disabled="true"] { opacity: .45; cursor: not-allowed; transform: none; }
-/* loading: the words stay for screen readers, a small spinner shows instead */
-.btn.is-loading, .btn[aria-busy="true"] { color: transparent !important; pointer-events: none; }
+/* loading: the words stay for screen readers, a small spinner shows instead. (v288) Under a second nothing shows:
+   the button only stops taking taps; the words give way to the spinner if the wait passes one second. */
+.btn.is-loading, .btn[aria-busy="true"] { pointer-events: none; animation: btnHush 0s linear 1s forwards; }
 .btn.is-loading::after, .btn[aria-busy="true"]::after {
   content: ""; position: absolute; left: 50%; top: 50%; width: 18px; height: 18px; margin: calc(-1 * var(--sp-2, 8px)) 0 0 calc(-1 * var(--sp-2, 8px));
-  border-radius: 50%; border: 2px solid var(--on-primary); border-right-color: transparent; animation: btnSpin .7s linear infinite;
+  border-radius: 50%; border: 2px solid var(--on-primary); border-right-color: transparent; opacity: 0; animation: btnSpin .7s linear infinite, waitShow 0s linear 1s forwards;
 }
+@keyframes btnHush { to { color: transparent; } }
+@keyframes waitShow { to { opacity: 1; } }
 .btn.secondary.is-loading::after, .btn-glass.is-loading::after, .btn-plain.is-loading::after,
 .btn.secondary[aria-busy="true"]::after, .btn-glass[aria-busy="true"]::after, .btn-plain[aria-busy="true"]::after { border-color: var(--text); border-right-color: transparent; }
 @keyframes btnSpin { to { transform: rotate(360deg); } }
@@ -2164,7 +2178,7 @@ html.lite {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
   .btn:active, .chip:active, .fu-chip:active, .plus-actions > *:active { transform: none !important; }
-  .btn.is-loading::after, .btn[aria-busy="true"]::after { animation: none !important; border-right-color: currentColor; opacity: .6; }
+  .btn.is-loading::after, .btn[aria-busy="true"]::after { animation: waitShow 0s linear 1s forwards !important; border-right-color: currentColor; } /* (a still ring, after one second) */
 }
 
 /* A reason under a field (errors.js): shown as you type, gone when it's fixed */
@@ -4059,11 +4073,12 @@ html:not(.home-edit) .hw-grid > .xw-player.xw-idle { display: none; } /* (nothin
 .bubble.error::before { content: "!"; display: inline-grid; place-items: center; width: 1.25em; height: 1.25em; margin-right: .45em; border-radius: 50%; background: var(--danger-ink); color: var(--danger-bg); font-weight: 800; font-size: .85em; vertical-align: .05em; }
 /* (v232) a button that waits: a small spinner and a short label; no spinning with Reduce Motion (a still "…") */
 .is-busy { cursor: progress; }
-.busy-spin { display: inline-block; width: 1em; height: 1em; margin-right: .45em; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; vertical-align: -.15em; animation: busySpin .8s linear infinite; }
-.icon-btn .busy-spin { margin: 0; } .icon-btn.is-busy svg { display: none; }
+.busy-spin { display: inline-block; width: 1em; height: 1em; margin-right: .45em; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; vertical-align: -.15em; opacity: 0; animation: busySpin .8s linear infinite, waitShow 0s linear 1s forwards; } /* (v288: it shows after one second, like the buttons) */
+.icon-btn .busy-spin { margin: auto; position: absolute; inset: 0; } :where(.icon-btn.is-busy) { position: relative; } .icon-btn.is-busy svg { animation: waitHide 0s linear 1s forwards; } /* (v288: its icon stays until the spinner shows) */
+@keyframes waitHide { to { visibility: hidden; } }
 button.is-busy:disabled { opacity: 1; }
 @keyframes busySpin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .busy-spin { animation: none; border: 0; width: auto; height: auto; } .busy-spin::before { content: "…"; } }
+@media (prefers-reduced-motion: reduce) { .busy-spin { animation: waitShow 0s linear 1s forwards; border: 0; width: auto; height: auto; } .busy-spin::before { content: "…"; } }
 /* (the phone app's glass bubbles and the lesson list keep their status colours too) */
 html.native:not(.lite) .bubble-assistant.error, html.native:not(.lite) .bubble.error { background: var(--danger-bg); -webkit-backdrop-filter: none; backdrop-filter: none; border-color: color-mix(in srgb, var(--danger-ink) 35%, transparent); }
 .letc-lesson.done em.st-badge.st-ok { color: var(--ok); background: var(--ok-bg); border: 0; }

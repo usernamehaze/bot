@@ -74,7 +74,7 @@
     onClose = typeof start.onClose === 'function' ? start.onClose : null;
     w = document.createElement('div');
     w.className = 'letc bp'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true'); w.setAttribute('aria-labelledby', 'bp-h');
-    w.innerHTML = '<div class="letc-card bp-card"><div class="letc-head bp-head"><button type="button" class="letc-x bp-back" aria-label="Back" hidden>‹</button><h2 id="bp-h">Board and Licensure exams</h2><button type="button" class="letc-x bp-x" aria-label="Close">×</button></div><div class="bp-body" aria-live="polite"><p class="letc-note">Getting your exams ready…</p></div></div>';
+    w.innerHTML = '<div class="letc-card bp-card"><div class="letc-head bp-head"><button type="button" class="letc-x bp-back" aria-label="Back" hidden>‹</button><h2 id="bp-h">Board and Licensure exams</h2><button type="button" class="letc-x bp-x" aria-label="Close">×</button></div><div class="bp-body" aria-live="polite"><div class="skel-list skel-wait" role="status" aria-label="Getting your exams ready">' + '<div class="skel-row"><span class="skel-dot"></span><span class="skel-text"><span class="skel-line"></span><span class="skel-line"></span></span></div>'.repeat(5) + '</div></div></div>';
     document.body.appendChild(w);
     body = w.querySelector('.bp-body'); head = w.querySelector('#bp-h'); back = w.querySelector('.bp-back');
     w.querySelector('.bp-x').addEventListener('click', close);

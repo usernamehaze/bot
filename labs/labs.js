@@ -29,11 +29,11 @@ import { PUZZLES } from './puzzles.js';
 import { space3dLab } from './space3d.js';
 import { atlasLab } from './atlas.js';
 import { TOOLS } from './tools.js';
-import { MUSEUM } from './museum.js?v=287';
+import { MUSEUM } from './museum.js?v=288';
 import { GAMES } from './games.js';
 import { GAMES2 } from './games2.js';
 import { KIDS } from './kids.js';
-import { LEVEL_LESSONS } from './level-lessons.js?v=287';
+import { LEVEL_LESSONS } from './level-lessons.js?v=288';
 
 // two shelves: things to learn with (simulations, 3D models, the atlas) and games (the daily puzzles)
 export const SUBJECTS = [['all', 'All'], ['3d', '3D'], ['biology', 'Biology'], ['chemistry', 'Chemistry'], ['physics', 'Physics'], ['space', 'Space'], ['math', 'Math'], ['geography', 'Geography'], ['history', 'History']];
@@ -460,7 +460,7 @@ function createView() {
   const bpBox = (cls, fill) => {
     const box = el('div', 'lf-board ' + cls);
     const go = () => { box.replaceChildren(); fill(box); };
-    if (bpCat) go(); else { box.innerHTML = '<p class="lf-hint">Getting the exams ready…</p>'; bpLoad().then(go).catch(() => { box.innerHTML = '<p class="lf-hint">The exams couldn’t load. Check your connection, then open this again.</p>'; }); }
+    if (bpCat) go(); else { box.innerHTML = '<div class="lf-skel skel-wait" role="status" aria-label="Getting the exams ready"><span class="skel-block"></span><span class="skel-block"></span><span class="skel-block"></span><span class="skel-block"></span></div>'; /* (v288) a skeleton of the folders, after a second */ bpLoad().then(go).catch(() => { box.innerHTML = '<p class="lf-hint">The exams couldn’t load. Check your connection, then open this again.</p>'; }); }
     return box;
   };
   // every exam, as folders: kind bexam (its lessons) or bsim (its simulation)
@@ -637,11 +637,16 @@ function createView() {
         ${b.me ? `<p class="board-me">You: <b>#${b.me.rank}</b> with <b>${b.me.points}</b> points</p>` : ''}
         ${scoreTable(b)}`;
       // (v282) still loading, or it couldn't be reached: say which, with Cassie busy or her oops, never an empty podium
-      if ((board === null || b.offline) && window.CassieErrors) {
-        const e = window.CassieErrors.empty(board === null ? { title: 'Loading today’s board…', text: 'Your scores are on the way.' }
-          : { title: 'Couldn’t reach the score board', text: 'Your finishes are still kept on this device.', action: 'Try again', onAction: () => { board = null; boardAt = 0; renderBoard(true); } });
+      // (v288) on its way: a skeleton of the podium and the rows (after a second), not a spinner or words
+      if (board === null) {
+        const pod = box.querySelector('.podium');
+        if (pod) pod.outerHTML = `<div class="podium board-skel skel-wait" role="status" aria-label="Loading today’s board">${[2, 1, 3].map((n) => `<div class="pod p${n}"><span class="skel-block bs-av"></span><span class="skel-line bs-name"></span><span class="skel-block bs-step"></span></div>`).join('')}</div>`;
+        const em = box.querySelector('.board-empty');
+        if (em) em.outerHTML = `<div class="skel-list board-skel-rows skel-wait" aria-hidden="true">${'<div class="skel-row"><span class="skel-dot"></span><span class="skel-text"><span class="skel-line"></span><span class="skel-line"></span></span></div>'.repeat(4)}</div>`;
+      } else if (b.offline && window.CassieErrors) {
+        const e = window.CassieErrors.empty({ title: 'Couldn’t reach the score board', text: 'Your finishes are still kept on this device.', action: 'Try again', onAction: () => { board = null; boardAt = 0; renderBoard(true); } });
         e.classList.add('board-state');
-        const pod = box.querySelector('.podium'); if (pod) pod.replaceWith(window.cassieEmpty ? window.cassieEmpty(e, board === null ? 'loading' : 'failed') : e);
+        const pod = box.querySelector('.podium'); if (pod) pod.replaceWith(window.cassieEmpty ? window.cassieEmpty(e, 'failed') : e);
       }
       box.querySelectorAll('[data-board-tab]').forEach((t) => t.addEventListener('click', () => { boardTab = t.dataset.boardTab; draw(); }));
     };

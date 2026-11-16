@@ -15796,21 +15796,25 @@ test('Liquid Glass turns solid in Lite mode and with Reduce Transparency; Reduce
   // Reduce Motion: nothing slides or spins
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const motion = await page.evaluate(() => { const b = document.createElement('button'); b.className = 'btn is-loading'; b.textContent = 'Save'; document.body.appendChild(b); const t = getComputedStyle(document.querySelector('.chip')).transitionDuration; const a = getComputedStyle(b, '::after').animationName; const d = getComputedStyle(b, '::after').animationDuration; b.remove(); return { t, a, d }; });
-  expect(/^0\.00001s|^1e-05s|^0s/.test(motion.t) && (motion.a === 'none' || /^0\.00001s|^1e-05s/.test(motion.d)), 'Reduce Motion stops the movement: ' + JSON.stringify(motion));
+  expect(/^0\.00001s|^1e-05s|^0s/.test(motion.t) && (motion.a === 'none' || /^0\.00001s|^1e-05s|^0s/.test(motion.d)), 'Reduce Motion stops the movement (v288: a loading button shows a still ring after a second): ' + JSON.stringify(motion));
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   // buttons: sizes and states
-  const btns = await page.evaluate(() => {
+  const btns = await page.evaluate(async () => {
     const make = (cls, attrs = {}) => { const b = document.createElement('button'); b.className = cls; b.textContent = 'Save'; Object.assign(b, attrs); document.body.appendChild(b); return b; };
     const sm = make('btn btn-sm'), md = make('btn'), lg = make('btn btn-lg'), off = make('btn', { disabled: true }), busy = make('btn is-loading'), glassB = make('btn btn-glass');
     busy.setAttribute('aria-busy', 'true');
     const h = (e) => Math.round(e.getBoundingClientRect().height);
-    const out = { sm: h(sm), md: h(md), lg: h(lg), offOpacity: getComputedStyle(off).opacity, offCursor: getComputedStyle(off).cursor, busyText: getComputedStyle(busy).color, busySpinner: getComputedStyle(busy, '::after').content, busyClicks: getComputedStyle(busy).pointerEvents, glassBlur: getComputedStyle(glassB).backdropFilter };
+    // (v288) under a second nothing shows (the words stay, the spinner is hidden); after it, the spinner
+    const early = { text: getComputedStyle(busy).color, spin: getComputedStyle(busy, '::after').opacity };
+    await new Promise((r) => setTimeout(r, 1200));
+    const out = { sm: h(sm), md: h(md), lg: h(lg), offOpacity: getComputedStyle(off).opacity, offCursor: getComputedStyle(off).cursor, earlyText: early.text, earlySpin: early.spin, busyText: getComputedStyle(busy).color, busySpin: getComputedStyle(busy, '::after').opacity, busySpinner: getComputedStyle(busy, '::after').content, busyClicks: getComputedStyle(busy).pointerEvents, glassBlur: getComputedStyle(glassB).backdropFilter };
     [sm, md, lg, off, busy, glassB].forEach((e) => e.remove());
     return out;
   });
   expect([40, 48].includes(btns.sm) && btns.md === 48 && btns.lg === 56, 'three button sizes on the 8-point grid (40 with a mouse or 48 to touch, 48, 56): ' + JSON.stringify(btns));
   expect(+btns.offOpacity < .6 && btns.offCursor === 'not-allowed', 'a disabled button looks disabled: ' + JSON.stringify(btns));
-  expect(/rgba\(0, 0, 0, 0\)|transparent/.test(btns.busyText) && btns.busySpinner === '""' && btns.busyClicks === 'none', 'a loading button shows a spinner and can’t be tapped twice: ' + JSON.stringify(btns));
+  expect(!/rgba\(0, 0, 0, 0\)|transparent/.test(btns.earlyText) && btns.earlySpin === '0', 'under a second a loading button shows nothing new (its words stay): ' + JSON.stringify(btns));
+  expect(/rgba\(0, 0, 0, 0\)|transparent/.test(btns.busyText) && btns.busySpin === '1' && btns.busySpinner === '""' && btns.busyClicks === 'none', 'after a second a loading button shows a spinner, and it can’t be tapped twice: ' + JSON.stringify(btns));
   expect(/blur/.test(btns.glassBlur), 'a glass button is frosted: ' + JSON.stringify(btns));
   // pressed: it shrinks a little while held
   await page.evaluate(() => { const b = document.createElement('button'); b.className = 'btn'; b.id = 'press-me'; b.textContent = 'Press'; b.style.cssText = 'position:fixed;left:20px;top:200px;z-index:99999'; document.body.appendChild(b); });

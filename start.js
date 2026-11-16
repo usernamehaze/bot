@@ -15,6 +15,6 @@
   try { var st = JSON.parse(localStorage.getItem('cassie.v2') || '{}'); if (String(st.accent || '').toLowerCase() === 'cassie') document.documentElement.classList.add('cassie'); } catch (e) { /* ignore */ }
   document.body.addEventListener('click', go);
   // a small spinner only if the app is slow to arrive (on a fast connection nothing shows at all)
-  setTimeout(function () { var s = document.querySelector('.spin'); if (s) s.classList.add('on'); }, 700);
+  setTimeout(function () { var s = document.querySelector('.spin'); if (s) s.classList.add('on'); }, 1000);
   setTimeout(go, 400); // a moment, then in (a first visit gets the app's own Welcome next)
 })();
