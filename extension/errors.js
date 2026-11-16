@@ -42,6 +42,7 @@
     // fields, checked as you type
     need_email: 'Type your email so Cassie knows which account is yours.',
     need_password: 'Type your password to sign in.',
+    need_new_password: 'Make a password of at least 8 letters or numbers for your account.',
     password_short: 'Your password needs at least 8 letters or numbers so it’s hard to guess. Add {n} more.',
     need_age: 'Type your age so Cassie can explain things at your level.',
     age_range: 'Ages go from 2 to 100. Check the number you typed.',

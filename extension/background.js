@@ -819,7 +819,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       const keys = await getKeys();
       try { const reply = await readPicture(keys, msg); sendResponse({ reply }); logAnswer(msg.log, reply, msg.image, sender); }
       catch (e) { sendResponse({ error: e.message }); }
-    })().catch((e) => sendResponse({ error: e.message || 'Something went wrong reading the picture.' }));
+    })().catch((e) => sendResponse({ error: e.message || 'Cassie couldn’t read the picture of this tab. Snip it again, or ask again in a moment.' }));
     return true;
   }
   return false;
