@@ -7298,6 +7298,42 @@ test('the model picker on a phone (360 and 390 wide): the + sheet names the mode
   }
 });
 
+// (v294) Tap targets are not 24px: every control is 44 by 44 at least, with a mouse too (its row, its label or a
+// tap area round a link in a sentence counts); a switch's whole row taps
+test('v294 tap targets: every button, link, switch and field on a computer’s Home, Settings and Plans is 44 by 44 or more, and a switch’s whole row works it', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, lite: 'off', server: false, state: { groqKey: 'gsk_test' } });
+  const small = () => page.evaluate(() => {
+    const out = [];
+    document.querySelectorAll('button, a[href], input:not([type=hidden]), select, textarea, summary, [role=button], [role=switch], [role=tab]').forEach((n) => {
+      if (!n.getClientRects().length) return;
+      const cs = getComputedStyle(n); if (cs.visibility === 'hidden' || +cs.opacity === 0 || cs.pointerEvents === 'none') return;
+      const r = n.getBoundingClientRect(); if (r.bottom < 0 || r.top > innerHeight || r.right < 0 || r.left > innerWidth) return;
+      let w = r.width, h = r.height;
+      const lab = n.matches('input') && n.closest('label'); if (lab) { const q = lab.getBoundingClientRect(); w = Math.max(w, q.width); h = Math.max(h, q.height); }
+      const af = getComputedStyle(n, '::after'); if (af.content !== 'none' && af.position === 'absolute') { w = Math.max(w, parseFloat(af.width) || 0); h = Math.max(h, parseFloat(af.height) || 0); }
+      if (w < 43.5 || h < 43.5) out.push(`${Math.round(w)}x${Math.round(h)} ${(n.getAttribute('aria-label') || n.textContent || n.className || n.tagName).trim().slice(0, 30)}`);
+    });
+    return out;
+  });
+  await page.evaluate(() => deskGo('home')); await page.waitForTimeout(800);
+  let s = await small();
+  expect(!s.length, 'Home: every control is 44 by 44: ' + s.join(' | '));
+  for (const pg of ['all', 'profile', 'plans']) {
+    await page.evaluate((x) => openSettings(x), pg); await page.waitForTimeout(400);
+    for (let y = 0; y < 5000; y += 600) {
+      await page.evaluate((y) => document.querySelector('.settings-card').scrollTo(0, y), y); await page.waitForTimeout(60);
+      s = await small();
+      expect(!s.length, `Settings ${pg}: every control is 44 by 44: ` + s.join(' | '));
+    }
+  }
+  await page.evaluate(() => openSettings('notifications')); await page.waitForTimeout(300);
+  // (the whole row is the switch's label; a browser that can't show reminders keeps the switch off, so it is only tapped where it works)
+  const row = await page.evaluate(() => { const t = document.getElementById('remind-toggle'), l = t.closest('label'); let n = 0; t.addEventListener('click', () => n++); if (!t.disabled) l.querySelector('.notif-h b').click(); return { label: !!l && l.classList.contains('notif-top') && l.contains(l.querySelector('.notif-h')), h: l ? l.getBoundingClientRect().height : 0, w: l ? l.getBoundingClientRect().width : 0, sw: t.getBoundingClientRect().width, disabled: t.disabled, n }; });
+  expect(row.label && row.h >= 44 && row.w > row.sw * 4 && (row.disabled || row.n === 1), 'the whole Study reminders row is its switch’s label: ' + JSON.stringify(row));
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test('8-point grid v233: every padding, margin and gap in the stylesheets is on the scale (4, 8, 12, 16, 24, 32, 40, 48, 56, 64, then multiples of 8; 1 to 2px hairlines; notes for the rest), styled elements on the website and in the app compute to it, and every button, field and tab is 48px on a phone and 40px or more on a computer (1280x800 and 390x844)', async (b) => {
   // 1. the stylesheets
   const PROPS = /(?<![\w-])(padding|margin|gap|row-gap|column-gap|padding-[a-z-]+|margin-[a-z-]+)\s*:\s*([^;}"`]+)/g;
