@@ -4484,15 +4484,17 @@ html[data-uistyle="crisp"] { --r-sm: 3px; --r-md: 4px; --r-lg: 6px; --r-xl: 8px;
 /* ---------- (v294) tap targets: 44 by 44 at least, with a finger or a mouse ----------
    Rows and pills that were 40px on a computer grow to 44; small round buttons (a close X, a back
    arrow) grow to 44 with their icon still 24 or less inside; a switch's whole row taps. */
+@media (pointer: fine) { /* (with a finger, the 48px rules above already apply) */
 button.sidebar-section, .side-tool, #side-apps .side-tool, #side-general .side-tool, .side-search, .side-menu-label, body:not(.side-open) .side-search-btn, body:not(.side-open) .side-menu-label,
 .fc-mini, .listen-btn, .plus-actions > *, .bubble-tools button.suggest, .fu-chip, .bill-seg button, .dk-awards, .dk-pill, .side-ext-go, .top-search, .top-timer, .desk .dk-chip,
 .set-nav button, .accent-chip, .top-results li, .dk-chat-acts .dk-btn, .ht-edit, .ld-btn, .ld-acts .ld-btn, .bubble:has(.ld) .listen-btn, .ld-ask button,
 .appx-bar .appx-discard, .appx-bar .appx-review, .subject-ask, .subject-rm, .home-ideas, .new-chat-btn { min-height: 44px; }
-.vc-x, .fc-x, .fc-back, .icon-btn.round, .dk-up, .ld-pop-x, .appx-sw { min-width: 44px; min-height: 44px; }
+}
+.vc-x, .fc-x, .fc-back, .icon-btn.round, .dk-up, .ld-pop-x, .appx-sw { min-width: var(--tap, 48px); min-height: var(--tap, 48px); } /* (a bigger X: 48 on every screen, its icon smaller inside) */
 .home-ideas { display: inline-flex; align-items: center; }
 /* a link inside a sentence keeps its size, but its tap area is 44 tall */
 .auth-legal a, .key-link, .auth-switch button, .desk .dk-ideas { position: relative; }
 .auth-legal a::after, .key-link::after, .auth-switch button::after, .desk .dk-ideas::after { content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%); }
 .key-link { display: inline-block; }
 label.notif-top { cursor: pointer; min-height: 44px; }
-.field.row, .field-toggle { min-height: 44px; align-items: center; } /* (the whole row is the switch's label, so all of it taps) */
+@media (pointer: fine) { .field.row, .field-toggle { min-height: 44px; align-items: center; } } /* (the whole row is the switch's label, so all of it taps) */
