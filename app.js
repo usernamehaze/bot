@@ -2147,7 +2147,12 @@ const HOME_EXAMPLES = [
   { label: 'Explore in 3D (in Learn)', ia: 'cube', icon: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5"/><path d="M12 12v9"/>', run: () => openLabs(null, { subject: '3d' }) },
   { label: 'Learn: try a simulation', ia: 'flask', icon: '<path d="M9 3h6M10 3v6.2L4.8 18.4A1.8 1.8 0 0 0 6.4 21h11.2a1.8 1.8 0 0 0 1.6-2.6L14 9.2V3M7.5 14h9"/>', run: () => openLabs() },
   { label: 'Study together (study room)', ia: 'people', icon: '<circle cx="8.5" cy="8.5" r="3"/><circle cx="16.5" cy="9.5" r="2.5"/><path d="M3 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5M14.5 14.3c3 .1 5.5 1.8 5.5 4.7"/>', run: () => openRoomChooser() },
-  { label: 'Flashcards', ia: 'cards', icon: '<path d="M6 8h10a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2zM8 8V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2"/>', run: () => window.CassieCards && window.CassieCards.open() },
+  { label: 'Flashcards', ia: 'cards', icon: '<path d="M6 8h10a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2zM8 8V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2"/>', run: () => {
+    // (v304: the phone app's own Cards page, as the old side button did; a guest is reminded to sign in)
+    if (document.documentElement.classList.contains('native') && window.CassieNative) window.CassieNative.go('cards');
+    else if (window.CassieCards) window.CassieCards.open();
+    guestNudge('Sign in so your flashcard decks and review are saved and follow you to every device.');
+  } },
   { label: 'Podcast my notes', ia: 'headphones', icon: '<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/>', run: () => openPodcastSources() },
   { label: 'Teach Cassie out loud', ia: 'bars', icon: '<path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4"/>', run: () => openVoice('teach') },
 ];
@@ -2807,7 +2812,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=303'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=304'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2829,7 +2834,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=303'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=304'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -3105,7 +3110,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=303').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=304').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -7464,7 +7469,7 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=303')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=304')));
 // a real photo needs Gemini pictures (Cassie's server or the student's key); the free service draws toys and models
 const realPhotoOk = () => !!((SERVER && serverPictures) || (state.geminiKey && !geminiImageOff));
 // a drawing inside a chat bubble (a new one draws itself; one from history shows finished)
@@ -8755,7 +8760,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=303');
+      exploreMod = await import('./explore/cell3d.js?v=304');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -8805,7 +8810,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=303');
+      labsMod = await import('./labs/labs.js?v=304');
       islandRest();
     }
     labsMod.open({
@@ -9651,20 +9656,16 @@ function resetQuizUi() {
   setTimeout(dressCassie, 0);
   if (quizBtn) { quizBtn.classList.remove('active'); setQuizLabel('Quiz me'); }
 }
-// (v274) Flashcards in the side menu, under the timer: the same place the Cards tab opened, with the cards due
-const sideCards = document.getElementById('side-cards');
+// (v304) Flashcards in the side menu is its study tool (it was shown twice: here, and as a second, dark button under
+// the timer). Its row shows the cards due.
+const sideCards = (toolBtns.find(([, ex]) => ex.label === 'Flashcards') || [])[0] || null;
+if (sideCards) { const em = document.createElement('em'); em.id = 'side-cards-due'; em.className = 'side-due rail-hide'; em.hidden = true; sideCards.appendChild(em); }
 function sideCardsDue() {
   const em = document.getElementById('side-cards-due'); if (!em) return;
   const due = window.CassieCards ? window.CassieCards.dueCount() : 0;
   em.hidden = !due; em.textContent = due ? `${due} due` : '';
   if (sideCards) sideCards.setAttribute('aria-label', due ? `Flashcards: ${due} ${due === 1 ? 'card' : 'cards'} due` : 'Flashcards');
 }
-if (sideCards) sideCards.addEventListener('click', () => {
-  if (matchMedia('(max-width: 760px)').matches) closeSidebar();
-  if (document.documentElement.classList.contains('native') && window.CassieNative) window.CassieNative.go('cards');
-  else if (window.CassieCards) window.CassieCards.open();
-  guestNudge('Sign in so your flashcard decks and review are saved and follow you to every device.');
-});
 function openSidebar() {
   sideCardsDue();
   renderChatList();
@@ -10771,10 +10772,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=303').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=304').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=303', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=304', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
