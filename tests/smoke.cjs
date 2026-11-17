@@ -2336,6 +2336,40 @@ test('v297 free Plus trial: the plans screen leads with Start my free trial (one
   await ctx.close();
 });
 
+// (v298) every price by where the student is: pesos in the Philippines, US$ elsewhere, the same in the app (plans
+// screen and Settings, Plans) and on the website; the server's, the website's and the app's prices are one table
+test('v298 prices by place: one price table in the server, the website and the app; pesos in the Philippines and US$ elsewhere on the website, the plans screen and Settings, Plans', async (b) => {
+  const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
+  const num = (s) => JSON.parse(s.replace(/(\w+):/g, '"$1":'));
+  const srv = read('server/worker.src.js'), land = read('landing/landing.js'), appjs = read('app.js');
+  const sPhp = num(srv.match(/const PAY_PHP = (\{[^\n]+\});/)[1]), sUsd = num(srv.match(/const PAY_USD = (\{[^\n]+\});/)[1]);
+  const lP = land.match(/php: \{ sym: '₱', free: 0, (plus: \{[^}]+\}, pro: \{[^}]+\}) \}/)[1], lU = land.match(/usd: \{ sym: 'US\$', free: 0, (plus: \{[^}]+\}, pro: \{[^}]+\}) \}/)[1];
+  const lPhp = num(`{${lP}}`), lUsd = num(`{${lU}}`);
+  const aPhp = num(appjs.match(/const FR_PAY_PHP = (\{[^\n;]+\});/)[1]), aUsd = num(appjs.match(/const FR_PAY_USD = (\{[^\n;]+\});/)[1]);
+  const same = (a, b2, keys) => ['plus', 'pro'].every((p) => keys.every((k) => a[p][k] === b2[p][k]));
+  expect(same(sPhp, lPhp, ['month', 'sem', 'year']) && same(sUsd, lUsd, ['month', 'sem', 'year']) && same(sPhp, aPhp, ['month', 'sem']) && same(sUsd, aUsd, ['month', 'sem']), 'one price table: ' + JSON.stringify({ sPhp, lPhp, aPhp, sUsd, lUsd, aUsd }));
+  expect(sUsd.pro.month > sUsd.plus.month * 1.5 && sPhp.pro.month > sPhp.plus.month * 1.5, 'Pro is a real step up from Plus in both currencies');
+  for (const [where, tz, locale, want] of [['the Philippines', 'Asia/Manila', 'en-PH', /^₱/], ['the US', 'America/New_York', 'en-US', /^US\$/]]) {
+    const ctx = await b.newContext({ ...devices['iPhone 13'], timezoneId: tz, locale, serviceWorkers: 'block' });
+    await ctx.addInitScript(([srv, seed]) => { window.CASSIE_SERVER = srv; if (!sessionStorage.getItem('seeded')) { localStorage.setItem('cassie.v2', seed); sessionStorage.setItem('seeded', '1'); } },
+      [SERVER, JSON.stringify({ profile: PROFILE, seenVersion: APP_VERSION, analytics: { usage: true, topics: false }, lite: 'on', tab: 'chat' })]);
+    await ctx.route(/workers\.dev|fonts\.g/, (r) => r.abort());
+    const page = await ctx.newPage();
+    await page.goto(`http://localhost:${APP_PORT}/index.html`); await page.waitForTimeout(800);
+    const web = await page.evaluate(() => [...document.querySelectorAll('[data-price], [data-pmini]')].map((x) => x.textContent.trim()));
+    expect(web.length >= 6 && web.every((t) => want.test(t)), `${where}, the website: ` + web.join(' '));
+    await page.goto(APP); await page.waitForTimeout(800);
+    await page.evaluate(() => { state.profile = state.profile || { name: 'T', role: 'student', grade: 'Grade 10', age: 15 }; openSettings('plans'); });
+    await page.waitForTimeout(300);
+    const plans = await page.evaluate(() => [...document.querySelectorAll('.set-plans [data-pp], .set-plans [data-ppn], .set-plans [data-pp0], .set-plans [data-ppday]')].map((x) => x.textContent.trim()));
+    expect(plans.length >= 12 && plans.every((t) => want.test(t)), `${where}, Settings, Plans: ` + plans.join(' '));
+    await page.evaluate(() => { closeSettings(); frPaywallShown = false; frPaywall(() => {}); });
+    const pay = await page.evaluate(() => [...document.querySelectorAll('.fr-plan-price')].map((x) => x.textContent.trim()));
+    expect(pay.length === 2 && pay.every((t) => want.test(t)), `${where}, the plans screen: ` + pay.join(' '));
+    await ctx.close();
+  }
+});
+
 test('v257: the studio voice no longer shows "guest" to a signed-in account: the podcast sheet rechecks the account on open, so a stale guest state from before sign-in self-heals', async (b) => {
   let healed = false; // node-side flag: before sign-in the server says guest; the on-open recheck flips it
   const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'authorization, content-type', 'access-control-allow-methods': 'GET, POST, OPTIONS' };
@@ -2945,7 +2979,7 @@ test('buying a plan: sign in first, then PayMongo’s checkout (pesos; a US$ pla
   try {
     await page.route('https://checkout.paymongo.com/**', (r) => r.fulfill({ contentType: 'text/html', body: '<title>PayMongo checkout</title><h1>PayMongo checkout</h1>' }));
     const cfg = await page.evaluate(async (srv) => (await fetch(srv + '/config')).json(), SERVER);
-    expect(cfg.pay === true && cfg.prices.php.plus.month.php === 149 && cfg.prices.usd.plus.month.shown === 'US$7.99' && cfg.prices.usd.plus.month.php === 499 && cfg.prices.php.pro.sem.php === 1399 && cfg.prices.php.pro.month.php === 349 && cfg.prices.usd.pro.month.shown === 'US$8.99', 'the server says payments are on, with every price (US$7.99 is charged ₱499): ' + JSON.stringify(cfg.prices && cfg.prices.usd.plus));
+    expect(cfg.pay === true && cfg.prices.php.plus.month.php === 149 && cfg.prices.usd.plus.month.shown === 'US$7.99' && cfg.prices.usd.plus.month.php === 499 && cfg.prices.php.pro.sem.php === 1399 && cfg.prices.php.pro.month.php === 349 && cfg.prices.usd.pro.month.shown === 'US$12.99', 'the server says payments are on, with every price (US$7.99 is charged ₱499; v298: Pro US$12.99): ' + JSON.stringify(cfg.prices && cfg.prices.usd.plus));
     // signed out: Get Plus asks to sign in first, then goes on to PayMongo by itself
     await page.waitForFunction(() => serverPay === true, null, { timeout: 5000 });
     await page.evaluate(() => plusSheet('More questions today', 'You’ve used today’s free questions.', 'limit'));

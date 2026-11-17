@@ -13,8 +13,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Cassie">
-<link rel="stylesheet" href="style.css?v=298">
-<link rel="stylesheet" href="rewards.css?v=298">
+<link rel="stylesheet" href="style.css?v=299">
+<link rel="stylesheet" href="rewards.css?v=299">
 </head>
 <body>
 
@@ -641,7 +641,7 @@
           <caption>At a glance</caption>
           <thead><tr><th scope="col"><span class="sr-only">What you get</span></th><th scope="col">Free</th><th scope="col" class="pc-plus">Plus</th><th scope="col">Pro</th></tr></thead>
           <tbody>
-            <tr><th scope="row">Price</th><td>₱0</td><td class="pc-plus"><span class="bill-m">₱149 a month</span><span class="bill-s">₱599 a semester</span></td><td><span class="bill-m">₱349 a month</span><span class="bill-s">₱1,399 a semester</span></td></tr>
+            <tr><th scope="row">Price</th><td data-pp0>₱0</td><td class="pc-plus"><span class="bill-m" data-pp="plus:month">₱149 a month</span><span class="bill-s" data-pp="plus:sem">₱599 a semester</span></td><td><span class="bill-m" data-pp="pro:month">₱349 a month</span><span class="bill-s" data-pp="pro:sem">₱1,399 a semester</span></td></tr>
             <tr><th scope="row">Questions a day</th><td>20</td><td class="pc-plus">100</td><td>150</td></tr>
             <tr><th scope="row">Smarter answers a day</th><td>10</td><td class="pc-plus">100</td><td>15 smartest, then 100</td></tr>
             <tr><th scope="row">Gemini pictures</th><td>3 a week</td><td class="pc-plus">5 a day</td><td>20 a day</td></tr>
@@ -651,7 +651,7 @@
         <div class="plan-grid">
           <article class="plan">
             <h3>Free</h3>
-            <p class="plan-price"><b>₱0</b> forever</p>
+            <p class="plan-price"><b data-pp0>₱0</b> forever</p>
             <ul>
               <li>20 questions a day: chat, quiz and highlight</li>
               <li>20 quick pictures a day, plus 3 Gemini pictures a week</li>
@@ -665,8 +665,8 @@
             <span class="plan-badge">Best for school</span>
             <h3>Plus</h3>
             <span class="plan-pass bill-s">Pasado Pass</span>
-            <p class="plan-price"><span class="bill-m"><b>₱149</b> a month</span><span class="bill-s"><b>₱599</b> a semester, about ₱4 a day</span></p>
-            <p class="plan-under"><span class="bill-m">One payment for 30 days. Never renews. 7 days to change your mind. Or ₱599 once for the whole semester.</span><span class="bill-s">One payment for 5 months. Never renews. 7 days to change your mind. Or ₱149 a month.</span></p>
+            <p class="plan-price"><span class="bill-m"><b data-ppn="plus:month">₱149</b> a month</span><span class="bill-s"><b data-ppn="plus:sem">₱599</b> a semester, about <span data-ppday="plus:sem">₱4</span> a day</span></p>
+            <p class="plan-under"><span class="bill-m">One payment for 30 days. Never renews. 7 days to change your mind. Or <span data-ppn="plus:sem">₱599</span> once for the whole semester.</span><span class="bill-s">One payment for 5 months. Never renews. 7 days to change your mind. Or <span data-ppn="plus:month">₱149</span> a month.</span></p>
             <ul>
               <li>Everything in Free, including the Finals Reviewer Kit, an exam plan and your weekly progress card</li>
               <li>100 questions a day</li>
@@ -679,8 +679,8 @@
           </article>
           <article class="plan plan-pro">
             <h3>Pro</h3>
-            <p class="plan-price"><span class="bill-m"><b>₱349</b> a month</span><span class="bill-s"><b>₱1,399</b> a semester, about ₱9 a day</span></p>
-            <p class="plan-under"><span class="bill-m">One payment for 30 days. Never renews. 7 days to change your mind. Or ₱1,399 once for the whole semester.</span><span class="bill-s">One payment for 5 months. Never renews. 7 days to change your mind. Or ₱349 a month.</span></p>
+            <p class="plan-price"><span class="bill-m"><b data-ppn="pro:month">₱349</b> a month</span><span class="bill-s"><b data-ppn="pro:sem">₱1,399</b> a semester, about <span data-ppday="pro:sem">₱9</span> a day</span></p>
+            <p class="plan-under"><span class="bill-m">One payment for 30 days. Never renews. 7 days to change your mind. Or <span data-ppn="pro:sem">₱1,399</span> once for the whole semester.</span><span class="bill-s">One payment for 5 months. Never renews. 7 days to change your mind. Or <span data-ppn="pro:month">₱349</span> a month.</span></p>
             <ul>
               <li>Everything in Plus</li>
               <li>Every lesson of the board exam courses: LET, CPALE, Civil Service, Criminology, Nursing, Civil Engineering and Psychometrician, plus NCLEX-RN, IELTS, OET Nursing, TOEFL iBT, SAT, JLPT and EPS-TOPIK for studying or working abroad</li>
@@ -716,26 +716,26 @@
 
 </div>
 
-<script src="extlink.js?v=298"></script>
-<script src="errors.js?v=298"></script>
-<script src="mic.js?v=298"></script>
-<script src="care.js?v=298"></script>
-<script src="memory.js?v=298"></script>
-<script src="rewards.js?v=298"></script>
-<script src="board.js?v=298"></script>
-<script src="export.js?v=298"></script>
-<script src="sketch.js?v=298"></script>
-<script src="config.js?v=298"></script>
-<script src="cassie-bot.js?v=298"></script>
-<script src="cards.js?v=298"></script>
-<script src="cite.js?v=298"></script>
-<script src="voice.js?v=298"></script>
+<script src="extlink.js?v=299"></script>
+<script src="errors.js?v=299"></script>
+<script src="mic.js?v=299"></script>
+<script src="care.js?v=299"></script>
+<script src="memory.js?v=299"></script>
+<script src="rewards.js?v=299"></script>
+<script src="board.js?v=299"></script>
+<script src="export.js?v=299"></script>
+<script src="sketch.js?v=299"></script>
+<script src="config.js?v=299"></script>
+<script src="cassie-bot.js?v=299"></script>
+<script src="cards.js?v=299"></script>
+<script src="cite.js?v=299"></script>
+<script src="voice.js?v=299"></script>
 <nav id="tabbar" class="tabbar" aria-label="Sections"><button type="button" class="tab" data-tab="home" aria-label="Home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 10.5 12 4l8.5 6.5V20a1 1 0 0 1-1 1H15v-6H9v6H4.5a1 1 0 0 1-1-1z"/></svg><span>Home</span></button><button type="button" class="tab" data-tab="chat" aria-label="Chat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5H9l-5 4z"/></svg><span>Chat</span></button><button type="button" class="tab" data-tab="labs" aria-label="Learn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6M10 3v6.2L4.8 18.4A1.8 1.8 0 0 0 6.4 21h11.2a1.8 1.8 0 0 0 1.6-2.6L14 9.2V3M7.5 14h9"/></svg><span>Learn</span></button><button type="button" class="tab" data-tab="games" aria-label="Games"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8h10a4 4 0 0 1 4 4v1.5a3.5 3.5 0 0 1-6.3 2.1L14 14.5h-4l-.7 1.1A3.5 3.5 0 0 1 3 13.5V12a4 4 0 0 1 4-4zM8 10.5v3M6.5 12h3M15.5 11.5h.01M17.5 13.5h.01"/></svg><span>Games</span></button><button type="button" class="tab" data-tab="you" aria-label="You"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4.5 21a7.5 7.5 0 0 1 15 0"/></svg><span>You</span></button></nav>
-<script src="app.js?v=298"></script>
-<script src="native.js?v=298"></script>
-<script src="listen.js?v=298"></script>
-<script src="tour.js?v=298"></script>
-<script src="study-room.js?v=298"></script>
-<script src="gradient.js?v=298"></script>
+<script src="app.js?v=299"></script>
+<script src="native.js?v=299"></script>
+<script src="listen.js?v=299"></script>
+<script src="tour.js?v=299"></script>
+<script src="study-room.js?v=299"></script>
+<script src="gradient.js?v=299"></script>
 </body>
 </html>
