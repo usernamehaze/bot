@@ -381,6 +381,12 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
   // drawing when one was asked for) is asked for once more, more strictly. → { kind, answer, scene, steps, noDraw }
   async function from({ send, ask, count = 0, draw = false, maxTokens = 3600 } = {}) {
     let last = null, nudge = '';
+    const asked = (String(ask).match(/The student asks: "([^"]*)"/) || [])[1] || '';
+    // (v303) the parts a textbook figure of it shows, said before she draws: a first drawing that has them all is shown
+    // at once, instead of being sent back and waited for twice
+    // (read straight from the drawer's file: nothing for 3D is set up until a drawing comes back)
+    const must = await import(chrome.runtime.getURL('livedraw.js')).then((m) => (m.mustHave ? m.mustHave(asked) : null)).catch(() => null);
+    if (must) ask += `\n  If you draw it: a textbook figure of ${must.what} shows ${must.parts.join(', ')}. Draw and name every one of them, each in its real place with its real shape (never a symbol or an icon).`;
     for (let tries = 0; tries < 2; tries++) {
       let reply = '';
       try { reply = await send(ask + nudge, maxTokens); }
@@ -391,25 +397,23 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
         ask = small; reply = await send(ask + nudge, maxTokens);
       }
       const got = parse(reply, count);
-      if (got.kind === 'card' && got.scene.dim === '3d' && !tries) {
-        // (as in the Cassie app: the model against her own plan; what is wrong goes back to her once)
-        const m = await load3d().catch(() => null), spec = m && m.clean(got.scene.spec), wrong = !m ? [] : spec ? m.check3d(spec) : ['the reply was not one valid JSON object in the schema'];
-        if (wrong.length) { last = got; nudge = `\n  IMPORTANT: your model has these problems:\n  - ${wrong.join('\n  - ')}\n  Send the whole corrected JSON object again.`; continue; }
-      }
-      if (got.kind === 'card' && got.scene.dim === 'flat' && !tries) {
-        const m = await load3d().catch(() => null), spec = m && m.clean(got.scene.spec), wrong = !m ? [] : spec ? m.check(spec, (String(ask).match(/The student asks: "([^"]*)"/) || [])[1] || '') : ['the reply was not one valid JSON object in the schema'];
-        if (wrong.length) { last = got; nudge = `\n  IMPORTANT: your drawing has these problems:\n  - ${wrong.slice(0, 8).join('\n  - ')}\n  Send the whole corrected JSON object again.`; continue; }
-      }
       if (got.kind === 'card' && (got.scene.dim === 'flat' || got.scene.dim === '3d') && !tries) {
-        // (as in the Cassie app: she looks at a picture of her own finished drawing; what is wrong goes back to her once)
-        const asked = (String(ask).match(/The student asks: "([^"]*)"/) || [])[1] || got.scene.title;
-        // The first drawing shows at once. scene.better → the corrected scene when the look found something, else null.
-        const first = got.scene, words_ = ask + nudge;
+        const m = await load3d().catch(() => null), spec = m && m.clean(got.scene.spec);
+        // a reply that can't be drawn at all is asked for again now; one that can is shown at once
+        if (m && !spec) { last = got; nudge = '\n  IMPORTANT: your reply was not one valid JSON object in the schema. Send the whole JSON object again.'; continue; }
+        const wrong = !m ? [] : got.scene.dim === '3d' ? m.check3d(spec) : m.check(spec, asked || got.scene.title);
+        // (v303) The first drawing shows at once. scene.better → the corrected one, made while she explains the first:
+        // first what her own check found (a missing part, a wrong arrow), then her look at a picture of it (Plus and Pro)
+        const first = got.scene, words_ = ask + nudge, what = first.dim === '3d' ? 'model' : 'drawing';
+        const redo = async (fixes, base, how) => {
+          const again = parse(await send(`${words_}\n  IMPORTANT: ${how}, and these things are wrong:\n  - ${fixes.join('\n  - ')}\n  Send the whole corrected JSON object again, with these fixed and everything that was right kept exactly as it was: ${JSON.stringify(base.spec)}`, maxTokens), count);
+          return again.kind === 'card' && again.scene.dim === base.dim ? again.scene : null;
+        };
         first.better = (async () => {
-          const fixes = await lookAt(first, asked);
-          if (!fixes.length) return null;
-          const again = parse(await send(`${words_}\n  IMPORTANT: a picture of your ${first.dim === '3d' ? 'model' : 'drawing'} was checked, and these things are wrong:\n  - ${fixes.join('\n  - ')}\n  Send the whole corrected JSON object again, with these fixed and everything that was right kept exactly as it was: ${JSON.stringify(first.spec)}`, maxTokens), count);
-          return again.kind === 'card' && again.scene.dim === first.dim ? again.scene : null;
+          let best = wrong.length ? await redo(wrong.slice(0, 8), first, `your ${what} was checked`).catch(() => null) : null;
+          const seen = best || first, fixes = await lookAt(seen, asked || seen.title);
+          if (fixes.length) best = (await redo(fixes, seen, `a picture of your ${what} was checked`).catch(() => null)) || best;
+          return best;
         })().catch(() => null);
       }
       if (got.kind === 'card' || (got.kind && !draw)) return got;
@@ -540,7 +544,7 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
     .lv-svg .lv-note text { fill: ${NOTE.ink}; stroke: none; font-size: 34px; }
     .lv-svg .lv-cur { transition: transform .12s linear, opacity .2s; }
     .lv-svg .lv-cur path { fill: #ffffff; stroke: #141416; stroke-width: 1.6; }
-    .lv-words { display: flex; flex-direction: column; gap: 8px; max-height: 168px; overflow: auto; }
+    .lv-words { display: flex; flex-direction: column; gap: 8px; max-height: 216px; overflow: auto; font-size: 16px; line-height: 1.5; }
     .lv-words.is-more { -webkit-mask-image: linear-gradient(to bottom, transparent, #000 24px); mask-image: linear-gradient(to bottom, transparent, #000 24px); }
     .lv-line { margin: 0; color: var(--mute); }
     .lv-line.is-now { color: var(--ink); font-weight: 600; }
@@ -552,6 +556,17 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
     .lv-ask input { flex: 1; min-width: 0; min-height: 44px; box-sizing: border-box; border-radius: 12px; border: 1px solid var(--edge); background: var(--card); color: var(--ink); padding: 0 12px; font: 15px/1.2 ${FONT}; }
     .lv-ask input::placeholder { color: var(--mute); opacity: 1; }
     .lv-ask input:focus { outline: 2px solid var(--ink); outline-offset: 1px; }
+    /* (v303) with a mouse the controls are compact (32px), so her words and the drawing have the room; on touch they stay 44px */
+    @media (pointer: fine) {
+      .lv .lv-card button, .lv .lv-clear3 { min-height: 32px; min-width: 32px; padding: 0 12px; border-radius: 8px; font-size: 13px; }
+      .lv .lv-card .lv-icon { padding: 0; }
+      .lv .lv-card .lv-size { min-width: 32px; min-height: 32px; width: 32px; height: 32px; padding: 0 4px 4px 0; }
+      .lv-ask input { min-height: 32px; border-radius: 8px; font-size: 14px; }
+      .lv-nav, .lv-ask { gap: 8px; }
+      .lv-on-page:not(.lv-cleared) .lv-body { padding-bottom: 32px; }
+      .lv-icon svg { width: 16px; height: 16px; }
+      .lv-head { padding: 4px 4px 4px 16px; }
+    }
     .lv button { all: unset; box-sizing: border-box; min-height: 44px; min-width: 44px; padding: 0 16px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
       font: 600 14px/1 ${FONT}; color: var(--ink); background: var(--card); border: 1px solid var(--line); cursor: pointer; }
     .lv button:hover { border-color: var(--edge); }
@@ -565,7 +580,7 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
     .lv-stage { position: relative; width: 100%; aspect-ratio: 4 / 3; border-radius: 8px; overflow: hidden; }
     .lv-float { position: fixed; pointer-events: auto; box-sizing: border-box; padding: 16px; border-radius: 16px; border: 1px solid var(--line); background: color-mix(in srgb, var(--card) 90%, transparent); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); box-shadow: 0 16px 48px rgba(0,0,0,.24); }
     /* (a flat drawing has room to be read: a wider card where the window allows) */
-    @media (min-height: 681px) and (min-width: 960px) { .lv-on-page.lv-flat:not(.lv-cleared) .lv-card { width: min(576px, calc(100vw - 32px)); } }
+    @media (min-height: 681px) and (min-width: 960px) { .lv-on-page.lv-flat:not(.lv-cleared) .lv-card { width: min(720px, calc(100vw - 32px)); } }
     /* a flat drawing in the Cassie app's form (livedraw.js draws it; these are its looks on her card) */
     .lv-stage-flat { aspect-ratio: 400 / 260; overflow: visible; border-radius: 0; color: var(--ink); }
     .ld-svg { display: block; width: 100%; height: 100%; overflow: visible; }
@@ -598,10 +613,11 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
     .lv-icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
     /* a short window (a small laptop): the drawing and her words sit side by side, so both show at once */
     @media (max-height: 680px) and (min-width: 880px) {
-      .lv-on-page:not(.lv-cleared) .lv-card { width: min(776px, calc(100vw - 32px)); }
-      .lv-on-page:not(.lv-cleared) .lv-body { display: grid; grid-template-columns: minmax(0, 1fr) 344px; align-items: start; }
+      .lv-on-page:not(.lv-cleared) .lv-card { width: min(1040px, calc(100vw - 32px)); }
+      .lv-on-page:not(.lv-cleared) .lv-body { display: grid; grid-template-columns: minmax(0, 1fr) 304px; align-items: start; }
       .lv-on-page .lv-svg { max-height: max(168px, calc(100vh - 184px)); }
-      .lv-on-page .lv-words { max-height: 132px; }
+      .lv-on-page .lv-stage-flat { max-height: max(220px, calc(100vh - 168px)); }
+      .lv-on-page .lv-words { max-height: max(132px, calc(100vh - 312px)); }
       /* (a 3D model over the page: her card stays narrow, the model has the room) */
       .lv-on-page.lv-floats:not(.lv-cleared) .lv-card { width: min(432px, calc(100vw - 32px)); }
       .lv-on-page.lv-floats:not(.lv-cleared) .lv-body { display: flex; }
@@ -1358,6 +1374,8 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
     let mic = null;
     if (askForm) {
       mic = window.CassieMic ? window.CassieMic.attach(askIn, { send: () => askForm.requestSubmit() }) : null;
+      // (v303) with a mouse, the mic is as compact as her other buttons (on touch it keeps its 48px)
+      if (mic && mic.button && window.matchMedia && matchMedia('(pointer: fine)').matches) Object.assign(mic.button.style, { height: '32px', minHeight: '32px', minWidth: '32px', padding: '0 8px', alignSelf: 'center' });
       if (mic && mic.button) new MutationObserver(() => { if (mic.button.dataset.on) setStatus('listening'); else if (host.dataset.status === 'listening') setStatus(playing ? (src ? 'speaking' : 'drawing') : cleared ? 'cleared' : done ? 'done' : 'paused'); }).observe(mic.button, { attributes: true, attributeFilter: ['data-on'] });
       askIn.addEventListener('keydown', (e) => { if (e.key !== 'Escape') e.stopPropagation(); }); // (the page's own shortcuts stay out of the box)
       askForm.addEventListener('submit', async (e) => {

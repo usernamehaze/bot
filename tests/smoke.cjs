@@ -9310,9 +9310,9 @@ test('Cassie’s live drawing in the extension (3.67): Ctrl twice opens “Ask C
     expect(c.title === 'How a jet engine pushes' && c.sub === 'Cut-away · Simplified sketch' && /You asked: how does a jet work\?/.test(c.text) && c.words.length === 6, 'the title, the view, “Simplified sketch”, the question and all six sentences: ' + JSON.stringify([c.title, c.sub, c.words.length]));
     expect(!/can(no|’|')t draw|couldn’t draw/i.test(c.text) && /so here is how/.test(c.text) && !/[–—]/.test(c.text), 'she never says she can’t draw it: she says the page lacks it and explains: ' + c.text.slice(0, 200));
     if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/live-done.png' });
-    // every control: 44px, a real button or box (so the keyboard reaches it), named; her words are announced
+    // every control: 32px with a mouse (v303: compact, so her words and the drawing have the room; 44px on touch), a real button or box (so the keyboard reaches it), named; her words are announced
     const controls = await page.evaluate((h) => { const r = document.querySelector(h).shadowRoot; return [...r.querySelectorAll('.lv-card button, .lv-card input')].filter((b) => b.offsetParent).map((b) => { const q = b.getBoundingClientRect(); return { name: (b.getAttribute('aria-label') || b.textContent || '').trim(), tag: b.tagName, w: Math.round(q.width), h: Math.round(q.height), tab: b.tabIndex }; }); }, LIVE);
-    expect(controls.length >= 11 && controls.every((b) => b.w >= 44 && b.h >= 44 && b.name && b.tab >= 0), 'every control is 44px, named and reachable by keyboard: ' + JSON.stringify(controls));
+    expect(controls.length >= 11 && controls.every((b) => b.w >= 32 && b.h >= 32 && b.h <= 36 && b.name && b.tab >= 0), 'every control is 32px (compact with a mouse), named and reachable by keyboard: ' + JSON.stringify(controls.filter((b) => !(b.w >= 32 && b.h >= 32 && b.h <= 36 && b.name && b.tab >= 0))));
     for (const name of ['Voice on', 'Move this card to the other side', 'Resize the card', 'Close', 'Back', 'Play', 'Next', 'Replay', 'Clear', 'Open on the board', 'Ask a follow-up', 'Say it instead of typing', 'Ask']) expect(controls.some((b) => b.name === name), 'the card has ' + name + ': ' + controls.map((b) => b.name).join(', '));
     expect(await page.evaluate((h) => { const r = document.querySelector(h).shadowRoot; return r.querySelector('.lv-words').getAttribute('aria-live') === 'polite' && r.querySelector('.lv-status').getAttribute('aria-live') === 'polite' && r.querySelector('.lv-card').getAttribute('role') === 'dialog' && /How a jet engine pushes/.test(r.querySelector('.lv-svg').getAttribute('aria-label')); }, LIVE), 'her words and what she is doing are announced, and the drawing has a name');
     // contrast, in light and in dark: words 4.5:1, every line she draws 3:1 on its paper
@@ -9359,7 +9359,7 @@ test('Cassie’s live drawing in the extension (3.67): Ctrl twice opens “Ask C
     c = await card();
     expect(c.box.left === 8 && c.box.top === 8, 'and to the top left corner: ' + JSON.stringify(c.box));
     const g = await spotOf('.lv-size'), wide = c.box.width;
-    expect(g.w >= 44 && g.h >= 44 && Math.abs(g.x + g.w - c.box.right) < 2 && Math.abs(g.y + g.h - c.box.bottom) < 2, 'the size grip sits in the bottom right corner: ' + JSON.stringify(g));
+    expect(g.w >= 32 && g.h >= 32 && Math.abs(g.x + g.w - c.box.right) < 2 && Math.abs(g.y + g.h - c.box.bottom) < 2, 'the size grip sits in the bottom right corner: ' + JSON.stringify(g));
     await drag({ x: g.x + g.w - 10, y: g.y + g.h - 10 }, 200, -100);
     c = await card();
     expect(Math.abs(c.box.width - wide - 200) < 3 && c.box.height > 280, 'dragging the corner makes it wider: ' + JSON.stringify([wide, c.box]));
@@ -9761,7 +9761,7 @@ test('Cassie’s live drawing, accurate (3.69): she is told to draw the very thi
     const looks = await sw.evaluate(() => self.__looks.slice()), P = await prompts();
     expect(c.title === 'The heart, corrected' && c.says === 'Cassie checked her drawing and fixed it.', 'the corrected drawing takes its place and says so: ' + c.title + ' / ' + c.says);
     expect(looks.length === 1 && /Its numbered names are: 1 = Heart wall; 2 = Atria/.test(looks[0]) && /meant to show: "how does the heart pump blood\?"/.test(looks[0]), 'she looked once at a picture of her own drawing, name by name');
-    expect(P.length === 2 && /a picture of your drawing was checked/.test(P[1]) && /number 2 \("Atria"\) does not look like a real Atria: the atria are drawn as flat ovals/.test(P[1]) && /kept exactly as it was: \{/.test(P[1]), 'what was wrong went back to her once, with her own drawing to keep');
+    expect(P.length === 2 && /a picture of your drawing was checked/.test(P[1]) && /number 2 \("Atria"\) does not look like a real Atria: the atria are drawn as flat ovals/.test(P[1]) && /kept exactly as it was: \{/.test(P[1]), 'what was wrong went back to her once, with her own drawing to keep: ' + P.length);
     const parts = await page.evaluate((h) => document.querySelector(h).shadowRoot.querySelectorAll('.lv-stage-flat .ld-part').length, LIVE);
     expect(parts === 6, 'the card shows the corrected drawing: ' + parts);
     await X.gone();
@@ -9772,6 +9772,25 @@ test('Cassie’s live drawing, accurate (3.69): she is told to draw the very thi
     await until({ beat: '0' }); await tap('.lv-play'); await page.waitForTimeout(1500);
     c = await card();
     expect(c.title === 'How the human heart works' && c.status !== 'fixed' && (await prompts()).length === 1, 'a drawing that is right stays as it is: ' + c.title + ' ' + c.status);
+    await X.gone();
+    // (v303) her own check finds parts left out (no vena cava, no valves): it still shows at once (no second wait), and
+    // the corrected one swaps in; the parts a textbook figure shows were in the first question
+    const flawed = JSON.parse(fixture('heart').replace(' through the vena cava', '').replace(' Valves between the chambers keep it flowing one way.', '')); flawed.title = 'How the heart pumps blood';
+    await sw.evaluate(() => { self.__looks = []; self.__look = ''; self.__wait = 3000; }); // (each answer takes 3 s here)
+    await replies([flawed, fixture('heart')]);
+    const t0 = Date.now();
+    await ask('how does the heart pump blood?');
+    await until({ beat: '0' }, 20000);
+    c = await card();
+    const shownAfter = Date.now() - t0;
+    expect(c.title === 'How the heart pumps blood' && shownAfter < 5500, 'the first drawing shows after ONE answer (3 s), even with something to fix, not after two: ' + c.title + ' after ' + shownAfter + ' ms');
+    await tap('.lv-play');
+    await page.waitForFunction((h) => document.querySelector(h).dataset.status === 'fixed', LIVE, { timeout: 15000 });
+    c = await card();
+    const P2 = await prompts();
+    await sw.evaluate(() => { self.__wait = 0; });
+    expect(c.title === 'How the human heart works' && P2.length === 2 && /your drawing was checked/.test(P2[1]) && /leaves them out: vena cava, valve/.test(P2[1]), 'what her check found went back once, and the corrected drawing took its place: ' + c.title);
+    expect(/If you draw it: a textbook figure of the heart shows right atrium, left atrium, right ventricle, left ventricle, aorta, pulmonary, vena cava, valve, septum\./.test(P2[0]), 'the parts a textbook figure shows are in the first question: ' + (P2[0].match(/If you draw it:[^\n]*/) || [''])[0]);
     await X.gone();
     // the student moved on (Clear) before the corrected one came: it is left alone
     await sw.evaluate(() => { self.__looks = []; self.__wait = 900; self.__look = JSON.stringify({ shapes: [{ n: 1, ok: false, why: 'x' }] }); });
@@ -9847,8 +9866,8 @@ test('Cassie’s live drawing in the side panel: Ask Cassie draws on the page wh
     await P_.until({ status: 'done' }, 20000);
     c = await P_.card();
     expect(c.parts.length === 5 && c.parts.every((p) => p.on) && c.title === 'A leaf makes food' && c.sub === 'Diagram · Simplified sketch' && c.words.length === 3, 'the whole drawing plays in the panel: ' + JSON.stringify([c.parts.length, c.title, c.words]));
-    const inPanel = await panel.evaluate((h) => { const r = document.querySelector(h).shadowRoot, b = r.querySelector('.lv-card').getBoundingClientRect(); return { side: !!r.querySelector('.lv-side'), fits: b.left >= 0 && b.right <= innerWidth + 1 && b.width <= 560, sideways: document.documentElement.scrollWidth > innerWidth + 1, small: [...r.querySelectorAll('.lv-card button, .lv-card input')].filter((x) => x.offsetParent).map((x) => { const q = x.getBoundingClientRect(); return [Math.round(q.width), Math.round(q.height)]; }).filter(([w, h]) => w < 44 || h < 44) }; }, LIVE);
-    expect(!inPanel.side && inPanel.fits && !inPanel.sideways && !inPanel.small.length, 'in the panel her card fits, with 44px controls and no side button: ' + JSON.stringify(inPanel));
+    const inPanel = await panel.evaluate((h) => { const r = document.querySelector(h).shadowRoot, b = r.querySelector('.lv-card').getBoundingClientRect(); return { side: !!r.querySelector('.lv-side'), fits: b.left >= 0 && b.right <= innerWidth + 1 && b.width <= 560, sideways: document.documentElement.scrollWidth > innerWidth + 1, small: [...r.querySelectorAll('.lv-card button, .lv-card input')].filter((x) => x.offsetParent).map((x) => { const q = x.getBoundingClientRect(); return [Math.round(q.width), Math.round(q.height)]; }).filter(([w, h]) => w < 32 || h < 32) }; }, LIVE);
+    expect(!inPanel.side && inPanel.fits && !inPanel.sideways && !inPanel.small.length, 'in the panel her card fits, with 32px controls (compact with a mouse) and no side button: ' + JSON.stringify(inPanel));
     if (process.env.SHOTS) await panel.screenshot({ path: process.env.SHOTS + '/live-panel.png' });
     // Clear and Escape work here too; Open on the board opens the panel's board with her drawing
     await P_.tap('.lv-clear');
@@ -9974,7 +9993,7 @@ test('Cassie’s live drawing in 3D: asked for 3D, or to be shown how parts go t
     expect(!/can(no|’|')t draw/i.test(c.text) && /so here is one/.test(c.text) && !/[–—]/.test(c.text + m.tags.join(' ')), 'she says the page lacks it and builds it: ' + c.text.slice(0, 160));
     if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/live-3d-done.png' });
     const controls = await page.evaluate((h) => { const r = document.querySelector(h).shadowRoot; return [...r.querySelectorAll('.lv-card button, .lv-card input, .lv-clear3')].filter((b) => b.offsetParent && !b.classList.contains('ld-tag')).map((b) => { const q = b.getBoundingClientRect(); return [(b.getAttribute('aria-label') || b.textContent).trim(), Math.round(q.width), Math.round(q.height)]; }); }, LIVE);
-    expect(controls.every(([, w, h]) => w >= 44 && h >= 44) && ['Close the case', 'Pull apart', 'Clear', 'Open on the board'].every((n) => controls.some(([name]) => name === n)), 'her 3D buttons are there and 44px: ' + JSON.stringify(controls));
+    expect(controls.every(([, w, h]) => w >= 32 && h >= 32) && ['Close the case', 'Pull apart', 'Clear', 'Open on the board'].every((n) => controls.some(([name]) => name === n)), 'her 3D buttons are there and 32px (compact with a mouse): ' + JSON.stringify(controls));
     // the case closes and opens; the model pulls apart; a part tapped (or chosen with the keyboard) shows its sentence
     expect(m.open.text === 'Close the case' && m.open.pressed === 'true' && m.apart.text === 'Pull apart', 'the case starts open: ' + JSON.stringify([m.open, m.apart]));
     await tap('.lv-open'); await page.waitForTimeout(300);
