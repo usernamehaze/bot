@@ -1,7 +1,8 @@
 # Cassie security notes
 
 What protects Cassie, what the owner has to do, and what to re-check after big changes.
-Last full audit: October 2026.
+Last full audit: November 2026 (the 20-point launch checklist: keys, git history, access, hashing,
+rate limits, bot protection, queries, input, escaping, uploads, responses, headers, HTTPS, dependencies).
 
 ## Where the secrets live
 
@@ -28,6 +29,9 @@ Last full audit: October 2026.
 | `Permissions-Policy` | Anything but the microphone being asked for |
 | `Strict-Transport-Security` | Plain-http connections |
 
+Every push also checks the code for API keys and private keys and runs `npm audit`; Dependabot
+checks the test tools and GitHub Actions weekly.
+
 The tests serve the site with the same headers and **fail if the security policy blocks
 anything**, so a new feature that needs a new service is caught before it ships.
 
@@ -46,6 +50,13 @@ Mammoth 1.13.0, JSZip 3.10.2. Licences are in `vendor/licenses/`.
   Password tries are limited per account (15/hour) and per network (100/hour). Signing in with
   Google to an email that already had a password account removes that password and signs out
   its old sessions (stops someone pre-registering another person's email).
+- **Bot protection on sign-up:** the form has a hidden field people never see; a script that fills
+  it in is refused. At most 30 new accounts an hour come from one network (`SIGNUPS_PER_HOUR`),
+  and throwaway email addresses can't make accounts.
+- **Saved study data is encrypted** (AES-256-GCM, tied to its own account) once the `DATA_KEY`
+  secret is set. Older saves still open and are encrypted on their next save. **Never change or
+  delete `DATA_KEY`**: saved data can't be opened without it (the app then shows an error instead
+  of an empty account, so nothing is written over).
 - **Each user only reaches their own data:** `/auth/me` and `/auth/save` work only with that
   account's own sign-in token. Study rooms are joined by code; a classmate can only erase their
   own strokes.
@@ -53,6 +64,12 @@ Mammoth 1.13.0, JSZip 3.10.2. Licences are in `vendor/licenses/`.
   person *and* per network (so made-up ids don't get around them), plus per-minute limits on
   every route that writes to the database.
 - **Database:** every query uses bound parameters (no SQL built from user text).
+- **Request size:** JSON bodies over 16 KB are refused before they're read (an account save may
+  be up to 300 KB). Recordings are capped at 8 MB and scores at 2 KB.
+- **Payments:** PayMongo's messages are checked with the webhook secret (HMAC-SHA256), a plan is
+  given once per payment, and never for a different amount than its price. (An old message sent
+  again does nothing, so there's no age limit: PayMongo may resend an old one, and refusing it
+  could lose a real payment.)
 - **Errors:** visitors get a plain message; details go to the dashboard's problem list.
 - **CORS** only lets Cassie's own sites and the extension call the server from a browser.
   This is not a lock (scripts outside a browser can ignore it); the rate limits are what
@@ -62,6 +79,8 @@ Mammoth 1.13.0, JSZip 3.10.2. Licences are in `vendor/licenses/`.
 
 1. **Paste the new `server/worker.js` into the Worker** after any server change.
 2. **Set a strong `ADMIN_TOKEN`** (20+ random characters, e.g. from a password manager).
+   Also add a **`DATA_KEY`** secret (32+ random characters) to encrypt saved study data. Keep a
+   copy in your password manager, and never change it.
 3. **Set spending limits** in the Groq, Google AI Studio and Anthropic consoles, so even a
    determined abuser can't run up a bill.
 4. Optional: in Cloudflare → Security, turn on Bot Fight Mode and a rate-limiting rule for the

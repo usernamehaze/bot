@@ -34,6 +34,8 @@
     signin_mismatch: 'That sign-in didn’t come from this page, so Cassie didn’t use it to keep your account safe. Tap Try again.',
     link_wrong_password: 'That password doesn’t match this email’s Cassie account. Check it for typos, or tap “I don’t know this password”.',
     too_many_tries: 'There were too many tries, so signing in is paused to keep accounts safe. Wait an hour, then try again.',
+    too_many_signups: 'Lots of accounts were just made from this network, so new ones are paused for an hour. Try again later, or continue as a guest for now.',
+    signup_blocked: 'Cassie couldn’t make that account. Close this page, open it again, then sign up.',
     signed_out: 'You’ve been signed out, so Cassie can’t save to your account. Sign in again to carry on.',
     password_long: 'That password is too long. Use one with fewer than 200 letters and numbers.',
     bad_request: 'Cassie didn’t understand that request. Close this and try again.',
