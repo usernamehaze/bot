@@ -2345,10 +2345,14 @@ test('v298 prices by place: one price table in the server, the website and the a
   const sPhp = num(srv.match(/const PAY_PHP = (\{[^\n]+\});/)[1]), sUsd = num(srv.match(/const PAY_USD = (\{[^\n]+\});/)[1]);
   const lP = land.match(/php: \{ sym: '₱', free: 0, (plus: \{[^}]+\}, pro: \{[^}]+\}) \}/)[1], lU = land.match(/usd: \{ sym: 'US\$', free: 0, (plus: \{[^}]+\}, pro: \{[^}]+\}) \}/)[1];
   const lPhp = num(`{${lP}}`), lUsd = num(`{${lU}}`);
-  const aPhp = num(appjs.match(/const FR_PAY_PHP = (\{[^\n;]+\});/)[1]), aUsd = num(appjs.match(/const FR_PAY_USD = (\{[^\n;]+\});/)[1]);
+  const aPhp = num(appjs.match(/const FR_PAY_PHP = (\{[^\n;]+\});/)[1]), aUsd = num(appjs.match(/const FR_PAY_USD_STD = (\{[^\n;]+\});/)[1]);
+  // (v300) the fair prices in lower-income countries: one table too
+  const sLow = num(srv.match(/const PAY_USD_LOW = (\{[^\n]+\});/)[1]), aLow = num(appjs.match(/const FR_PAY_USD_LOW = (\{[^\n;]+\});/)[1]);
+  const lL = land.match(/usdLow: \{ sym: 'US\$', free: 0, (plus: \{[^}]+\}, pro: \{[^}]+\}) \}/)[1], lLow = num(`{${lL}}`);
   const same = (a, b2, keys) => ['plus', 'pro'].every((p) => keys.every((k) => a[p][k] === b2[p][k]));
   expect(same(sPhp, lPhp, ['month', 'sem', 'year']) && same(sUsd, lUsd, ['month', 'sem', 'year']) && same(sPhp, aPhp, ['month', 'sem']) && same(sUsd, aUsd, ['month', 'sem']), 'one price table: ' + JSON.stringify({ sPhp, lPhp, aPhp, sUsd, lUsd, aUsd }));
   expect(sUsd.pro.month > sUsd.plus.month * 1.5 && sPhp.pro.month > sPhp.plus.month * 1.5, 'Pro is a real step up from Plus in both currencies');
+  expect(same(sLow, lLow, ['month', 'sem', 'year']) && same(sLow, aLow, ['month', 'sem']) && sLow.plus.month < 4 && sLow.pro.month < 7, 'the fair prices in lower-income countries are one table, and low: ' + JSON.stringify({ sLow, lLow, aLow }));
   for (const [where, tz, locale, want] of [['the Philippines', 'Asia/Manila', 'en-PH', /^₱/], ['the US', 'America/New_York', 'en-US', /^US\$/]]) {
     const ctx = await b.newContext({ ...devices['iPhone 13'], timezoneId: tz, locale, serviceWorkers: 'block' });
     await ctx.addInitScript(([srv, seed]) => { window.CASSIE_SERVER = srv; if (!sessionStorage.getItem('seeded')) { localStorage.setItem('cassie.v2', seed); sessionStorage.setItem('seeded', '1'); } },
@@ -2368,6 +2372,25 @@ test('v298 prices by place: one price table in the server, the website and the a
     expect(pay.length === 2 && pay.every((t) => want.test(t)), `${where}, the plans screen: ` + pay.join(' '));
     await ctx.close();
   }
+  // (v300) the server's country comes first (a phone set to New York, really in India or the Philippines)
+  for (const [c, want, name] of [['IN', /^US\$2\.99/, 'India: US$2.99'], ['PH', /^₱149/, 'the Philippines: ₱149'], ['US', /^US\$7\.99/, 'the US: US$7.99']]) {
+    await fetch(SERVER + '/__country?c=' + c);
+    const ctx = await b.newContext({ ...devices['iPhone 13'], timezoneId: 'America/New_York', locale: 'en-US', serviceWorkers: 'block' });
+    await ctx.addInitScript(([srv, seed]) => { window.CASSIE_SERVER = srv; if (!sessionStorage.getItem('seeded')) { localStorage.setItem('cassie.v2', seed); sessionStorage.setItem('seeded', '1'); } },
+      [SERVER, JSON.stringify({ profile: PROFILE, seenVersion: APP_VERSION, analytics: { usage: true, topics: false }, lite: 'on', tab: 'chat' })]);
+    await ctx.route(/workers\.dev|fonts\.g/, (r) => r.abort());
+    const page = await ctx.newPage();
+    await page.goto(`http://localhost:${APP_PORT}/index.html`);
+    await page.waitForFunction((w) => new RegExp(w).test(document.querySelector('[data-price="plus"]').textContent), want.source.replace('^', '^') , { timeout: 5000 }).catch(() => {});
+    const web = await page.evaluate(() => document.querySelector('[data-price="plus"]').textContent.trim());
+    expect(want.test(web), `the website, a visitor in ${name}: ` + web);
+    await page.goto(APP); await page.evaluate(async () => { await configReady; });
+    await page.evaluate(() => openSettings('plans')); await page.waitForTimeout(200);
+    const app = await page.evaluate(() => document.querySelector('.set-plans [data-ppn="plus:month"]').textContent.trim());
+    expect(want.test(app), `the app, a student in ${name}: ` + app);
+    await ctx.close();
+  }
+  await fetch(SERVER + '/__country?c=');
 });
 
 test('v257: the studio voice no longer shows "guest" to a signed-in account: the podcast sheet rechecks the account on open, so a stale guest state from before sign-in self-heals', async (b) => {

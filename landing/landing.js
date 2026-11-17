@@ -107,6 +107,8 @@
     // sem = a Semester pass: one payment for 5 months (about 20% off)
     php: { sym: '₱', free: 0, plus: { month: 149, sem: 599, year: 1490 }, pro: { month: 349, sem: 1399, year: 3490 } },
     usd: { sym: 'US$', free: 0, plus: { month: 7.99, sem: 31.99, year: 79.9 }, pro: { month: 12.99, sem: 51.99, year: 129.9 } },
+    // (v300) fair prices in lower-income countries (the server's own table; it decides by where the visitor really is)
+    usdLow: { sym: 'US$', free: 0, plus: { month: 2.99, sem: 11.99, year: 29.9 }, pro: { month: 5.99, sem: 23.99, year: 59.9 } },
   };
   const tz = (Intl.DateTimeFormat().resolvedOptions().timeZone || '');
   const lang = (navigator.language || '').toLowerCase();
@@ -126,8 +128,10 @@
     month: 'One payment for 30 days. Never renews: buy again when you need it. 7 days to change your mind.',
     year: 'One payment for 12 months. Never renews. 7 days to change your mind.',
   };
+  let tier = 'std'; // (v300) 'low' when Cassie's server says the visitor is in a lower-income country
+  const table = (c) => (c === 'usd' && tier === 'low' ? PRICES.usdLow : PRICES[c]);
   function renderPrices() {
-    const p = PRICES[cur];
+    const p = table(cur);
     $('[data-price="free"]').textContent = fmt(cur, 0);
     ['plus', 'pro'].forEach((k) => {
       const v = p[k][bill];
@@ -152,11 +156,12 @@
       if (pp) note.textContent = `Charged as ₱${pp.php.toLocaleString('en-PH')} (PHP). Your bank converts it.`;
     });
     // (v298) the prices in the words above and in the FAQ follow the currency too
-    $$('[data-pmini]').forEach((x) => { const [k, b] = x.dataset.pmini.split(':'); x.textContent = fmt(cur, PRICES[cur][k][b]); });
+    $$('[data-pmini]').forEach((x) => { const [k, b] = x.dataset.pmini.split(':'); x.textContent = fmt(cur, table(cur)[k][b]); });
     $$('[data-cur]').forEach((b) => b.classList.toggle('on', b.dataset.cur === cur));
     $$('[data-bill]').forEach((b) => b.classList.toggle('on', b.dataset.bill === bill));
   }
   if (SERVER) fetch(SERVER + '/config').then((r) => (r.ok ? r.json() : null)).then((c) => {
+    if (c && /^[A-Z]{2}$/.test(c.country || '')) { cur = c.country === 'PH' ? 'php' : 'usd'; tier = c.tier === 'low' ? 'low' : 'std'; renderPrices(); } // (v300: where the visitor really is)
     if (!c || !c.pay) return;
     payOn = true; payPrices = c.prices || null;
     const fine = $('#pricing .fine'); if (fine) fine.textContent = 'Every plan is one payment for the time you pick, and nothing renews by itself. Pay with GCash, Maya or a card on PayMongo’s secure page; US$ prices are charged in pesos. Daily limits start again at midnight, Philippine time, and weekly ones on Monday.';
