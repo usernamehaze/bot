@@ -214,7 +214,10 @@ export async function startFakeServer(port = 4630) {
     if (req.url === '/auth/google' && req.method === 'POST' && mode.googleAuth === 'hang') return; // never answers
     if (req.url === '/__reset') { sq.exec('DELETE FROM quota'); res.writeHead(204); return res.end(); }
     if (req.url === '/__reset-scores') { try { sq.exec('DELETE FROM scores'); } catch (e) { /* no table yet */ } res.writeHead(204); return res.end(); }
-    const r = await worker.fetch(new Request(`http://localhost:${port}${req.url}`, { method: req.method, headers: req.headers, body: ['GET', 'HEAD'].includes(req.method) ? undefined : body }), env, ctx);
+    if (req.url.startsWith('/__country')) { mode.country = new URL(req.url, 'http://x').searchParams.get('c') || ''; res.writeHead(204); return res.end(); } // (v300: where the test visitor is)
+    const rq = new Request(`http://localhost:${port}${req.url}`, { method: req.method, headers: req.headers, body: ['GET', 'HEAD'].includes(req.method) ? undefined : body });
+    if (mode.country) Object.defineProperty(rq, 'cf', { value: { country: mode.country } }); // (as Cloudflare does: request.cf.country)
+    const r = await worker.fetch(rq, env, ctx);
     res.writeHead(r.status, Object.fromEntries(r.headers));
     if (/event-stream/.test(r.headers.get('content-type') || '') && r.body) { // pass a stream on as it comes, like Cloudflare does
       const rd = r.body.getReader();

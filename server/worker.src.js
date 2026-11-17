@@ -690,10 +690,16 @@ const PAY_LONG = { month: '30 days', sem: 'the semester (5 months)', year: '12 m
 const payLive = (env) => /^sk_live_/.test(String(env.PAYMONGO_SECRET_KEY || ''));
 const payOn = (env) => payLive(env);
 const payTester = (env, email) => !!email && String(env.PAY_TESTERS || '').toLowerCase().split(',').map((x) => x.trim()).filter(Boolean).includes(String(email).toLowerCase());
-function payPrice(env, plan, bill, cur) {
+// (v300) fair prices by country: students in lower-income countries pay what Filipino students pay, near
+// enough (US$2.99 Plus, US$5.99 Pro a month); the country is Cloudflare's own (request.cf), so it can't be faked
+const PAY_USD_LOW = { plus: { month: 2.99, sem: 11.99, year: 29.9 }, pro: { month: 5.99, sem: 23.99, year: 59.9 } };
+const LOW_PRICE = new Set(['IN', 'ID', 'VN', 'PK', 'BD', 'NG', 'KE', 'EG', 'LK', 'NP', 'KH', 'LA', 'MM', 'GH', 'TZ', 'UG', 'ET']);
+const countryOf = (request) => String((request && request.cf && request.cf.country) || '').toUpperCase().slice(0, 2);
+const tierOf = (request) => (LOW_PRICE.has(countryOf(request)) ? 'low' : 'std');
+function payPrice(env, plan, bill, cur, tier = 'std') {
   if (!PAY_PHP[plan] || !PAY_DAYS[bill]) return null;
   if (cur === 'usd') {
-    const rate = +env.USD_PHP_RATE > 20 && +env.USD_PHP_RATE < 200 ? +env.USD_PHP_RATE : 61.5, usd = PAY_USD[plan][bill];
+    const rate = +env.USD_PHP_RATE > 20 && +env.USD_PHP_RATE < 200 ? +env.USD_PHP_RATE : 61.5, usd = (tier === 'low' ? PAY_USD_LOW : PAY_USD)[plan][bill];
     return { php: Math.ceil((usd * rate) / 10) * 10 - 1, shown: `US$${usd.toFixed(2)}` };
   }
   return { php: PAY_PHP[plan][bill], shown: `₱${PAY_PHP[plan][bill].toLocaleString('en-PH')}` };
@@ -721,7 +727,7 @@ async function pay(request, env, url, ctx) {
   if (!(await authAllowed(request, env, 'pay:' + acc.id, 20))) return json({ error: 'Too many tries. Wait a while, then try again.' }, 429, h);
   const b = await request.json().catch(() => ({}));
   const plan = ['plus', 'pro'].includes(b.plan) ? b.plan : '', bill = PAY_DAYS[b.bill] ? b.bill : '', cur = b.cur === 'usd' ? 'usd' : 'php';
-  const price = payPrice(env, plan, bill, cur);
+  const price = payPrice(env, plan, bill, cur, tierOf(request)); // (the price for the country the student is really in)
   if (!price) return json({ error: 'Pick a plan first.' }, 400, h);
   const id = 'cas_' + [...crypto.getRandomValues(new Uint8Array(12))].map((x) => x.toString(16).padStart(2, '0')).join('');
   const back = (() => { try { return new URL(request.headers.get('origin')).origin; } catch (e) { return 'https://askcassie.study'; } })();
@@ -833,8 +839,10 @@ async function config(request, env) {
   const h = allowedOrigin(request, env);
   if (!h) return new Response('forbidden', { status: 403 });
   // with payments on: every pass's price, in pesos and in US$ (with the pesos it is charged as), from the server's own table
-  const prices = env.PAYMONGO_SECRET_KEY ? Object.fromEntries(['php', 'usd'].map((c) => [c, Object.fromEntries(['plus', 'pro'].map((pl) => [pl, Object.fromEntries(Object.keys(PAY_DAYS).map((bi) => [bi, payPrice(env, pl, bi, c)]))]))])) : null;
-  return json({ claude: !!env.ANTHROPIC_KEY, pictures: geminiPicturesOn(env), pay: payOn(env), test: !!env.PAYMONGO_SECRET_KEY && !payLive(env), prices, trial: !!env.DB }, 200, { ...h, 'cache-control': 'max-age=300' }); // (trial: this server has /trial/start, v297)
+  const tier = tierOf(request), country = countryOf(request) || null;
+  const prices = env.PAYMONGO_SECRET_KEY ? Object.fromEntries(['php', 'usd'].map((c) => [c, Object.fromEntries(['plus', 'pro'].map((pl) => [pl, Object.fromEntries(Object.keys(PAY_DAYS).map((bi) => [bi, payPrice(env, pl, bi, c, tier)]))]))])) : null;
+  // (v300) country and tier: where the student is, so the app and the website show their own price (private per visitor: no shared cache)
+  return json({ claude: !!env.ANTHROPIC_KEY, pictures: geminiPicturesOn(env), pay: payOn(env), test: !!env.PAYMONGO_SECRET_KEY && !payLive(env), prices, trial: !!env.DB, country, tier }, 200, { ...h, 'cache-control': 'private, max-age=300' }); // (trial: this server has /trial/start, v297)
 }
 
 /* ---------------------------------------------------------------- talking with Cassie
