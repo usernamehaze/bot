@@ -558,7 +558,7 @@ html.add-open #mascot { visibility: hidden; } /* (Cassie steps aside while the s
 /* (v248) a phone's side menu: Memory under New chat, with its name */
 /* (v249) a phone's side menu: Memory is one of Menu's rows, with its name */
 #memory-btn.side-mem { width: 100% !important; height: auto !important; min-width: 0 !important; min-height: var(--tap, 48px) !important; padding: var(--sp-2, 8px) var(--sp-3, 12px) !important; justify-content: flex-start !important; border: 0 !important; border-radius: 10px !important; background: transparent !important; box-shadow: none !important; }
-#memory-btn.side-mem svg { display: block !important; width: 20px; height: 20px; flex: none; }
+#memory-btn.side-mem svg { display: block !important; width: 18px; height: 18px; flex: none; } /* (v304: the same size as the other rows' icons, so its word lines up) */
 .side-mem .app-label { display: inline !important; }
 .side-mem .memory-dot { position: static; }
 .model-pill #model-pill-model { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -4527,3 +4527,26 @@ label.notif-top { cursor: pointer; min-height: 44px; }
 .set-trial-h { margin: 0 0 var(--sp-1, 4px); font-weight: 750; font-size: 1.02rem; }
 .set-trial-p { margin: 0 0 var(--sp-3, 12px); color: var(--muted); line-height: var(--lh-body, 1.5); }
 .set-trial .set-trial-go { width: 100%; min-height: 48px; }
+
+/* (v304) 1. Flashcards in the side menu is one study tool: its row shows the cards due */
+.side-tool .side-due { margin-left: auto; flex: none; font-style: normal; font-size: .76rem; font-weight: 700; padding: 2px var(--sp-2, 8px); border-radius: 99px; background: var(--primary); color: var(--on-primary); }
+.side-tool .side-due[hidden] { display: none; }
+/* 2. empty states sit in the middle: the picture, the words and the button */
+.empty-state { align-items: center; text-align: center; }
+.empty-state .es-text { margin-left: auto; margin-right: auto; }
+/* 3. scrolled to the bottom, Apply keeps its space above the Lite mode box */
+.appx-bar { margin-bottom: var(--sp-4, 16px); }
+/* 4. Memory in the side menu reads like the rows around it: the dot for something new goes after the word */
+#side-general .memory-dot, .side-mem .memory-dot { order: 2; margin-left: auto; flex: none; }
+#side-general #memory-btn .app-label, .side-mem .app-label { order: 1; }
+/* 5. computers: the sidebar's arrow is small but clear, and the search sits at the top in the middle */
+@media (min-width: 761px) and (pointer: fine) {
+  /* (a small 28px circle you see, in a 44px area you can click: it stays easy to hit) */
+  .side-toggle { width: 44px; height: 44px; min-width: 44px; min-height: 44px; left: calc(var(--side-w) - 22px); top: calc(16px + var(--safe-top)); border: 0; background: transparent; box-shadow: none; }
+  .side-toggle::before { content: ""; position: absolute; inset: 8px; border-radius: 50%; border: 1px solid var(--muted); background: var(--surface); box-shadow: 0 2px 8px rgba(var(--shade-rgb), .12); }
+  .side-toggle:hover::before { border-color: var(--text); }
+  .side-toggle svg { position: relative; width: 14px; height: 14px; }
+}
+@media (min-width: 1101px) {
+  .topbar .top-search { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(480px, 36vw); flex: none; z-index: 2; }
+}

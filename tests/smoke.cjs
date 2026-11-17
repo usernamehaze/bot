@@ -1084,10 +1084,12 @@ test('v274 (390x844 and 1280x800): the follow-up pills show after an explanation
         await page.waitForFunction(() => document.getElementById('sidebar').classList.contains('open'), null, { timeout: 3000 });
       } else await page.evaluate(() => setSideOpen(true));
       await page.waitForTimeout(400);
-      const row = await page.evaluate(() => { const c = document.getElementById('side-cards'), p = document.getElementById('pomo'), r = c.getBoundingClientRect(); return { shown: r.width > 0 && r.height >= 40, under: !!(p.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING) && r.top >= p.getBoundingClientRect().bottom - 1, text: c.querySelector('span').textContent, due: c.querySelector('em').textContent, dueShown: !c.querySelector('em').hidden, h: Math.round(r.height) }; });
-      expect(row.shown && row.under && row.text === 'Flashcards' && (!phone || row.h >= 48), `${size}: Flashcards is in the menu, under the timer: ` + JSON.stringify(row));
-      if (phone) expect(row.dueShown && row.due === '1 due', `${size}: it shows the cards due: ` + JSON.stringify(row));
-      await page.click('#side-cards');
+      // (v304) Flashcards is one of the study tools (it was there twice: a second, dark button under the timer is gone), with the cards due
+      await page.evaluate(() => setToolsOpen(true)); await page.waitForTimeout(200);
+      const row = await page.evaluate(() => { const all = [...document.querySelectorAll('#sidebar button, #sidebar a')].filter((x) => x.offsetParent && /^Flashcards/.test(x.textContent.trim())), c = all[0], r = c.getBoundingClientRect(), em = c.querySelector('em'); return { count: all.length, gone: !document.querySelector('.side-cards'), tool: c.classList.contains('side-tool') && !!c.closest('#side-tools'), shown: r.width > 0 && r.height >= 40, text: c.querySelector('span').textContent, due: em ? em.textContent : '', dueShown: !!em && !em.hidden, label: c.getAttribute('aria-label') || '', h: Math.round(r.height) }; });
+      expect(row.count === 1 && row.gone && row.tool && row.shown && row.text === 'Flashcards' && (!phone || row.h >= 44), `${size}: Flashcards is in the menu once, as a study tool: ` + JSON.stringify(row));
+      if (phone) expect(row.dueShown && row.due === '1 due' && /1 card due/.test(row.label), `${size}: it shows the cards due: ` + JSON.stringify(row));
+      await page.click('#side-tools .side-tool:has-text("Flashcards")');
       await page.waitForSelector('.fc:not([hidden])', { timeout: 5000 });
       expect(await page.locator('#highlight-help-toggle, #side-hl-toggle, .side-hl').count() === 0, `${size}: no Highlight help switch`);
       expect(!errors.length, `${size}: menu page errors: ` + errors.join(' | '));
@@ -7538,6 +7540,44 @@ test('v294 tap targets: every button, link, switch and field on a computer’s H
 });
 
 // (v295) Cassie's grammar and vocabulary fit the student: by age or grade, then by how they write in the chat
+test('v304: Flashcards once in the side menu (a study tool, no second dark button), empty states in the middle, Apply keeps 16px above Lite mode at the bottom, the Memory row like the others (its dot after the word), and on a computer a small sidebar arrow and the search in the top middle', async (b) => {
+  for (const [size, opts] of [['1440x900', { device: 'Desktop Chrome', viewport: { width: 1440, height: 900 } }], ['390x844', { device: 'iPhone 13' }]]) {
+    const phone = size === '390x844';
+    const { ctx, page, errors } = await open(b, { ...opts, server: false, state: { groqKey: 'gsk_test' } });
+    // 1 and 4: the side menu
+    if (phone) { await page.evaluate(() => openSidebar()); } else await page.evaluate(() => setSideOpen(true));
+    await page.evaluate(() => { setToolsOpen(true); document.getElementById('memory-dot').hidden = false; }); await page.waitForTimeout(400);
+    const side = await page.evaluate(() => {
+      const vis = (e) => e.offsetParent !== null;
+      const flash = [...document.querySelectorAll('#sidebar button, #sidebar a')].filter((e) => vis(e) && /^Flashcards/.test(e.textContent.trim())).length;
+      const m = document.getElementById('memory-btn'), lbl = m.querySelector('.app-label'), dot = document.getElementById('memory-dot');
+      const other = [...document.querySelectorAll('#sidebar .side-tool')].find((e) => vis(e) && e !== m && /^(Help|Settings|Flashcards)$/.test(e.textContent.trim()));
+      const span = other.querySelector('span:not(.memory-dot)') || other;
+      return { flash, memText: Math.round(lbl.getBoundingClientRect().left), otherText: Math.round(span.getBoundingClientRect().left), dotAfter: dot.getBoundingClientRect().left > lbl.getBoundingClientRect().right };
+    });
+    expect(side.flash === 1, `${size}: Flashcards is in the side menu once: ` + JSON.stringify(side));
+    expect(Math.abs(side.memText - side.otherText) <= 1 && side.dotAfter, `${size}: Memory lines up with the rows around it, its dot after the word: ` + JSON.stringify(side));
+    if (phone) await page.evaluate(() => closeSidebar());
+    // 5: the arrow and the search (a computer)
+    if (!phone) {
+      const top = await page.evaluate(() => { const t = document.getElementById('side-toggle').getBoundingClientRect(), q = document.querySelector('.top-search').getBoundingClientRect(), bar = document.querySelector('.topbar').getBoundingClientRect(); const be = getComputedStyle(document.getElementById('side-toggle'), '::before'); return { arrow: [parseFloat(be.width), parseFloat(be.height)], hit: [Math.round(t.width), Math.round(t.height)], arrowRight: Math.round(t.right), searchMid: Math.round(q.left + q.width / 2), barMid: Math.round(bar.left + bar.width / 2), searchLeft: Math.round(q.left), visible: getComputedStyle(document.getElementById('side-toggle')).visibility !== 'hidden' }; });
+      expect(top.arrow[0] <= 32 && top.arrow[0] >= 24 && top.arrow[1] <= 32 && top.visible && top.hit[0] >= 44 && top.hit[1] >= 44, `${size}: the sidebar arrow looks small (28px) but there, and is still 44px to click: ` + JSON.stringify(top));
+      expect(Math.abs(top.searchMid - top.barMid) <= 2 && top.searchLeft > top.arrowRight + 16, `${size}: the search is in the top middle, clear of the arrow: ` + JSON.stringify(top));
+    }
+    // 2: an empty state, in the middle
+    await page.evaluate(() => window.CassieCards.open()); await page.waitForSelector('.fc .empty-state');
+    const es = await page.evaluate(() => { const e = document.querySelector('.fc .empty-state'), q = e.getBoundingClientRect(), mid = (s) => { const x = e.querySelector(s).getBoundingClientRect(); return Math.round(x.left + x.width / 2); }; return { box: Math.round(q.left + q.width / 2), title: mid('.es-title'), text: mid('.es-text'), go: mid('.es-go'), align: getComputedStyle(e).textAlign }; });
+    expect(es.align === 'center' && [es.title, es.text, es.go].every((x) => Math.abs(x - es.box) <= 2), `${size}: the empty state sits in the middle: ` + JSON.stringify(es));
+    await page.evaluate(() => window.CassieCards.close());
+    // 3: Apply, scrolled to the very bottom, keeps its space above Lite mode
+    await page.evaluate(() => openSettings('appearance')); await page.waitForTimeout(500);
+    await page.evaluate(() => { const x = [...document.querySelectorAll('.appx-style')].find((y) => y.offsetParent && y.getAttribute('aria-pressed') !== 'true'); x.click(); }); await page.waitForTimeout(300);
+    const gap = await page.evaluate(() => { let e = document.getElementById('appx-bar'); while (e && !(e.scrollHeight > e.clientHeight + 20 && /auto|scroll/.test(getComputedStyle(e).overflowY))) e = e.parentElement; e.scrollTop = e.scrollHeight; const bar = document.getElementById('appx-bar').getBoundingClientRect(), lite = document.querySelector('.set-group[data-k^="lite"]').getBoundingClientRect(); return Math.round(lite.top - bar.bottom); });
+    expect(gap >= 16, `${size}: at the bottom, Apply keeps 16px above the Lite mode box: ` + gap);
+    expect(!errors.length, `${size}: page errors: ` + errors.join(' | '));
+    await ctx.close();
+  }
+});
 test('v295 language fit: Cassie’s grammar and vocabulary follow the student’s age or grade and how they write, her own grammar always correct, theirs never corrected unless asked', async (b) => {
   const { ctx, page, errors } = await open(b, { server: false, state: { groqKey: 'gsk_test' } });
   const fit = await page.evaluate(() => {
