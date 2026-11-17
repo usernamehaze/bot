@@ -2294,7 +2294,14 @@ test('v297 free Plus trial: the plans screen leads with Start my free trial (one
   const email = `trial${Date.now()}@example.com`;
   const res = await page.evaluate(async ([srv, email]) => { const r = await fetch(srv + '/auth/signup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email, password: 'secret-pass-1', age: 15, name: 'Tia' }) }); return r.json(); }, [SERVER, email]);
   expect(res.token, 'signed up: ' + JSON.stringify(res).slice(0, 200));
-  await page.evaluate((r) => { signedIn(r.token, r.account, r.plan); window.__landed = false; frPaywall(() => { window.__landed = true; }); }, res);
+  // (v297) an older server (its /config has no trial): no trial offered anywhere, the usual plans screen
+  await page.evaluate((r) => { signedIn(r.token, r.account, r.plan); }, res);
+  await page.evaluate(async () => { await configReady; });
+  const old = await page.evaluate(() => { const was = serverTrial; serverTrial = false; frPaywallShown = false; frPaywall(() => {}); const out = { h: document.querySelector('.fr-pay .fr-h').textContent, trial: !!document.querySelector('.fr-trial'), can: canTrial() }; frClose(); frPaywallShown = false; serverTrial = was; return out; });
+  if (process.env.SHOTS) { await page.evaluate(() => { const was = serverTrial; serverTrial = false; frPaywall(() => {}); serverTrial = was; }); await page.screenshot({ path: process.env.SHOTS + '/trial-oldserver.png' }); await page.evaluate(() => { frClose(); frPaywallShown = false; }); }
+  expect(old.h === 'Cassie is free. Go further when you want.' && !old.trial && !old.can, 'an older server: no trial offered, the usual plans screen: ' + JSON.stringify(old));
+  expect(await page.evaluate(() => serverTrial), 'this server says it has the trial (/config trial: true)');
+  await page.evaluate(() => { window.__landed = false; frPaywall(() => { window.__landed = true; }); });
   await page.waitForSelector('.fr-pay .fr-trial', { timeout: 5000 });
   const pay = await page.evaluate(() => { const bg = (s) => getComputedStyle(document.querySelector(s)).backgroundColor; return { h: document.querySelector('.fr-pay .fr-h').textContent, trialBg: bg('.fr-trial'), getBg: bg('.fr-get-2'), skip: !!document.querySelector('.fr-skip-pay'), focus: document.activeElement && document.activeElement.className }; });
   expect(pay.h === 'Try Plus free for 14 days' && !/rgba\(0, 0, 0, 0\)|transparent/.test(pay.trialBg) && /rgba\(0, 0, 0, 0\)|transparent/.test(pay.getBg) && pay.skip, 'trial first: one filled button, Get Plus outlined, Continue with Free still there: ' + JSON.stringify(pay));
