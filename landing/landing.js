@@ -106,7 +106,7 @@
   const PRICES = {
     // sem = a Semester pass: one payment for 5 months (about 20% off)
     php: { sym: '₱', free: 0, plus: { month: 149, sem: 599, year: 1490 }, pro: { month: 349, sem: 1399, year: 3490 } },
-    usd: { sym: 'US$', free: 0, plus: { month: 7.99, sem: 31.99, year: 79.9 }, pro: { month: 8.99, sem: 35.99, year: 89.9 } },
+    usd: { sym: 'US$', free: 0, plus: { month: 7.99, sem: 31.99, year: 79.9 }, pro: { month: 12.99, sem: 51.99, year: 129.9 } },
   };
   const tz = (Intl.DateTimeFormat().resolvedOptions().timeZone || '');
   const lang = (navigator.language || '').toLowerCase();
@@ -151,6 +151,8 @@
       note.hidden = !(cur === 'usd' && pp);
       if (pp) note.textContent = `Charged as ₱${pp.php.toLocaleString('en-PH')} (PHP). Your bank converts it.`;
     });
+    // (v298) the prices in the words above and in the FAQ follow the currency too
+    $$('[data-pmini]').forEach((x) => { const [k, b] = x.dataset.pmini.split(':'); x.textContent = fmt(cur, PRICES[cur][k][b]); });
     $$('[data-cur]').forEach((b) => b.classList.toggle('on', b.dataset.cur === cur));
     $$('[data-bill]').forEach((b) => b.classList.toggle('on', b.dataset.bill === bill));
   }

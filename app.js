@@ -2807,7 +2807,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=298'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=299'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2829,7 +2829,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=298'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=299'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -3105,7 +3105,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=298').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=299').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -7462,7 +7462,7 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=298')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=299')));
 // a real photo needs Gemini pictures (Cassie's server or the student's key); the free service draws toys and models
 const realPhotoOk = () => !!((SERVER && serverPictures) || (state.geminiKey && !geminiImageOff));
 // a drawing inside a chat bubble (a new one draws itself; one from history shows finished)
@@ -8753,7 +8753,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=298');
+      exploreMod = await import('./explore/cell3d.js?v=299');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -8803,7 +8803,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=298');
+      labsMod = await import('./labs/labs.js?v=299');
       islandRest();
     }
     labsMod.open({
@@ -9268,7 +9268,7 @@ function setPage(page, { back = false } = {}) {
   secs.hidden = !(page === 'all' || SET_TITLES[page] && !['profile', 'plans'].includes(page));
   if (page !== 'all' && setSearch.value) { setSearch.value = ''; filterSettings(); }
   if (page === 'profile') fillYou();
-  if (page === 'plans') paintTrial(); // (v297)
+  if (page === 'plans') { paintTrial(); paintPlanPrices(); } // (v297, v298: the prices in their own currency)
   if (appxShows(page)) appxOpen(); // (v255: snapshot the committed appearance, so preview can be reviewed or discarded)
   if (page === 'language' || page === 'all') renderLang();
   if (page === 'notifications' || page === 'study' || page === 'all') renderRemind();
@@ -10769,10 +10769,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=298').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=299').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=298', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=299', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
@@ -11027,7 +11027,7 @@ function frLand() {
 let frPaywallShown = false;
 let frPayBill = 'month'; // the switch: 'month' or 'sem' (the Pasado Pass)
 const FR_PAY_PHP = { plus: { month: 149, sem: 599 }, pro: { month: 349, sem: 1399 } };
-const FR_PAY_USD = { plus: { month: 7.99, sem: 31.99 }, pro: { month: 8.99, sem: 35.99 } };
+const FR_PAY_USD = { plus: { month: 7.99, sem: 31.99 }, pro: { month: 12.99, sem: 51.99 } }; // (v298: Pro US$12.99, the same step up from Plus as in pesos; the server's and the website's prices match)
 function frPayTag(plan, bill) {
   const cur = payCur(), per = bill === 'sem' ? 'a semester' : 'a month';
   const live = payPrices && payPrices[cur] && payPrices[cur][plan] && payPrices[cur][plan][bill];
@@ -11324,6 +11324,26 @@ async function startTrial() {
 }
 // a plain note with one button (the payment sheet's look)
 function trialNote(title, text, btn) { const s = paySheet(title, text); s.set(title, text, `<button type="button" class="plus-ok">${escapeHtml(btn)}</button>`); return s; }
+// (v298) every price in the app in the student's own currency (payCur: pesos in the Philippines, US$
+// elsewhere), from the server's own prices when it has sent them, else the set ones (the same as the website's)
+function planAmount(plan, bill, cur = payCur()) {
+  const live = payPrices && payPrices[cur] && payPrices[cur][plan] && payPrices[cur][plan][bill];
+  if (live && live.shown) return live.shown;
+  return cur === 'usd' ? `US$${FR_PAY_USD[plan][bill].toFixed(2)}` : `₱${FR_PAY_PHP[plan][bill].toLocaleString('en-PH')}`;
+}
+function planPerDay(plan, bill, cur = payCur()) {
+  const n = (cur === 'usd' ? FR_PAY_USD : FR_PAY_PHP)[plan][bill] / (bill === 'sem' ? 152 : 30);
+  return cur === 'usd' ? `US$${n.toFixed(2)}` : `₱${Math.max(1, Math.round(n))}`;
+}
+function paintPlanPrices() {
+  const root = document.querySelector('.set-plans'); if (!root) return;
+  const cur = payCur(), zero = cur === 'usd' ? 'US$0' : '₱0', per = { month: 'a month', sem: 'a semester' };
+  root.querySelectorAll('[data-pp0]').forEach((x) => { x.textContent = zero; });
+  root.querySelectorAll('[data-pp]').forEach((x) => { const [pl, bi] = x.dataset.pp.split(':'); x.textContent = `${planAmount(pl, bi, cur)} ${per[bi]}`; });
+  root.querySelectorAll('[data-ppn]').forEach((x) => { const [pl, bi] = x.dataset.ppn.split(':'); x.textContent = planAmount(pl, bi, cur); });
+  root.querySelectorAll('[data-ppday]').forEach((x) => { const [pl, bi] = x.dataset.ppday.split(':'); x.textContent = planPerDay(pl, bi, cur); });
+  root.dataset.cur = cur;
+}
 // (v297) Plans in Settings: Start my free trial while it can start; on the trial, the days left
 function paintTrial() {
   const box = document.querySelector('.set-trial'); if (!box) return;
