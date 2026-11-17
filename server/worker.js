@@ -1014,7 +1014,7 @@ async function config(request, env) {
   if (!h) return new Response('forbidden', { status: 403 });
   // with payments on: every pass's price, in pesos and in US$ (with the pesos it is charged as), from the server's own table
   const prices = env.PAYMONGO_SECRET_KEY ? Object.fromEntries(['php', 'usd'].map((c) => [c, Object.fromEntries(['plus', 'pro'].map((pl) => [pl, Object.fromEntries(Object.keys(PAY_DAYS).map((bi) => [bi, payPrice(env, pl, bi, c)]))]))])) : null;
-  return json({ claude: !!env.ANTHROPIC_KEY, pictures: geminiPicturesOn(env), pay: payOn(env), test: !!env.PAYMONGO_SECRET_KEY && !payLive(env), prices }, 200, { ...h, 'cache-control': 'max-age=300' });
+  return json({ claude: !!env.ANTHROPIC_KEY, pictures: geminiPicturesOn(env), pay: payOn(env), test: !!env.PAYMONGO_SECRET_KEY && !payLive(env), prices, trial: !!env.DB }, 200, { ...h, 'cache-control': 'max-age=300' }); // (trial: this server has /trial/start, v297)
 }
 
 /* ---------------------------------------------------------------- talking with Cassie

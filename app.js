@@ -2807,7 +2807,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=297'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=298'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2829,7 +2829,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=297'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=298'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -3105,7 +3105,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=297').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=298').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -5347,14 +5347,15 @@ let serverClaude = false, serverPictures = false; // (serverPictures: Gemini pic
 let lastPhoto = null;
 try { serverClaude = sessionStorage.getItem('cassie.claude') === '1'; serverPictures = sessionStorage.getItem('cassie.pictures') === '1'; } catch (e) { /* storage blocked */ }
 var serverPay = false, payPrices = null; // (var: buying can start before this part of the file has run)
-try { const pc = JSON.parse(sessionStorage.getItem('cassie.pay') || 'null'); if (pc) { serverPay = !!pc.on; payPrices = pc.prices || null; } } catch (e) { /* storage blocked */ }
+var serverTrial = false; // (v297) the server has the free trial (its /config says trial: true); until then no trial is offered
+try { const pc = JSON.parse(sessionStorage.getItem('cassie.pay') || 'null'); if (pc) { serverPay = !!pc.on; payPrices = pc.prices || null; serverTrial = !!pc.trial; } } catch (e) { /* storage blocked */ }
 const configReady = !SERVER ? Promise.resolve() : (() => {
   return fetch(SERVER + '/config').then((r) => (r.ok ? r.json() : null)).then((c) => {
     serverClaude = !!(c && c.claude); serverPictures = !!(c && c.pictures);
     // (a test key: only on a tester's device, after opening the app with ?paytest=1)
     let tester = false; try { if (/[?&]paytest=1\b/.test(location.search)) sessionStorage.setItem('cassie.paytest', '1'); tester = sessionStorage.getItem('cassie.paytest') === '1'; } catch (e) { /* storage blocked */ }
-    serverPay = !!(c && (c.pay || (c.test && tester))); payPrices = (c && c.prices) || null;
-    try { sessionStorage.setItem('cassie.pay', JSON.stringify({ on: serverPay, prices: payPrices })); } catch (e) { /* storage blocked */ }
+    serverPay = !!(c && (c.pay || (c.test && tester))); payPrices = (c && c.prices) || null; serverTrial = !!(c && c.trial);
+    try { sessionStorage.setItem('cassie.pay', JSON.stringify({ on: serverPay, prices: payPrices, trial: serverTrial })); } catch (e) { /* storage blocked */ }
     payLabels();
     try { sessionStorage.setItem('cassie.claude', serverClaude ? '1' : '0'); sessionStorage.setItem('cassie.pictures', serverPictures ? '1' : '0'); } catch (e) { /* storage blocked */ }
   }).catch(() => { /* offline: the usual brains answer */ });
@@ -7461,7 +7462,7 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=297')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=298')));
 // a real photo needs Gemini pictures (Cassie's server or the student's key); the free service draws toys and models
 const realPhotoOk = () => !!((SERVER && serverPictures) || (state.geminiKey && !geminiImageOff));
 // a drawing inside a chat bubble (a new one draws itself; one from history shows finished)
@@ -8752,7 +8753,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=297');
+      exploreMod = await import('./explore/cell3d.js?v=298');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -8802,7 +8803,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=297');
+      labsMod = await import('./labs/labs.js?v=298');
       islandRest();
     }
     labsMod.open({
@@ -10768,10 +10769,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=297').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=298').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=297', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=298', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
@@ -11299,7 +11300,7 @@ const TRIAL_DAYS = 14;
 const onTrial = () => !!(state.plan && state.plan.trial && planName() === 'plus');
 const trialDaysLeft = () => (onTrial() ? Math.max(0, Math.ceil((state.plan.until - Date.now()) / 864e5)) : 0);
 const trialUsed = () => !!state.trialUsed;
-const canTrial = () => !!(SERVER && accountsOn() && !isSubscriber() && !trialUsed());
+const canTrial = () => !!(SERVER && serverTrial && accountsOn() && !isSubscriber() && !trialUsed()); // (serverTrial: an older server has no trial, so none is offered)
 async function startTrial() {
   await configReady;
   if (!SERVER || !accountsOn()) { plusSheet('', '', 'plans', 'Get the Pasado Pass first'); return; }
