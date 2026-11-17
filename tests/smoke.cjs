@@ -2289,6 +2289,59 @@ test('v266: the plans screen shows monthly prices first with a Monthly / Semeste
 });
 
 // (v297) the free Plus trial: trial first after sign-up, 14 days, no card, once per account, a heads-up 2 days before
+test('v302 security: a bot trap on sign-up, 30 new accounts an hour per network, small request bodies only, and saved study data encrypted with DATA_KEY (saves from before still open; a moved or keyless row is an error, never an empty account)', async () => {
+  const env = { GROQ_KEY: 'gsk_test_fake' };
+  const { call, DB } = await realServer(env);
+  const has = (who) => !!DB.db.prepare('SELECT 1 FROM accounts WHERE email = ?').get(who);
+  const mail = (n) => `${n}@example.com`;
+  // the hidden field: only a script fills it in
+  const trap = await call('POST', '/auth/signup', { email: mail('bot1'), password: 'longenough1', age: 20, website: 'http://spam.example' });
+  expect(trap.status === 400 && trap.json.code === 'signup_blocked' && !has(mail('bot1')), 'the bot trap refuses it, and no account is made: ' + trap.text);
+  // a class signs up together; a script making hundreds is stopped at 30 an hour
+  let made = 0, last;
+  for (let i = 0; i < 31; i++) { last = await call('POST', '/auth/signup', { email: mail('kid' + i), password: 'longenough1', age: 14 }); if (last.status === 200) made++; }
+  expect(made === 30 && last.status === 429 && last.json.code === 'too_many_signups' && !has(mail('kid30')), `30 accounts from one network, then a pause (${made} made): ` + last.text);
+  const elsewhere = await call('POST', '/auth/signup', { email: mail('kid99'), password: 'longenough1', age: 14 }, { 'cf-connecting-ip': '198.51.100.9' });
+  expect(elsewhere.status === 200, 'another network can still sign up: ' + elsewhere.text);
+  const signIn = await call('POST', '/auth/login', { email: mail('kid3'), password: 'longenough1' });
+  expect(signIn.status === 200, 'signing in is not counted as a new account: ' + signIn.text);
+  // small bodies only (a save may be big)
+  const huge = await call('POST', '/auth/login', { email: mail('kid3'), password: 'x'.repeat(20000) });
+  expect(huge.status === 413 && huge.json.code === 'too_big', 'a 20 KB sign-in is refused before it is read: ' + huge.status);
+  const early = await call('POST', '/early', { email: mail('kid3'), pad: 'x'.repeat(20000) });
+  expect(early.status === 400, 'a 20 KB early-list request is refused: ' + early.status);
+  // saved study data: encrypted once DATA_KEY is set
+  const up = await call('POST', '/auth/signup', { email: mail('ana'), password: 'longenough1', age: 17 }, { 'cf-connecting-ip': '198.51.100.20' });
+  const auth = { authorization: 'Bearer ' + up.json.token }, row = () => DB.db.prepare('SELECT id, data FROM accounts WHERE email = ?').get(mail('ana'));
+  const big = await call('POST', '/auth/save', { data: { cards: [1], notes: 'n'.repeat(100000) } }, auth);
+  expect(big.status === 200, 'a 100 KB save still works: ' + big.status);
+  await call('POST', '/auth/save', { data: { cards: [1] } }, auth);
+  expect(row().data.startsWith('{'), 'without DATA_KEY: saved as before');
+  env.DATA_KEY = 'test-data-key-0123456789abcdef';
+  const old = await call('GET', '/auth/me', null, auth);
+  expect(old.status === 200 && old.json.account.data.cards.length === 1, 'a save from before DATA_KEY still opens: ' + old.text);
+  await call('POST', '/auth/save', { data: { cards: [1, 2, 3], note: 'photosynthesis notes' } }, auth);
+  const sealed = row().data;
+  expect(sealed.startsWith('enc1:') && !/photosynthesis|cards/.test(sealed), 'with DATA_KEY: the database holds only encrypted text: ' + sealed.slice(0, 40));
+  const me = await call('GET', '/auth/me', null, auth);
+  expect(me.status === 200 && me.json.account.data.cards.length === 3 && me.json.account.data.note === 'photosynthesis notes', 'the student gets it back, readable: ' + me.text.slice(0, 120));
+  const again = await call('POST', '/auth/login', { email: mail('ana'), password: 'longenough1' }, { 'cf-connecting-ip': '198.51.100.20' });
+  expect(again.status === 200 && again.json.account.data.cards.length === 3, 'signing in on another device gets it too');
+  // copied onto another account: it can't be read there
+  const ben = await call('POST', '/auth/signup', { email: mail('ben'), password: 'longenough1', age: 17 }, { 'cf-connecting-ip': '198.51.100.21' });
+  DB.db.prepare('UPDATE accounts SET data = ? WHERE email = ?').run(sealed, mail('ben'));
+  const moved = await call('GET', '/auth/me', null, { authorization: 'Bearer ' + ben.json.token });
+  expect(moved.status >= 500 && !/photosynthesis/.test(moved.text), 'another account can’t open it: ' + moved.status);
+  // DATA_KEY removed by mistake: an error, never "no data" (the app would write over it)
+  delete env.DATA_KEY;
+  const keyless = await call('GET', '/auth/me', null, auth);
+  expect(keyless.status >= 500, 'no DATA_KEY: an error, not an empty account: ' + keyless.status);
+  env.DATA_KEY = 'test-data-key-0123456789abcdef';
+  expect((await call('GET', '/auth/me', null, auth)).json.account.data.cards.length === 3, 'the key back: the data opens again');
+  // the sign-up form: the trap is there, hidden, and never sent by a person
+  const appjs = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
+  expect(/<div class="auth-hp" hidden aria-hidden="true">[^]*?name="website"[^]*?tabindex="-1"/.test(appjs) && /f\.website\.value \? \{ website: f\.website\.value \} : \{\}/.test(appjs), 'the sign-up form has the hidden field, and sends it only when filled in');
+});
 test('v297 free Plus trial: the plans screen leads with Start my free trial (one filled button, Free still there), 14 days of Plus from the server, once per account, Plans and You show the days left, one heads-up two days before it ends', async (b) => {
   const { ctx, page, errors } = await open(b, { server: true, device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off', state: { tab: 'home', plan: null, profile: { name: 'Tia', role: 'student', grade: 'Grade 10', age: 15, at: 1 } } });
   const email = `trial${Date.now()}@example.com`;

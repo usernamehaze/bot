@@ -1,0 +1,14 @@
+# Once a week GitHub checks Cassie's test tools and the GitHub Actions the tests use for security fixes,
+# and opens a pull request when one needs updating. (The libraries in vendor/ are checked by hand: see SECURITY.md.)
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /tests
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5

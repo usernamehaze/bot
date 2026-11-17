@@ -146,6 +146,8 @@ export async function startFakeServer(port = 4630) {
     get ANTHROPIC_KEY() { return mode.claude === 'off' ? undefined : 'sk-ant-test'; },
     get PAYMONGO_SECRET_KEY() { return mode.payOn === 'live' ? 'sk_live_fake_paymongo' : mode.payOn ? 'sk_test_fake_paymongo' : undefined; }, // (off unless a test switches it on: true = a test key, 'live' = a live key)
     get PAY_TESTERS() { return mode.payTesters || ''; },
+    SIGNUPS_PER_HOUR: '100000', // (every test shares one network here; the real limit, 30, is tested on its own)
+    get DATA_KEY() { return mode.dataKey || undefined; }, // (v302: saved study data is encrypted when a test sets mode.dataKey)
     PAYMONGO_WEBHOOK_SECRET: 'whsk_test_fake_paymongo', VIEW_TOKEN: 'test-view-token-0123456789',
     get GEMINI_KEY() { return mode.gemini === 'off' ? undefined : 'AIza_server_test'; },
     get WEB_DAILY() { return mode.webDaily == null ? undefined : String(mode.webDaily); }, get WEB_DAILY_ALL() { return mode.webAll == null ? undefined : String(mode.webAll); },

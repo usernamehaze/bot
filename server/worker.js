@@ -283,7 +283,8 @@ async function push(request, env, url) {
   if (request.method === 'GET' && url.pathname === '/push/key') return json(pushOn(env) ? { on: true, key: env.VAPID_PUBLIC_KEY } : { on: false }, 200, h);
   if (request.method !== 'POST') return new Response('not found', { status: 404, headers: h });
   if (!pushOn(env)) return json({ error: 'Reminders aren’t switched on yet.' }, 503, h);
-  let b; try { b = await request.json(); } catch (e) { return json({ error: 'bad json' }, 400, h); }
+  const b = await readJson(request, 4096);
+  if (!b) return json({ error: 'bad json' }, 400, h);
   const id = /^[\w-]{8,64}$/.test(String(b.id || '')) ? String(b.id) : '';
   if (!id) return json({ error: 'bad id' }, 400, h);
   await ensureSchema(env.DB);
@@ -390,6 +391,14 @@ function cors(origin, env) {
   const ok = allowed.some((a) => origin === a || (a === 'http://localhost' && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)))
     || (env.ALLOW_EXTENSION !== 'off' && /^chrome-extension:\/\/[a-p]{32}$/.test(origin)); // the Cassie extension (Chrome and Edge)
   return ok ? { 'access-control-allow-origin': origin, 'access-control-allow-methods': 'GET, POST, OPTIONS', 'access-control-allow-headers': 'content-type, authorization', 'access-control-expose-headers': 'retry-after, x-cassie-source, x-cassie-left, x-cassie-plan, x-speak', vary: 'origin' } : {};
+}
+// (v302) a request's JSON, read only when it is small (16 KB here): a huge body is refused before it is read in full.
+// Too big or not JSON: null.
+async function readJson(request, max = 16384) {
+  if (+(request.headers.get('content-length') || 0) > max) return null;
+  const t = await request.text().catch(() => '');
+  if (t.length > max) return null;
+  try { const o = JSON.parse(t || '{}'); return o && typeof o === 'object' ? o : null; } catch (e) { return null; }
 }
 const json = (data, status = 200, extra = {}) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', ...extra } });
 // The dashboard page: only its own script may run (a fresh one-time code each visit), it can't be
@@ -595,8 +604,7 @@ async function geminiSearch(env, q, system) {
 async function web(request, env, ctx) {
   const h = allowedOrigin(request, env);
   if (!h) return new Response('forbidden', { status: 403 });
-  let body = {};
-  try { body = await request.json(); } catch (e) { /* empty */ }
+  const body = (await readJson(request)) || {};
   const q = String(body.q || '').replace(/\s+/g, ' ').trim().slice(0, 1000);
   if (q.length < 2) return chatError('Type a question first, then tap Web.', 400, h);
   if (!env.GEMINI_KEY) return chatError('Web search isn’t on yet.', 503, h, {}, 'web_off');
@@ -816,7 +824,7 @@ async function early(request, env) {
   if (!h) return new Response('forbidden', { status: 403 });
   await ensureSchema(env.DB);
   if (!(await authAllowed(request, env, 'early:' + (request.headers.get('cf-connecting-ip') || 'unknown'), 20))) return json({ error: 'Too many tries. Wait a while, then try again.' }, 429, h);
-  const b = await request.json().catch(() => ({}));
+  const b = (await readJson(request)) || {};
   const { account } = await planOf(request, env);
   let email = String(b.email || '').trim().toLowerCase().slice(0, 200);
   if (!email && account) email = String(((await env.DB.prepare('SELECT email FROM accounts WHERE id = ?').bind(account).first()) || {}).email || '').toLowerCase();
@@ -905,7 +913,7 @@ async function pay(request, env, url, ctx) {
   }
   if (!(request.method === 'POST' && url.pathname === '/pay/checkout')) return new Response('not found', { status: 404, headers: h });
   if (!(await authAllowed(request, env, 'pay:' + acc.id, 20))) return json({ error: 'Too many tries. Wait a while, then try again.' }, 429, h);
-  const b = await request.json().catch(() => ({}));
+  const b = (await readJson(request)) || {};
   const plan = ['plus', 'pro'].includes(b.plan) ? b.plan : '', bill = PAY_DAYS[b.bill] ? b.bill : '', cur = b.cur === 'usd' ? 'usd' : 'php';
   const price = payPrice(env, plan, bill, cur, tierOf(request)); // (the price for the country the student is really in)
   if (!price) return json({ error: 'Pick a plan first.' }, 400, h);
@@ -999,7 +1007,7 @@ async function adminPayHook(request, env, url) {
 async function adminPlan(request, env, url) {
   const no = await adminOk(request, env);
   if (no) return json({ error: no.error }, no.status);
-  const b = request.method === 'POST' ? await request.json().catch(() => ({})) : { email: url.searchParams.get('email') };
+  const b = request.method === 'POST' ? (await readJson(request)) || {} : { email: url.searchParams.get('email') };
   const email = String(b.email || '').trim().toLowerCase().slice(0, 200);
   const acc = email && await env.DB.prepare('SELECT id, email, name FROM accounts WHERE email = ?').bind(email).first();
   if (!acc) return json({ error: 'No Cassie account with that email. They need to sign up first.' }, 404);
@@ -1705,7 +1713,37 @@ const providerList = (r) => ((r && r.results) || []).map((x) => x.provider).sort
 async function providersOf(env, id) { return providerList(await providersQuery(env, id).all()); }
 async function publicAccount(env, a, providers) {
   if (!providers) providers = await providersOf(env, a.id);
-  return { email: a.email || '', name: a.name || '', password: !!a.pass, providers, google: providers.includes('google'), apple: providers.includes('apple'), data: a.data ? JSON.parse(a.data) : null };
+  return { email: a.email || '', name: a.name || '', password: !!a.pass, providers, google: providers.includes('google'), apple: providers.includes('apple'), data: a.data ? JSON.parse(await openData(env, a.data, a.id)) : null };
+}
+// (v302) Each account's saved study data is encrypted (AES-256-GCM) when the DATA_KEY secret is set, and tied to its
+// own account, so a row copied to another account can't be read. Saves from before DATA_KEY was set still open, and
+// are encrypted the next time they're saved. A saved row that can't be opened (DATA_KEY removed or changed) is an
+// error, never "no data", so the app never mistakes it for an empty account and writes over it.
+let dataKeyFor = '', dataKeyP = null;
+function dataKey(env) {
+  if (!env.DATA_KEY) return null;
+  if (dataKeyFor !== env.DATA_KEY) {
+    dataKeyFor = env.DATA_KEY;
+    dataKeyP = crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(env.DATA_KEY))).then((d) => crypto.subtle.importKey('raw', d, 'AES-GCM', false, ['encrypt', 'decrypt']));
+  }
+  return dataKeyP;
+}
+const bytesB64 = (u8) => { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode(...u8.subarray(i, i + 0x8000)); return btoa(s); };
+async function sealData(env, text, accountId) {
+  const k = dataKey(env);
+  if (!k) return text;
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: new TextEncoder().encode(accountId) }, await k, new TextEncoder().encode(text)));
+  const all = new Uint8Array(12 + ct.length); all.set(iv); all.set(ct, 12);
+  return 'enc1:' + bytesB64(all);
+}
+async function openData(env, stored, accountId) {
+  if (!String(stored).startsWith('enc1:')) return stored; // (saved before DATA_KEY was set)
+  const k = dataKey(env);
+  if (!k) throw new Error('saved data is encrypted, but DATA_KEY isn’t set');
+  const all = Uint8Array.from(atob(String(stored).slice(5)), (c) => c.charCodeAt(0));
+  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: all.subarray(0, 12), additionalData: new TextEncoder().encode(accountId) }, await k, all.subarray(12));
+  return new TextDecoder().decode(plain);
 }
 const freePlan = { plan: 'free', until: 0 };
 async function signedInReply(env, acc, isNew) {
@@ -1856,7 +1894,7 @@ async function auth(request, env, path) {
   let body = {};
   if (request.method === 'POST') {
     const text = await request.text();
-    if (text.length > 300000) return fail('That is too big to save. Make it shorter, then try again.', 413, 'too_big');
+    if (text.length > (path === '/auth/save' ? 300000 : 16384)) return fail('That is too big to save. Make it shorter, then try again.', 413, 'too_big'); // (v302: only a save carries more than a few lines)
     try { body = JSON.parse(text || '{}'); } catch (e) { return fail('Cassie didn’t understand that request. Close this and try again.', 400, 'bad_request'); }
   }
 
@@ -1887,12 +1925,16 @@ async function auth(request, env, path) {
     const password = String(body.password || '');
     if (!EMAIL_RE.test(email)) return fail('That doesn’t look like an email yet. It needs an @ and a dot, like name@gmail.com.', 400, 'email_bad');
     if (path === '/auth/signup') {
+      // (v302) a bot trap: the sign-up form has a field people never see (it's hidden), so only a script fills it in
+      if (body.website) return fail('Cassie couldn’t make that account. Close this page, open it again, then sign up.', 400, 'signup_blocked');
       if (!(+body.age >= 2 && +body.age <= 100)) return fail('Ages go from 2 to 100. Check the number you typed.', 400, 'age_range'); // every age is welcome
       if (DISPOSABLE_RE.test(email)) return fail('That looks like a throwaway email, and those can’t make accounts. Use the email you check every day.', 400, 'email_disposable');
       if (password.length < 8) return fail('Your password needs at least 8 letters or numbers so it’s hard to guess.', 400, 'password_short');
       if (password.length > 200) return fail('That password is too long. Use one with fewer than 200 letters and numbers.', 400, 'password_long');
       const exists = await env.DB.prepare('SELECT id FROM accounts WHERE email = ?').bind(email).first();
       if (exists) return fail('That email is already signed up. Try signing in instead.', 409, 'email_taken');
+      // (v302) at most 30 new accounts an hour from one network (a whole class can still sign up together; a script making hundreds can't)
+      if (!(await authAllowed(request, env, 'signup:' + (request.headers.get('cf-connecting-ip') || 'unknown'), +env.SIGNUPS_PER_HOUR || 30))) return fail('Lots of accounts were just made from this network, so new ones are paused for an hour. Try again later, or continue as a guest for now.', 429, 'too_many_signups');
       const salt = randomToken(16);
       const acc = { id: randomToken(12), email, name: String(body.name || '').trim().slice(0, 40), data: null };
       await env.DB.prepare('INSERT INTO accounts (id, email, pass, salt, name, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?)')
@@ -1925,7 +1967,7 @@ async function auth(request, env, path) {
     const data = body.data && typeof body.data === 'object' ? JSON.stringify(body.data) : null;
     if (!data || data.length > 250000) return fail('There was nothing to save yet. Change something first, then save.', 400, 'nothing_to_save');
     const name = String((body.data.profile && body.data.profile.name) || acc.name || '').slice(0, 40);
-    await env.DB.prepare('UPDATE accounts SET data = ?, name = ?, updated = ? WHERE id = ?').bind(data, name, Date.now(), acc.id).run();
+    await env.DB.prepare('UPDATE accounts SET data = ?, name = ?, updated = ? WHERE id = ?').bind(await sealData(env, data, acc.id), name, Date.now(), acc.id).run();
     return ok({ saved: true });
   }
   if (path === '/auth/logout') {
