@@ -2391,6 +2391,21 @@ test('v298 prices by place: one price table in the server, the website and the a
     await ctx.close();
   }
   await fetch(SERVER + '/__country?c=');
+  // (v301) with payments on, the website shows the server's own prices, so it never shows a price checkout won't charge
+  {
+    const odd = (shown, php) => ({ shown, php });
+    const prices = { php: { plus: { month: odd('₱149', 149), sem: odd('₱599', 599), year: odd('₱1,490', 1490) }, pro: { month: odd('₱499', 499), sem: odd('₱1,999', 1999), year: odd('₱4,990', 4990) } },
+      usd: { plus: { month: odd('US$7.99', 499), sem: odd('US$31.99', 1969), year: odd('US$79.90', 4919) }, pro: { month: odd('US$14.99', 929), sem: odd('US$59.99', 3689), year: odd('US$149.90', 9219) } } };
+    const ctx = await b.newContext({ ...devices['iPhone 13'], timezoneId: 'Asia/Manila', locale: 'en-PH', serviceWorkers: 'block' });
+    await ctx.addInitScript((srv) => { window.CASSIE_SERVER = srv; }, SERVER);
+    await ctx.route((u) => u.href === SERVER + '/config', (r) => r.fulfill({ json: { pay: true, prices, country: 'PH', tier: 'std' }, headers: { 'access-control-allow-origin': '*' } }));
+    const page = await ctx.newPage();
+    await page.goto(`http://localhost:${APP_PORT}/index.html`);
+    await page.waitForFunction(() => document.querySelector('[data-price="pro"]').textContent.trim() === '₱499', null, { timeout: 5000 }).catch(() => {});
+    const shown = await page.evaluate(() => [...document.querySelectorAll('[data-price]')].map((x) => x.textContent.trim()).join(' '));
+    expect(shown === '₱0 ₱149 ₱499', 'the website shows what the server charges (Pro ₱499 here): ' + shown);
+    await ctx.close();
+  }
 });
 
 test('v257: the studio voice no longer shows "guest" to a signed-in account: the podcast sheet rechecks the account on open, so a stale guest state from before sign-in self-heals', async (b) => {

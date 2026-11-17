@@ -129,7 +129,23 @@
     year: 'One payment for 12 months. Never renews. 7 days to change your mind.',
   };
   let tier = 'std'; // (v300) 'low' when Cassie's server says the visitor is in a lower-income country
-  const table = (c) => (c === 'usd' && tier === 'low' ? PRICES.usdLow : PRICES[c]);
+  // (v301) with payments on, the website shows the server's own prices: exactly what checkout charges
+  const live = (c) => {
+    const src = payPrices && payPrices[c];
+    if (!src) return null;
+    const t = { sym: PRICES[c].sym, free: 0 };
+    for (const pl of ['plus', 'pro']) {
+      t[pl] = {};
+      for (const bi of ['month', 'sem', 'year']) {
+        const v = src[pl] && src[pl][bi];
+        const n = v ? (c === 'php' ? +v.php : parseFloat(String(v.shown || '').replace(/[^0-9.]/g, ''))) : NaN;
+        if (!Number.isFinite(n) || n <= 0) return null; // (anything odd: the set prices)
+        t[pl][bi] = n;
+      }
+    }
+    return t;
+  };
+  const table = (c) => live(c) || (c === 'usd' && tier === 'low' ? PRICES.usdLow : PRICES[c]);
   function renderPrices() {
     const p = table(cur);
     $('[data-price="free"]').textContent = fmt(cur, 0);
