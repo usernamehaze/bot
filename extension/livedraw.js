@@ -104,6 +104,13 @@ const MUST = [
   { is: /\b(layers of the earth|earth'?s layers|inside the earth|earth'?s interior|structure of the earth)\b/i, what: 'the Earth', need: [['crust'], ['mantle'], ['outer core'], ['inner core']] },
   { is: /\b(tooth|teeth|ngipin)\b/i, what: 'a tooth', need: [['enamel'], ['dentin'], ['pulp'], ['root'], ['gum']] },
 ];
+// (v303) the parts a textbook figure of what was asked about shows, told to her before she draws, so her first
+// drawing has them all (a drawing sent back for a missing part costs the student a second wait)
+export function mustHave(asked = '') {
+  const about = String(asked || '');
+  const rule = MUST.find((r) => r.is.test(about) && !(r.not && r.not.test(about)));
+  return rule ? { what: rule.what, parts: rule.need.map((alts) => alts[0].replace(/\\b/g, '')) } : null;
+}
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 function missingParts(spec, asked) {
   const about = `${spec.title} ${asked || ''}`;
