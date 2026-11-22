@@ -86,7 +86,7 @@ async function open(browser, { server = true, state = {}, fakeGroq, lite = 'on',
   await fakeGoogle(ctx); // never the real Google
   await ctx.route(/appleid\.apple\.com/, (route) => route.abort()); // never the real Apple (a test brings its own)
   if (setup) await setup(ctx);
-  await ctx.route(/wikipedia\.org|worldbank\.org/, (route) => route.abort()); // the atlas's live lookups (a test brings its own)
+  await ctx.route(/wikipedia\.org|worldbank\.org|wikimedia\.org|openverse\.org/, (route) => route.abort()); // the atlas's live lookups, and (v305) reference pictures for drawings (a test brings its own)
   const groqCalls = [];
   await ctx.route(/api\.groq\.com/, async (route) => {
     const req = route.request();
@@ -7540,6 +7540,54 @@ test('v294 tap targets: every button, link, switch and field on a computer’s H
 });
 
 // (v295) Cassie's grammar and vocabulary fit the student: by age or grade, then by how they write in the chat
+test('v305 drawings, more realistic: every way the AI writes a shape is read (a fan no longer vanishes); spokes stay inside the wheel; planets never sit inside each other; a creature is one body (no floating head), its legs have thickness, and no two parts share a name; dark colours show on dark paper; a dragon in 3D is drawn flat; a real thing is drawn from a free reference picture (an English diagram from Wikimedia Commons), credited on the card; none for living or imaginary things', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, state: { groqKey: 'gsk_test', theme: 'dark' } });
+  const fx = (n) => JSON.parse(fs.readFileSync(path.join(ROOT, 'tests/fixtures/live', n + '.json'), 'utf8'));
+  const r = await page.evaluate(async (F) => {
+    const m = await liveDrawLoad();
+    const kinds = (sp) => sp.parts.map((p) => p.shapes.map((s) => s.t).join('+'));
+    const fan = m.clean(F.fan), fan2 = m.clean(F.fan2), bike = m.clean(F.bike), solar = m.clean(F.solar), dragon = m.clean(F.dragon), volcano = m.clean(F.volcano);
+    const twice = m.clean({ title: 'A table', mode: '2d', parts: [{ label: 'Leg', say: 'a', anchor: [100, 200], shapes: [{ t: 'rect', x: 90, y: 120, w: 20, h: 120 }, { t: 'line', x1: 90, y1: 120, x2: 110, y2: 120 }] }, { label: 'Leg', say: 'b', anchor: [300, 200], shapes: [{ t: 'rect', x: 290, y: 120, w: 20, h: 120 }, { t: 'line', x1: 290, y1: 120, x2: 310, y2: 120 }] }, { label: 'Top', say: 'c', anchor: [200, 115], shapes: [{ t: 'rect', x: 80, y: 105, w: 240, h: 15 }, { t: 'line', x1: 80, y1: 112, x2: 320, y2: 112 }] }] });
+    const dark = m.clean({ title: 'x', mode: '2d', parts: [{ label: 'Frame', color: '#1a1a1a', say: 'a', shapes: [{ t: 'line', x1: 0, y1: 0, x2: 10, y2: 10 }] }] });
+    const lum = (h) => { const x = h.slice(1); const [r, g, b] = [0, 2, 4].map((k) => parseInt(x.slice(k, k + 2), 16) / 255); return .2126 * r + .7152 * g + .0722 * b; };
+    return {
+      fan: { parts: fan && fan.parts.length, kinds: fan && kinds(fan), problems: fan && m.check3d(fan).filter((x) => /no 3d shape/.test(x)) },
+      fan2: fan2 && kinds(fan2), bike: m.check3d(bike), solar: m.check3d(solar), dragon: m.check(dragon, 'draw a dragon'), volcano: m.check(volcano, 'draw how a volcano erupts'), twice: m.check(twice, 'draw a table'),
+      darkLum: lum(dark.parts[0].color),
+      soft: LIVE_SOFT_RE.test('show me a dragon in 3D') && LIVE_SOFT_RE.test('a dinosaur in 3D'),
+      refWords: /reference picture of it from a free picture library/.test(liveDrawPrompt(false, { picture: true, reference: true })) && /the Sun and the orbits/.test(liveDrawPrompt(false, { picture: true, reference: true })),
+    };
+  }, { fan: fx('fan3d-flags'), fan2: fx('fan3d-blades'), bike: fx('bike3d-spokes'), solar: fx('solar3d-stacked'), dragon: fx('dragon2d-floating'), volcano: fx('volcano2d-good') });
+  expect(r.fan.parts === 6 && !r.fan.problems.length && r.fan.kinds.join() === 'lathe,cylinder,lathe,cylinder,cylinder+cylinder,blades', 'a fan written as {"lathe": true} or with no kind at all is read, every part: ' + JSON.stringify(r.fan));
+  expect(r.fan2 && r.fan2.includes('blades'), 'blades written as {n, len, hub} are read: ' + JSON.stringify(r.fan2));
+  expect(r.bike.filter((x) => /stick out past its rim/.test(x)).length >= 2, 'spokes past the tyre are sent back: ' + JSON.stringify(r.bike));
+  expect(r.solar.some((x) => /"Saturn" and "Uranus" overlap/.test(x)), 'planets inside each other are sent back: ' + JSON.stringify(r.solar));
+  expect(r.dragon.some((x) => /"Head and horns" floats apart from the body/.test(x)) && r.dragon.some((x) => /"Legs and claws" is drawn as thin lines/.test(x)), 'a floating head and stick legs are sent back: ' + JSON.stringify(r.dragon));
+  expect(!r.volcano.length, 'a good drawing passes: ' + JSON.stringify(r.volcano));
+  expect(r.twice.some((x) => /used for more than one part: leg/.test(x)), 'two parts named "Leg" are sent back: ' + JSON.stringify(r.twice));
+  expect(r.darkLum >= .3, 'a near-black part is brightened on dark paper: ' + r.darkLum);
+  expect(r.soft && r.refWords, 'a dragon asked for in 3D is drawn flat; a reference comes with its own words');
+  // the reference: Commons first, an English (or wordless) diagram, never one labelled in another language; credited
+  const api = []; const PNG = fs.readFileSync(path.join(ROOT, 'icons/icon-192.png'));
+  await ctx.route(/commons\.wikimedia\.org\/w\/api\.php/, (route) => {
+    const u = route.request().url(); api.push(u);
+    const body = /list=search/.test(u) ? { query: { search: [{ title: 'File:Volcano diagram-hi.svg' }, { title: 'File:Volcano scheme.svg' }] } }
+      : { query: { pages: { 1: { imageinfo: [{ thumburl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/v/v1/Volcano_scheme.svg/500px-Volcano_scheme.svg.png', descriptionurl: 'https://commons.wikimedia.org/wiki/File:Volcano_scheme.svg' }] } } } };
+    route.fulfill({ json: body, headers: { 'access-control-allow-origin': '*' } });
+  });
+  await ctx.route(/upload\.wikimedia\.org/, (route) => route.fulfill({ body: PNG, contentType: 'image/png', headers: { 'access-control-allow-origin': '*' } }));
+  const ref = await page.evaluate(async () => { const m = await liveDrawLoad(); const v = await m.findReference('draw how a volcano erupts'); const d = await m.findReference('draw a dragon'), f = await m.findReference('draw a frog'); return { v: v && { mime: v.mimeType, len: v.base64.length, ref: v.ref }, d, f }; });
+  expect(ref.v && ref.v.mime === 'image/png' && ref.v.len > 1000 && ref.v.ref.text === 'Volcano scheme.svg, Wikimedia Commons' && /File:Volcano_scheme\.svg$/.test(ref.v.ref.url), 'a volcano gets the English Commons diagram (not the Hindi one), credited: ' + JSON.stringify(ref.v && ref.v.ref));
+  expect(api.every((u) => /origin=\*/.test(u)) && api.some((u) => /iiurlwidth=500/.test(u)), 'Commons is asked the light, standard way (origin=*, a standard 500px size): ' + api.join(' | '));
+  expect(ref.d === null && ref.f === null, 'no reference for an imaginary creature or a living thing');
+  // the card credits it, with a link
+  const card = await page.evaluate(async () => { const m = await liveDrawLoad(); const host = document.createElement('div'); document.body.appendChild(host); await m.render(host, { title: 'How a volcano erupts', mode: '2d', ref: { text: 'Volcano scheme.svg, Wikimedia Commons', url: 'https://commons.wikimedia.org/wiki/File:Volcano_scheme.svg' }, parts: [{ label: 'Cone', say: 'a', anchor: [200, 150], shapes: [{ t: 'path', d: 'M100 240 L200 60 L300 240 Z' }, { t: 'line', x1: 200, y1: 60, x2: 200, y2: 240 }] }, { label: 'Ground', say: 'b', anchor: [200, 245], shapes: [{ t: 'line', x1: 0, y1: 240, x2: 400, y2: 240 }, { t: 'line', x1: 0, y1: 250, x2: 400, y2: 250 }] }] }, { animate: false }); const r2 = host.querySelector('.ld-ref'); return r2 ? { text: r2.textContent, href: r2.querySelector('a').href, rel: r2.querySelector('a').rel } : null; });
+  expect(card && card.text === 'Drawn from a reference: Volcano scheme.svg, Wikimedia Commons' && /Volcano_scheme/.test(card.href) && card.rel === 'noopener', 'the card says where the reference came from, with a link: ' + JSON.stringify(card));
+  const headers = fs.readFileSync(path.join(ROOT, '_headers'), 'utf8');
+  expect(/https:\/\/commons\.wikimedia\.org https:\/\/upload\.wikimedia\.org https:\/\/api\.openverse\.org/.test(headers), 'the security policy lets Cassie reach the two picture libraries');
+  expect(!errors.length, 'page errors: ' + errors.join(' | '));
+  await ctx.close();
+});
 test('v304: Flashcards once in the side menu (a study tool, no second dark button), empty states in the middle, Apply keeps 16px above Lite mode at the bottom, the Memory row like the others (its dot after the word), and on a computer a small sidebar arrow and the search in the top middle', async (b) => {
   for (const [size, opts] of [['1440x900', { device: 'Desktop Chrome', viewport: { width: 1440, height: 900 } }], ['390x844', { device: 'iPhone 13' }]]) {
     const phone = size === '390x844';
