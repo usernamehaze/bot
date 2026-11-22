@@ -17,13 +17,44 @@ const lum = (h) => { let x = h.slice(1); if (x.length < 6) x = x.slice(0, 3).spl
 let paperLight = null; // (a drawing on a card with its own paper, like the extension's: its light or dark, not the page's)
 const lightPage = () => { if (paperLight != null) return paperLight; try { const m = getComputedStyle(document.body).backgroundColor.match(/[\d.]+/g); return m && (.2126 * m[0] + .7152 * m[1] + .0722 * m[2]) / 255 > .6; } catch (e) { return false; } };
 const shade = (h, k) => { let x = h.slice(1); if (x.length < 6) x = x.slice(0, 3).split('').map((c) => c + c).join(''); return '#' + [0, 2, 4].map((i) => Math.round(parseInt(x.slice(i, i + 2), 16) * k).toString(16).padStart(2, '0')).join(''); };
-const color = (c, i) => { const h = color0(c, i); return lightPage() && lum(h) > .55 ? shade(h, .55 / lum(h) * .8) : h; };
+// (v305) and on dark paper a very dark colour is brightened (a black bike copied from a photo was nearly invisible)
+const lighten = (h, k) => { let x = h.slice(1); if (x.length < 6) x = x.slice(0, 3).split('').map((c) => c + c).join(''); return '#' + [0, 2, 4].map((i) => { const v = parseInt(x.slice(i, i + 2), 16); return Math.round(v + (255 - v) * k).toString(16).padStart(2, '0'); }).join(''); };
+const color = (c, i) => { const h = color0(c, i); if (lightPage()) return lum(h) > .55 ? shade(h, .55 / lum(h) * .8) : h; return lum(h) < .3 ? lighten(h, Math.min(.85, (.42 - lum(h)) / (1 - lum(h)) + .1)) : h; };
 const words = (t, max = 400) => String(t == null ? '' : t).replace(/[–—]/g, ',').replace(/[<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, max);
 const PATH_OK = /^[MmLlHhVvCcSsQqTtAaZz0-9.,\s+-]{1,1500}$/;
 const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ---------- the spec: what the AI wrote, made safe ----------
+const KINDS2 = ['line', 'arrow', 'rect', 'circle', 'ellipse', 'poly', 'path', 'text'];
+const KINDS3 = ['cylinder', 'tube', 'disc', 'cone', 'torus', 'ring', 'blades', 'sphere', 'box', 'capsule', 'pipe', 'arrow', 'lathe', 'plate'];
+const has = (x, k) => x[k] != null && x[k] !== '';
+function kindOf(x, mode) {
+  const known = mode === '3d' ? KINDS3 : KINDS2;
+  const said = String(x.t || x.type || x.shape || x.kind || '').toLowerCase();
+  if (known.includes(said)) return said;
+  const flag = known.find((k) => x[k] === true || x[k] === 'true'); // ({"lathe": true})
+  if (flag) return flag;
+  if (mode === '3d') {
+    if (Array.isArray(x.profile)) return 'lathe';
+    if (Array.isArray(x.outline)) return 'plate';
+    if (Array.isArray(x.pts)) return 'pipe';
+    if (Array.isArray(x.size)) return 'box';
+    if (has(x, 'hub') || ((has(x, 'n') || has(x, 'count')) && has(x, 'len'))) return 'blades';
+    if (has(x, 'tube')) return 'torus';
+    if (has(x, 'r') && (has(x, 'len') || has(x, 'h'))) return 'cylinder';
+    if (has(x, 'r')) return 'sphere';
+    return said;
+  }
+  if (typeof x.d === 'string') return 'path';
+  if (Array.isArray(x.pts)) return 'poly';
+  if (has(x, 'x1') && has(x, 'y2')) return 'line';
+  if (has(x, 'rx') && has(x, 'ry')) return 'ellipse';
+  if (has(x, 'cx') && has(x, 'r')) return 'circle';
+  if (has(x, 'x') && has(x, 'y') && (has(x, 'w') || has(x, 'width'))) return 'rect';
+  if (has(x, 'text')) return 'text';
+  return said;
+}
 const box4 = (b) => (Array.isArray(b) && b.length === 4 ? [num(b[0], 0, 400), num(b[1], 0, 260), num(b[2], 4, 400, 60), num(b[3], 4, 260, 40)] : null);
 export function clean(raw) {
   let s = raw;
@@ -46,10 +77,11 @@ export function clean(raw) {
     // (3d, for something that is put together) where the part starts before it slides into its place, as an offset; and the side to look from
     from: mode === '3d' && Array.isArray(p && p.from) && p.from.length === 3 && p.from.every((v) => Number.isFinite(+v)) ? p.from.map((v) => num(v, -12, 12)) : null,
     view: mode === '3d' && ['front', 'back', 'left', 'right', 'side', 'top'].includes(p && p.view) ? p.view : null,
-    shapes: (Array.isArray(p && p.shapes) ? p.shapes : []).slice(0, mode === '3d' ? 8 : 24).filter((x) => x && typeof x === 'object'),
+    shapes: (Array.isArray(p && p.shapes) ? p.shapes : []).slice(0, mode === '3d' ? 8 : 24).filter((x) => x && typeof x === 'object').map((x) => ({ ...x, t: kindOf(x, mode) })),
   })).filter((p) => p.shapes.length);
   if (!parts.length) return null;
-  return { title: words(s.title, 90) || 'How it works', mode, intro: words(s.intro, 300), summary: words(s.summary, 300), photo: words(s.photo, 300), simple: !!s.simple, axis: ['x', 'y', 'z'].includes(s.axis) ? s.axis : 'x', parts };
+  const ref = s.ref && typeof s.ref === 'object' && /^https:\/\//.test(String(s.ref.url || '')) ? { text: words(s.ref.text, 160), url: String(s.ref.url).slice(0, 400) } : null;
+  return { title: words(s.title, 90) || 'How it works', mode, intro: words(s.intro, 300), summary: words(s.summary, 300), photo: words(s.photo, 300), simple: !!s.simple, axis: ['x', 'y', 'z'].includes(s.axis) ? s.axis : 'x', parts, ref };
 }
 
 // ---------- is it a good drawing? (2d) the points every shape reaches, and what is wrong ----------
@@ -63,6 +95,19 @@ function shapePoints(sh) {
   if (t === 'poly' && Array.isArray(sh.pts)) return sh.pts.map((q) => [+(q && q[0]), +(q && q[1])]);
   if (t === 'text') return [[n('x'), n('y')]];
   return [];
+}
+// (v305) living things and creatures: one body whose parts touch; what is not part of the body is left out of that check
+const CREATURE = /\b(animals?|dragons?|dinosaurs?|creatures?|monsters?|unicorns?|horses?|dogs?|cats?|lions?|tigers?|bears?|birds?|eagles?|owls?|chickens?|ducks?|fish|sharks?|whales?|dolphins?|frogs?|toads?|snakes?|lizards?|turtles?|crocodiles?|insects?|ants?|bees?|butterfl\w*|spiders?|cows?|goats?|pigs?|carabaos?|monkeys?|elephants?|giraffes?|deer|rabbits?|mice|mouse|bats?|people|person|human body|hayop|aso|pusa|ibon|isda)\b/i;
+const NOT_BODY = /\b(fire|flames?|breath|smoke|ground|floor|grass|branch|rock|water|air|sky|cloud|spots?|stripes?|scales?|pattern|whiskers?|shadow|arrows?|path|nest|food|egg)\b/i;
+const LIMB = /\b(legs?|arms?|limbs?|tails?|necks?|paws?|feet|foot|claws?|tentacles?)\b/i;
+// (v305) points along a shape's outline, close enough together to measure the gap between two parts
+function outlinePoints(sh) {
+  const t = String(sh.t || '').toLowerCase(), n = (k) => +sh[k];
+  if (t === 'circle' || t === 'ellipse') { const rx = t === 'circle' ? n('r') : n('rx'), ry = t === 'circle' ? n('r') : n('ry'); return Array.from({ length: 24 }, (_, k) => [n('cx') + rx * Math.cos(k * Math.PI / 12), n('cy') + ry * Math.sin(k * Math.PI / 12)]); }
+  const pts = shapePoints(sh), out = [];
+  for (let k = 0; k < pts.length; k++) { out.push(pts[k]); const q = pts[k + 1]; if (q) { const steps = Math.min(12, Math.ceil(Math.hypot(q[0] - pts[k][0], q[1] - pts[k][1]) / 10)); for (let j = 1; j < steps; j++) out.push([pts[k][0] + (q[0] - pts[k][0]) * j / steps, pts[k][1] + (q[1] - pts[k][1]) * j / steps]); } }
+  if (t === 'rect' && out.length >= 2) { const [a, b] = [out[0], out[out.length - 1]]; return [[a[0], a[1]], [b[0], a[1]], [b[0], b[1]], [a[0], b[1]], [(a[0] + b[0]) / 2, a[1]], [(a[0] + b[0]) / 2, b[1]], [a[0], (a[1] + b[1]) / 2], [b[0], (a[1] + b[1]) / 2]]; }
+  return out;
 }
 // (round by nature: a plain circle is the real shape)
 const ROUND_THINGS = /\b(?:sun|moon|star|planet|earth|ball|atom|nucleus|drop|droplet|bubble|molecule|wheel|coin|pupil|egg|cell\s+membrane|o2|co2|h2o|ion|electron|proton|neutron)s?\b/i;
@@ -100,7 +145,7 @@ const MUST = [
   { is: /\bdigestive (system|tract)\b|\bdigestion\b/i, what: 'the digestive system', need: [['mouth'], ['oesophagus', 'esophagus', 'food pipe'], ['stomach'], ['liver'], ['small intestine'], ['large intestine', 'colon']] },
   { is: /\b(electric(al)? )?circuits?\b/i, not: /\bcircuit training\b/i, what: 'a circuit', need: [['battery', 'cell', 'power'], ['wire'], ['switch'], ['bulb', 'lamp', 'resistor', 'load'], ['current']] },
   { is: /\batoms?\b|\batomic structure\b/i, not: /\batomic bomb\b/i, what: 'an atom', need: [['nucleus'], ['proton'], ['neutron'], ['electron'], ['shell', 'orbit', 'cloud']] },
-  { is: /\bsolar system\b/i, what: 'the solar system', need: [['sun'], ['mercury'], ['venus'], ['earth'], ['mars'], ['jupiter'], ['saturn'], ['uranus'], ['neptune']] },
+  { is: /\bsolar system\b/i, what: 'the solar system', need: [['sun'], ['mercury'], ['venus'], ['earth'], ['mars'], ['jupiter'], ['saturn'], ['uranus'], ['neptune'], ['orbit']] },
   { is: /\b(layers of the earth|earth'?s layers|inside the earth|earth'?s interior|structure of the earth)\b/i, what: 'the Earth', need: [['crust'], ['mantle'], ['outer core'], ['inner core']] },
   { is: /\b(tooth|teeth|ngipin)\b/i, what: 'a tooth', need: [['enamel'], ['dentin'], ['pulp'], ['root'], ['gum']] },
 ];
@@ -159,6 +204,22 @@ export function check(spec, asked = '') {
   if (boxes.length >= 2) {
     const ux = Math.max(...boxes.map((b) => b[2])) - Math.min(...boxes.map((b) => b[0])), uy = Math.max(...boxes.map((b) => b[3])) - Math.min(...boxes.map((b) => b[1]));
     if (ux * uy < 400 * 260 * .18) out.push('everything is piled into one small corner; spread the drawing across the picture');
+  }
+  // (v305) every part has its own name ("Front leg" and "Back leg", never "Leg" twice)
+  const names = spec.parts.map((p) => String(p.label || '').trim().toLowerCase()).filter(Boolean);
+  const twice = [...new Set(names.filter((n, i) => names.indexOf(n) !== i))];
+  if (twice.length) out.push(`these names are used for more than one part: ${twice.join(', ')}; give each part its own name, like "Front leg" and "Back leg"`);
+  // (v305) a creature is one body: its parts touch (a head never floats away from its neck), and its legs, arms and tail have thickness
+  if (CREATURE.test(`${spec.title} ${asked}`)) {
+    const own = spec.parts.map((p) => { const pts = p.shapes.flatMap(outlinePoints).filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y)); return pts.length ? pts : null; });
+    const near = (a, b) => a && b && a.some(([x, y]) => b.some(([u, v]) => Math.abs(x - u) <= 6 && Math.abs(y - v) <= 6 && (x - u) ** 2 + (y - v) ** 2 <= 36));
+    spec.parts.forEach((p, i) => {
+      const label = p.label || p.id;
+      if (NOT_BODY.test(label) || !own[i]) return;
+      const body = spec.parts.map((q, j) => (j !== i && !NOT_BODY.test(q.label || q.id) ? own[j] : null)).filter(Boolean);
+      if (body.length && !body.some((b) => near(own[i], b))) out.push(`"${label}" floats apart from the body; join it on where it really grows from (a head joins the neck, a wing joins the shoulder)`);
+      if (LIMB.test(label) && p.shapes.length > 1 && p.shapes.every((sh) => { const t = String(sh.t || '').toLowerCase(); return t === 'line' || t === 'arrow' || (t === 'path' && !/z/i.test(String(sh.d || ''))); })) out.push(`"${label}" is drawn as thin lines; draw each one as a shape with thickness (an outline that closes), with a joint and a foot or tip`);
+    });
   }
   return out;
 }
@@ -236,7 +297,90 @@ export function check3d(spec) {
       if (blades) out.push(`${name(x)}'s blades face the wrong way: they turn around the main shaft, so give them "axis":"${main}"`);
     }
   }
+  // (v305) a spoke, a blade or a rod stays inside the wheel or ring it belongs to (no spokes sticking out past the tyre):
+  // only thin pieces (blades, rods, or cylinders much narrower than the ring), and only sideways past the rim (along the
+  // axle is fine: a jet's casing is a wide cylinder that runs on past the ring at its mouth)
+  const AXES = { x: 0, y: 1, z: 2 };
+  for (const x of ok) {
+    const rims = x.p.shapes.filter((sh) => /^(torus|ring|disc)$/.test(String(sh.t || '').toLowerCase()) && AXES[sh.axis] != null);
+    if (!rims.length) continue;
+    const rim = rims.reduce((a, sh) => (Math.abs(+sh.r || 0) > Math.abs(+a.r || 0) ? sh : a)), rb = box3(rim);
+    if (!rb) continue;
+    const R = Math.abs(+rim.r || 0), across = [0, 1, 2].filter((k) => k !== AXES[rim.axis]), pad = R * .15;
+    const thin = x.p.shapes.filter((sh) => { const t = String(sh.t || '').toLowerCase(); return t === 'blades' || t === 'pipe' || ((t === 'cylinder' || t === 'tube') && Math.abs(+sh.r || 0) < R * .25); });
+    const sticks = thin.map(box3).filter(Boolean).some((b) => across.some((k) => b[k] < rb[k] - pad || b[k + 3] > rb[k + 3] + pad));
+    if (sticks) out.push(`${name(x)} has thin pieces (spokes, blades or rods) that stick out past its rim; keep them inside it, shorter than its radius`);
+  }
+  // (v305) separate round things (planets, balls, atoms) never sit inside each other
+  const balls = ok.flatMap((x) => x.p.shapes.filter((sh) => String(sh.t || '').toLowerCase() === 'sphere').map(box3).filter(Boolean).map((b) => ({ x, c: [(b[0] + b[3]) / 2, (b[1] + b[4]) / 2, (b[2] + b[5]) / 2], r: (b[3] - b[0]) / 2 })));
+  for (let i = 0; i < balls.length; i++) for (let j = i + 1; j < balls.length; j++) {
+    const a = balls[i], b = balls[j];
+    if (a.x === b.x || a.x.p.inside === b.x.p.id || b.x.p.inside === a.x.p.id) continue;
+    const d = Math.hypot(a.c[0] - b.c[0], a.c[1] - b.c[1], a.c[2] - b.c[2]);
+    if (d < (a.r + b.r) * .9) out.push(`${name(a.x)} and ${name(b.x)} overlap; give each its own place (planets each on their own orbit, at their own distance)`);
+  }
   return [...new Set(out)].slice(0, 10);
+}
+
+// ---------- (v305) a reference picture to draw from ----------
+// For a real structure, machine or place, Cassie finds a free picture of it first and draws from that, so its outline,
+// proportions and parts are the real ones. A diagram from Wikimedia Commons for how things are built or work (a volcano,
+// the heart, the layers of the Earth); a photo from Openverse for objects and machines (a bicycle, a fan). Living things
+// and imaginary creatures get none: a photo at an angle or a painting made those drawings worse, not better.
+// Only free licences (public domain, CC0, CC BY, CC BY-SA), and the card credits the picture. → { mimeType, base64, ref } or null
+const DIAGRAM = /\b(diagram|cycle|layers?|cross.?section|inside|structure|system|process|how .{0,40}\b(work|erupt|form|grow|flow)s?|parts? of|anatomy|heart|lungs?|brain|kidneys?|eye|ear|tooth|skeleton|volcano|earthquake|cell|atom|molecule|circuit|engine|motor|pump|generator|turbine|photosynthesis|digestive|respiratory|circulatory|nervous|solar system|planet|earth|moon|tides?|seasons?|eclipse|rainbow|lever|pulley|gear)\b/i;
+const NO_REF = /\b(plants?|trees?|flowers?|leaf|leaves|roots?|seeds?|mushrooms?|fungi|bacteri\w*|virus\w*|people|person|face|my |your |our |this|that|these|those|graph|chart|equation|map of)\b/i;
+const FREE = /^(cc0|pdm|by|by-sa|public domain|cc by( |-)?(sa)?[\s\d.]*|cc-by(-sa)?[\s\d.]*)$/i;
+function subjectOf(q) {
+  return String(q || '').toLowerCase().replace(/\(.*?\)/g, ' ')
+    .replace(/\b(please|pls|can you|could you|cassie|draw|sketch|show|me|us|a|an|the|of|in 3d|3d|picture|image|diagram|how|does|do|it|explain|label(l)?ed|with labels|what|is|are|looks? like)\b/g, ' ')
+    .replace(/[^a-z0-9 -]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
+}
+async function getJson(url, ms) { const r = await fetch(url, { signal: AbortSignal.timeout(ms), credentials: 'omit' }); if (!r.ok) throw new Error(String(r.status)); return r.json(); }
+async function asData(url, ms) {
+  const r = await fetch(url, { signal: AbortSignal.timeout(ms), credentials: 'omit' });
+  if (!r.ok) throw new Error(String(r.status));
+  const b = await r.blob();
+  if (!/^image\/(png|jpeg|webp|gif)$/.test(b.type) || b.size > 2.5e6 || b.size < 2000) throw new Error('not a picture');
+  const base64 = await new Promise((ok, no) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result).split(',')[1] || ''); fr.onerror = no; fr.readAsDataURL(b); });
+  return { mimeType: b.type, base64 };
+}
+async function fromCommons(subject, ms) {
+  const api = 'https://commons.wikimedia.org/w/api.php?origin=*&format=json&action=query';
+  const hits = (await getJson(`${api}&list=search&srnamespace=6&srlimit=8&srsearch=${encodeURIComponent(subject + ' diagram')}`, ms)).query?.search || [];
+  // an English or wordless diagram (not one labelled in another language), a picture file
+  const pick = hits.map((h) => h.title).find((t) => /\.(svg|png|jpe?g)$/i.test(t) && !/[-_](?!en\b)[a-z]{2,3}(-[a-z]{2,4})?\.(svg|png|jpe?g)$/i.test(t) && !/\b(map|flag|logo|stamp|coin|painting|poster)\b/i.test(t));
+  if (!pick) return null;
+  const page = Object.values((await getJson(`${api}&prop=imageinfo&iiprop=url&iiurlwidth=500&titles=${encodeURIComponent(pick)}`, ms)).query?.pages || {})[0];
+  const ii = page && page.imageinfo && page.imageinfo[0];
+  if (!ii || !ii.thumburl) return null;
+  return { ...(await asData(ii.thumburl, ms)), ref: { text: `${pick.replace(/^File:/, '')}, Wikimedia Commons`, url: ii.descriptionurl } };
+}
+async function fromOpenverse(subject, ms) {
+  const d = await getJson(`https://api.openverse.org/v1/images/?q=${encodeURIComponent(subject)}&license=cc0,pdm,by,by-sa&mature=false&page_size=8`, ms);
+  for (const r of d.results || []) {
+    if (!FREE.test(String(r.license || '')) || !r.thumbnail) continue;
+    try {
+      const lic = String(r.license).toLowerCase() === 'pdm' ? 'public domain' : `CC ${String(r.license).toUpperCase()} ${r.license_version || ''}`.trim();
+      return { ...(await asData(r.thumbnail, ms)), ref: { text: `${words(r.title, 60) || 'a photo'}${r.creator ? ' by ' + words(r.creator, 40) : ''}, ${lic}, Openverse`, url: r.foreign_landing_url || r.url } };
+    } catch (e) { /* the next one */ }
+  }
+  return null;
+}
+export async function findReference(question, ms = 5000) {
+  const q = String(question || '');
+  if (CREATURE.test(q) || NO_REF.test(q)) return null;
+  const subject = subjectOf(q);
+  if (subject.length < 3) return null;
+  // Commons first (diagrams, photos and public-domain drawings, and quick); Openverse only while there is time left.
+  // A student never waits more than about 6 seconds for a reference: then Cassie draws without one.
+  const end = Date.now() + ms * 1.2;
+  for (const find of [fromCommons, fromOpenverse]) {
+    const left = end - Date.now();
+    if (left < 1500) break;
+    try { const got = await find(subject, Math.min(ms, left)); if (got) return got; } catch (e) { /* offline, busy, or nothing: the next source */ }
+  }
+  return null;
 }
 
 // ---------- the frame around a drawing: the picture, what she says, and what you can do ----------
@@ -255,6 +399,11 @@ export async function render(host, rawSpec, opts = {}) {
   const acts = el('div', 'ld-acts');
   host.append(head, stage, hint, say);
   if (spec.simple && opts.simpleNote) host.appendChild(el('p', 'ld-note', opts.simpleNote));
+  if (spec.ref) { // (v305) drawn from a reference picture: where it came from (its licence asks for the credit)
+    const r = el('p', 'ld-ref', 'Drawn from a reference: '), a = el('a', null, spec.ref.text);
+    a.href = spec.ref.url; a.target = '_blank'; a.rel = 'noopener';
+    r.appendChild(a); host.appendChild(r);
+  }
   host.appendChild(acts);
   const setSay = async (text, type) => {
     if (!type) { say.textContent = text; return; }

@@ -2812,7 +2812,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=304'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=305'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2834,7 +2834,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=304'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=305'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -3110,7 +3110,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=304').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=305').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -7356,10 +7356,10 @@ const LD_EXAMPLE_HOUSE = {"title":"A house being built","mode":"2d","layout":"si
 const LD_EXAMPLE_WATER = {"title":"The water cycle","mode":"2d","layout":"the sea along the bottom, a hill on the right, the sun top right, a cloud in the middle top","intro":"Water keeps moving between the sea, the sky and the land.","summary":"Evaporate, condense, fall, collect, and it starts again.","photo":"a real landscape with the sea, a hill, clouds and rain falling, on a sunny day","parts":[{"id":"sea","label":"Ocean","say":"Most water is in the oceans, lakes and rivers.","color":"#7fb0ff","box":[10,206,380,46],"shapes":[{"t":"path","d":"M10 222 Q60 210 110 222 T210 222 T310 222 T390 222","fill":false},{"t":"path","d":"M10 222 L10 250 L390 250 L390 222","fill":false}],"anchor":[200,236]},{"id":"sun","label":"Sun","say":"The sun heats the water.","color":"#ffd29e","box":[318,24,64,64],"shapes":[{"t":"circle","cx":350,"cy":56,"r":20,"fill":true},{"t":"line","x1":350,"y1":28,"x2":350,"y2":20},{"t":"line","x1":322,"y1":56,"x2":314,"y2":56},{"t":"line","x1":330,"y1":36,"x2":324,"y2":30}],"anchor":[350,56]},{"id":"evap","label":"Evaporation","say":"Warm water turns into vapour and rises.","color":"#8fe0b0","box":[100,110,70,96],"shapes":[{"t":"arrow","x1":112,"y1":204,"x2":112,"y2":116},{"t":"arrow","x1":136,"y1":204,"x2":136,"y2":116},{"t":"arrow","x1":160,"y1":204,"x2":160,"y2":116}],"anchor":[136,160]},{"id":"cloud","label":"Condensation","say":"High up the vapour cools into tiny drops: clouds.","color":"#a3a3ad","box":[150,40,124,48],"shapes":[{"t":"path","d":"M154 84 Q150 62 172 62 Q178 42 202 48 Q222 36 238 54 Q264 54 266 72 Q272 86 254 86 Z","fill":true},{"t":"path","d":"M182 70 Q194 62 206 70"}],"anchor":[210,66]},{"id":"rain","label":"Precipitation","say":"When the drops get heavy they fall as rain.","color":"#7ee0e0","box":[176,92,80,40],"shapes":[{"t":"line","x1":190,"y1":94,"x2":184,"y2":124,"dash":true},{"t":"line","x1":214,"y1":94,"x2":208,"y2":124,"dash":true},{"t":"line","x1":238,"y1":94,"x2":232,"y2":124,"dash":true}],"anchor":[214,108]},{"id":"runoff","label":"Runoff","say":"Rain runs down the land back to the sea.","color":"#c9a7ff","box":[240,140,140,82],"shapes":[{"t":"path","d":"M244 220 L300 148 L372 220"},{"t":"arrow","x1":326,"y1":190,"x2":272,"y2":216}],"anchor":[330,190]}]};
 const LD_EXAMPLE_PHOTO = {"title":"How photosynthesis works","mode":"2d","layout":"a leaf in the middle on its stem; the sun top left; CO2 coming in from the left; water rising from the roots; O2 leaving top right; glucose bottom right","intro":"A leaf makes its own food from light, air and water.","summary":"Light, carbon dioxide and water make glucose and release oxygen in the chloroplast.","photo":"a real green leaf on a plant in bright sunlight, close up, showing its veins","parts":[{"id":"sun","label":"Sunlight","say":"Sunlight gives the leaf the energy it needs.","color":"#ffd29e","box":[30,30,126,78],"anchor":[54,54],"shapes":[{"t":"circle","cx":54,"cy":54,"r":18,"fill":true},{"t":"line","x1":54,"y1":28,"x2":54,"y2":20},{"t":"line","x1":28,"y1":54,"x2":20,"y2":54},{"t":"line","x1":36,"y1":36,"x2":30,"y2":30},{"t":"arrow","x1":76,"y1":66,"x2":152,"y2":104}]},{"id":"leaf","label":"Leaf","say":"The leaf is a thin green blade with veins that carry water and food.","color":"#8fe0b0","box":[136,70,200,170],"anchor":[214,170],"shapes":[{"t":"path","d":"M150 190 C170 120 250 70 330 80 C320 150 250 200 150 190 Z","fill":true},{"t":"path","d":"M150 190 Q240 140 330 80"},{"t":"line","x1":200,"y1":160,"x2":204,"y2":132},{"t":"line","x1":200,"y1":160,"x2":226,"y2":178},{"t":"line","x1":250,"y1":128,"x2":252,"y2":100},{"t":"line","x1":250,"y1":128,"x2":282,"y2":146},{"t":"line","x1":150,"y1":190,"x2":140,"y2":236}]},{"id":"chloro","label":"Chloroplast","say":"Inside the leaf cells, chloroplasts catch the light with green chlorophyll.","color":"#7ee0e0","box":[244,108,36,24],"anchor":[262,120],"shapes":[{"t":"ellipse","cx":262,"cy":120,"rx":16,"ry":9,"fill":true},{"t":"path","d":"M251 117 L273 117"},{"t":"path","d":"M251 123 L273 123"}]},{"id":"co2","label":"Carbon dioxide in","say":"Carbon dioxide from the air enters through tiny holes called stomata.","color":"#a3a3ad","box":[16,130,148,40],"anchor":[90,152],"shapes":[{"t":"text","x":20,"y":142,"text":"CO2"},{"t":"arrow","x1":20,"y1":152,"x2":160,"y2":152},{"t":"arrow","x1":20,"y1":164,"x2":154,"y2":164}]},{"id":"water","label":"Water from roots","say":"The roots take in water, and it travels up the stem to the leaf.","color":"#7fb0ff","box":[118,196,48,60],"anchor":[147,216],"shapes":[{"t":"path","d":"M140 236 L124 252"},{"t":"path","d":"M140 236 L156 252"},{"t":"path","d":"M140 236 L140 254"},{"t":"arrow","x1":147,"y1":234,"x2":147,"y2":198},{"t":"text","x":152,"y":230,"text":"H2O"}]},{"id":"o2","label":"Oxygen out","say":"Oxygen is made and leaves the leaf into the air.","color":"#c9a7ff","box":[296,20,92,80],"anchor":[360,34],"shapes":[{"t":"arrow","x1":300,"y1":96,"x2":352,"y2":44},{"t":"circle","cx":360,"cy":34,"r":6},{"t":"circle","cx":374,"cy":30,"r":6},{"t":"text","x":352,"y":58,"text":"O2"}]},{"id":"gluc","label":"Glucose","say":"Glucose, a sugar, is the food the plant makes and uses to grow.","color":"#ffb067","box":[268,126,100,104],"anchor":[330,193],"shapes":[{"t":"arrow","x1":270,"y1":128,"x2":318,"y2":182},{"t":"poly","pts":[[318,186],[330,180],[342,186],[342,200],[330,206],[318,200],[318,186]],"fill":true},{"t":"text","x":296,"y":226,"text":"C6H12O6"}]}]};
 // soft and living things, and processes: a 3D model is made of simple solids and would look wrong, so these are drawn flat
-const LIVE_SOFT_RE = /\b(heart|lungs?|brain|kidneys?|liver|stomach|intestines?|eyes?|ears?|skin|muscles?|bones?|skeleton|tooth|teeth|tongue|nerves?|neurons?|veins?|arter(y|ies)|blood|organs?|body|digestive|respiratory|circulatory|nervous system|cells?|bacteri\w*|virus\w*|dna|plants?|lea(f|ves)|flowers?|roots?|seeds?|trees?|animals?|insects?|fish|birds?|frogs?|butterfl\w*|puso|baga|utak|halaman|dahon|bulaklak|hayop|cycle|photosynthesis|respiration|digestion|mitosis|meiosis|evaporation|erosion|food (chain|web)|ecosystem)\b/i;
+const LIVE_SOFT_RE = /\b(heart|lungs?|brain|kidneys?|liver|stomach|intestines?|eyes?|ears?|skin|muscles?|bones?|skeleton|tooth|teeth|tongue|nerves?|neurons?|veins?|arter(y|ies)|blood|organs?|body|digestive|respiratory|circulatory|nervous system|cells?|bacteri\w*|virus\w*|dna|plants?|lea(f|ves)|flowers?|roots?|seeds?|trees?|animals?|insects?|fish|birds?|frogs?|dragons?|dinosaurs?|unicorns?|creatures?|monsters?|horses?|dogs?|cats?|butterfl\w*|puso|baga|utak|halaman|dahon|bulaklak|hayop|cycle|photosynthesis|respiration|digestion|mitosis|meiosis|evaporation|erosion|food (chain|web)|ecosystem)\b/i;
 // (v279) opts.picture: the student sent a picture with the question, so she draws the very thing in it; opts.flatNote: 3D was asked for something soft or living
 function liveDrawPrompt(want3d, opts = {}) {
-  const seen = opts.picture ? `The student sent a picture with the question. Look at it first. If the thing they ask about is in it (a photo, a figure, a diagram, their own sketch), ${want3d ? 'build' : 'draw'} THAT one: its true outline and proportions, the side it is seen from, its real colours, and the parts you can see, each where it really is.\n` : '';
+  const seen = opts.reference ? `The picture is a reference picture of it from a free picture library (v305). Draw the real thing as it looks there: its true outline and proportions, the side it is seen from, and its parts, each where it really is. Leave out anything else in the picture, write every name in English, and still show every main part a textbook figure of the topic shows, even one the picture leaves out (the solar system has the Sun and the orbits).\n` : opts.picture ? `The student sent a picture with the question. Look at it first. If the thing they ask about is in it (a photo, a figure, a diagram, their own sketch), ${want3d ? 'build' : 'draw'} THAT one: its true outline and proportions, the side it is seen from, its real colours, and the parts you can see, each where it really is.\n` : '';
   const flatNote = opts.flatNote ? `They asked for 3D, but a 3D model here is built from simple solids and would look wrong for something soft, living or a process, so draw it flat, and say that in a few words at the start of "intro".\n` : '';
   const care = `Students learn from this: every fact, label, direction and count MUST be correct. Show every main part a textbook figure of it shows, each in its real place (a bicycle: frame, both wheels, saddle, handlebars, pedals and cranks, chain, chainring, rear gear, fork and brakes; arrows for rain point down and for evaporation point up). Leave out only a small detail you are not sure of.`;
   const tail = `Use the student's language (English, Filipino or Taglish). No dashes in the words. No emojis.`;
@@ -7440,7 +7440,13 @@ async function liveDrawFirst(question, want3d, image = null) {
   const m = await liveDrawLoad();
   const soft = want3d && LIVE_SOFT_RE.test(question); // (v279: a heart, a leaf, a cycle asked for in 3D is drawn flat, and she says so)
   if (soft) want3d = false;
-  const messages = [{ role: 'system', content: liveDrawPrompt(want3d, { picture: !!image, flatNote: soft }) }, { role: 'user', content: question }];
+  // (v305) no picture from the student: a free reference picture of the real thing to draw from, when one helps (a few seconds at most)
+  let ref = null;
+  if (!image && navigator.onLine !== false) {
+    const found = await m.findReference(question).catch(() => null);
+    if (found) { image = { mimeType: found.mimeType, base64: found.base64 }; ref = found.ref; }
+  }
+  const messages = [{ role: 'system', content: liveDrawPrompt(want3d, { picture: !!image, reference: !!ref, flatNote: soft }) }, { role: 'user', content: question }];
   let { text, simple } = await liveDrawCall(messages, true, image); // (the drawing is the one question it counts as)
   let spec = m.clean(text);
   const issues = (sp) => (!sp ? ['the reply was not one valid JSON object in the schema'] : [...(!want3d && sp.mode === '3d' ? ['it must be a flat 2d pen drawing, mode "2d"'] : []), ...m.check(sp, question)]);
@@ -7451,7 +7457,7 @@ async function liveDrawFirst(question, want3d, image = null) {
     if (s2 && issues(s2).length <= wrong.length) { spec = s2; text = again.text; simple = simple || again.simple; }
   }
   if (spec && !want3d && spec.mode === '3d') spec.mode = '2d';
-  if (spec) { spec.simple = simple; spec.q = question.slice(0, 300); }
+  if (spec) { spec.simple = simple; spec.q = question.slice(0, 300); if (ref) spec.ref = ref; }
   return { text, spec, messages, issues, image };
 }
 // the look, while she draws: a picture of the drawing, every number checked; one redraw when something is wrong
@@ -7465,11 +7471,11 @@ async function liveDrawVerify(question, first) {
   const s3 = fix && m.clean(fix.text);
   if (!s3 || first.issues(s3).length) return null;
   if (s3.mode === '3d' && first.spec.mode === '2d') s3.mode = '2d';
-  s3.simple = first.spec.simple || fix.simple; s3.q = first.spec.q;
+  s3.simple = first.spec.simple || fix.simple; s3.q = first.spec.q; if (first.spec.ref) s3.ref = first.spec.ref;
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=304')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=305')));
 // a real photo needs Gemini pictures (Cassie's server or the student's key); the free service draws toys and models
 const realPhotoOk = () => !!((SERVER && serverPictures) || (state.geminiKey && !geminiImageOff));
 // a drawing inside a chat bubble (a new one draws itself; one from history shows finished)
@@ -8760,7 +8766,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=304');
+      exploreMod = await import('./explore/cell3d.js?v=305');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -8810,7 +8816,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=304');
+      labsMod = await import('./labs/labs.js?v=305');
       islandRest();
     }
     labsMod.open({
@@ -10772,10 +10778,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=304').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=305').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=304', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=305', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.

@@ -4304,6 +4304,8 @@ html.lg-refract.native .tabbar { background: linear-gradient(var(--lg-tint), var
 .ld-ltext { fill: var(--text); font-weight: 600; font-family: system-ui, -apple-system, sans-serif; }
 .ld-lbg { fill: color-mix(in srgb, var(--bg) 82%, transparent); stroke: var(--lg-line, var(--border)); stroke-width: 1; }
 .ld-note { margin: 0; font-size: .82rem; color: var(--muted); }
+.ld-ref { margin: 0; font-size: .78rem; line-height: 1.4; color: var(--muted); } /* (v305) the reference picture's credit */
+.ld-ref a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 .ld-photo-wrap { position: relative; margin-top: var(--sp-2, 8px); border-radius: 14px; overflow: hidden; }
 .ld-photo-wrap img { display: block; width: 100%; height: auto; }
 .ld-pin { position: absolute; transform: translate(-50%, -50%); padding: var(--sp-1, 4px) var(--sp-2, 8px); border-radius: 99px; background: color-mix(in srgb, var(--bg) 85%, transparent); color: var(--text); border: 1px solid var(--lg-line, var(--border)); font-size: .76rem; font-weight: 700; white-space: nowrap; pointer-events: none; }
