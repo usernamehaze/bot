@@ -4,7 +4,7 @@
    versioned: files the app loads with ?v=<the app's version> in the address; they are fetched that way too.
    Run it after adding or removing a file in labs/ or explore/ (a smoke test checks the list is current). */
 const fs = require('fs'), path = require('path');
-const ROOT = path.join(__dirname, '..');
+const ROOT = path.join(__dirname, '..', 'web'); // (the website's files)
 const walk = (dir) => fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true }).flatMap((e) => {
   const rel = dir + '/' + e.name;
   if (e.isDirectory()) return rel === 'explore/body' ? [] : walk(rel); // (the 3D body models: too big to save)

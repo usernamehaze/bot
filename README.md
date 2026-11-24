@@ -41,13 +41,23 @@ like passwords.
 **Cost note:** both free tiers are genuinely free (no billing), but
 rate-limited per minute/day. Groq's higher limit is why text runs on it.
 
+## Folders
+
+| Folder | What's in it |
+|---|---|
+| `web/` | The website and app: every page, script, stylesheet, icon, the labs, the 3D explorer and the landing page. `askcassie.study/app.html` is `web/app.html`. |
+| `extension/` | Cassie for Chrome (the browser extension). |
+| `server/` | Cassie's Cloudflare Worker (`worker.src.js`, built into `worker.js`). |
+| `docs/` | Notes and guides: store publishing (`STORES.md`), audits, plans, `founder/`, and `promo/` (ad videos and their sources). |
+| `scripts/` | The site build (`build-site.sh`), helper scripts, and the tests (`scripts/tests`). |
+
 ## Running it locally
 
-No build step or dependencies — it's plain HTML/CSS/JS. Serve the folder
-with any static file server, for example:
+No build step or dependencies — it's plain HTML/CSS/JS. Serve the `web/`
+folder with any static file server, for example:
 
 ```bash
-python3 -m http.server 8000
+cd web && python3 -m http.server 8000
 ```
 
 Then open `http://localhost:8000` in your browser.
@@ -80,19 +90,20 @@ Talking to the Gemini API always requires an internet connection.)
 The simplest option is **GitHub Pages**:
 
 1. Push this repo to GitHub.
-2. In the repo settings, enable **Pages**, serving from the branch/folder
-   containing these files.
+2. In the repo settings, enable **Pages**, serving from the `web/` folder
+   (or run `bash scripts/build-site.sh` and serve `_site`).
 3. Open the published URL on your phone and computer and install it as
    described above.
 
 Any static host (Netlify, Vercel, Cloudflare Pages) works the same way —
-just point it at this folder.
+just point it at the `web/` folder.
 
 Cassie's own site is Cloudflare Pages with `bash scripts/build-site.sh` as the build command
 (output: `_site`). The build stamps every `?v=` and the offline cache's name with the commit,
 so there's nothing to bump by hand. `server/worker.js` is built from `server/worker.src.js` with
 `cd server && python3 build.py` (a test fails if you forget), and the extension's `board.js` and
-`sketch.js` are the app's own (a test fails if the copies differ).
+`sketch.js` are the app's own in `web/` (a test fails if the copies differ). The tests:
+`cd scripts/tests && npm ci && npm test`.
 
 ## Browser extension (desktop only)
 
@@ -113,7 +124,7 @@ silently in the background, and doesn't require any special OS-level
 permissions — everything it does is a direct, visible reaction to text
 you selected.
 
-## Website layout
+## Website layout (in `web/`)
 
 - `index.html` — the landing page (marble hero, features, pricing, FAQ). Its moving background
   is `gradient.js`.

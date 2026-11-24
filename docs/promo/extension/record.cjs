@@ -1,12 +1,12 @@
 // Records "Cassie for Chrome: how it works", the video the app shows after its tour (on computers).
 // The real extension runs on a study page (promo/extension/page.html), with the AI faked so the answers
 // are always the same. Captions and a mouse pointer are drawn on the page for the recording only.
-//   node promo/extension/record.cjs   →   landing/extension-how.webm, .mp4 (for Safari) and .jpg
+//   node docs/promo/extension/record.cjs   →   web/landing/extension-how.webm, .mp4 (for Safari) and .jpg
 // (needs the tests' Playwright: cd tests && npm install; and ffmpeg: imageio_ffmpeg's, or one on PATH)
 const path = require('path'), fs = require('fs'), os = require('os'), http = require('http'), { execFileSync } = require('child_process');
-const ROOT = path.resolve(__dirname, '../..');
-const { chromium } = require(path.join(ROOT, 'tests/node_modules/playwright'));
-const OUT = path.join(ROOT, 'landing/extension-how.mp4'), WEBM = path.join(ROOT, 'landing/extension-how.webm'), POSTER = path.join(ROOT, 'landing/extension-how.jpg');
+const ROOT = path.resolve(__dirname, '../../..'); // (the repo)
+const { chromium } = require(path.join(ROOT, 'scripts/tests/node_modules/playwright'));
+const OUT = path.join(ROOT, 'web/landing/extension-how.mp4'), WEBM = path.join(ROOT, 'web/landing/extension-how.webm'), POSTER = path.join(ROOT, 'web/landing/extension-how.jpg');
 const FFMPEG = (() => {
   try { return execFileSync('python3', ['-c', 'import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())']).toString().trim(); } catch (e) { return 'ffmpeg'; }
 })();

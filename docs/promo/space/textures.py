@@ -1,6 +1,6 @@
 """Makes the planet pictures for the 3D solar system (labs/tex/*.webp).
 
-   python3 promo/space/textures.py <folder with the downloaded maps>
+   python3 docs/promo/space/textures.py <folder with the downloaded maps>
 
 Real maps (public domain): NASA 3D Resources (github.com/nasa/NASA-3D-Resources) for Mars,
 Jupiter, Saturn, Neptune, Pluto and the Hipparcos star map; the Earth (day, night lights,

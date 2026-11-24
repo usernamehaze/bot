@@ -2,7 +2,7 @@
 //   node promo/ad3/frames.cjs <out-dir>          (site served at :4700)
 const fs = require('fs');
 const path = require('path');
-const { chromium } = require(path.join(__dirname, '../../tests/node_modules/playwright'));
+const { chromium } = require(path.join(__dirname, '../../../scripts/tests/node_modules/playwright'));
 const BASE = process.env.BASE || 'http://localhost:4700';
 const OUT = path.resolve(process.argv[2] || 'ad3-out');
 (async () => {

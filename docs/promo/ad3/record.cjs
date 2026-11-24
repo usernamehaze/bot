@@ -6,13 +6,13 @@
 //   node promo/ad3/record.cjs <out-dir> [scene …]      (needs the site served at :4700, see README)
 const fs = require('fs');
 const path = require('path');
-const { chromium } = require(path.join(__dirname, '../../tests/node_modules/playwright'));
+const { chromium } = require(path.join(__dirname, '../../../scripts/tests/node_modules/playwright'));
 
 const BASE = process.env.BASE || 'http://localhost:4700';
 const FPS = 30;
 const OUT = path.resolve(process.argv[2] || 'ad3-out');
 const ONLY = process.argv.slice(3);
-const APP_VERSION = fs.readFileSync(path.join(__dirname, '../../app.js'), 'utf8').match(/APP_VERSION = '([^']+)'/)[1];
+const APP_VERSION = fs.readFileSync(path.join(__dirname, '../../../web/app.js'), 'utf8').match(/APP_VERSION = '([^']+)'/)[1];
 const SEED = JSON.stringify({ profile: { name: 'Mika', role: 'student', grade: 'Grade 10', field: '', age: 16, at: 1 }, seenVersion: APP_VERSION, analytics: { usage: false, topics: false }, lite: 'off' });
 
 // the cursor the viewer sees (Playwright's mouse is invisible)

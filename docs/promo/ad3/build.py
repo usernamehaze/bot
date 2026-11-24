@@ -1,6 +1,6 @@
 """Puts the 1-minute tour together: promo/cassie-ad-60s.mp4.
 
-   python3 promo/ad3/build.py <out-dir>
+   python3 docs/promo/ad3/build.py <out-dir>
 
 <out-dir> holds what record.cjs and frames.cjs made (a folder of frames per scene, bg-*.png,
 mask.png). Each filmed scene goes into its window under its caption, the scenes cross-fade, and the

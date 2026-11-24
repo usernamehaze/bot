@@ -261,5 +261,5 @@ then paste the new `worker.js` into Cloudflare again. Your data is kept.
 
 Only Cassie's own site can use the server: askcassie.study (and www),
 plus localhost for testing. Not askcassie.pages.dev: Cloudflare sends anyone there to
-askcassie.study (a Bulk Redirect, see STORES.md). If you host Cassie somewhere else, add a
+askcassie.study (a Bulk Redirect, see docs/STORES.md). If you host Cassie somewhere else, add a
 variable `ALLOWED_ORIGINS` listing your sites, separated by commas.
