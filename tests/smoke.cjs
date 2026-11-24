@@ -7540,6 +7540,25 @@ test('v294 tap targets: every button, link, switch and field on a computer’s H
 });
 
 // (v295) Cassie's grammar and vocabulary fit the student: by age or grade, then by how they write in the chat
+test('v308: "make a 3d bicycle" and "can you make a bicycle" are drawn live (a model for 3D), not sent to the picture maker; a quiz, a reviewer, an essay or a poster are not drawings; the free picture service at its limit (its notice is a picture) is never shown as the student’s picture', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, lite: 'off', state: { groqKey: 'gsk_test' } });
+  const r = await page.evaluate(() => ['make a 3d bicycle', 'can you make a bicycle', 'build a 3D model of the heart', 'create a bicycle in 3D', 'make me a volcano please', 'make a quiz about cells', 'make a reviewer for science', 'make an essay about my mom', 'make a poster about recycling', 'can you make a summary', 'make a list of planets', 'make a study plan'].map((q) => (liveDrawRequest(q) ? 1 : 0)).join(''));
+  expect(r === '111110000000', 'things to show are drawn; things to write or study, and pictures, are not: ' + r);
+  await page.fill('#prompt-input', 'make a 3d bicycle'); await page.click('#send-btn');
+  await page.waitForTimeout(600);
+  expect(await page.evaluate(() => !document.querySelector('.ld-pop') && !!document.querySelector('#chat-log .bubble-user') && /make a 3d bicycle/.test(document.querySelector('#chat-log .bubble-user').textContent) && !/Here.s your picture/.test(document.getElementById('chat-log').innerText)), '"make a 3d bicycle" goes straight to a 3D model, not a picture');
+  // the picture service at its limit: a busy status with a picture of the words
+  const PNG = fs.readFileSync(path.join(ROOT, 'icons/icon-192.png'));
+  await ctx.route(/pollinations\.ai/, (route) => route.fulfill({ status: 429, body: PNG, contentType: 'image/png', headers: { 'access-control-allow-origin': '*' } }));
+  const busy = await page.evaluate(async () => { try { const g = await generateImage('a red bicycle'); return 'shown:' + g.src.slice(0, 40); } catch (e) { return 'refused'; } });
+  expect(busy === 'refused', 'the "at its limit" picture is never shown as the student’s picture: ' + busy);
+  await ctx.unroute(/pollinations\.ai/);
+  await ctx.route(/pollinations\.ai/, (route) => route.fulfill({ status: 200, body: PNG, contentType: 'image/png', headers: { 'access-control-allow-origin': '*' } }));
+  const ok = await page.evaluate(async () => { try { const g = await generateImage('a red bicycle'); return /pollinations/.test(g.src) && g.keep; } catch (e) { return 'failed: ' + e.message; } });
+  expect(ok === true, 'a real picture still shows: ' + ok);
+  expect(!errors.length, 'page errors: ' + errors.join(' | '));
+  await ctx.close();
+});
 test('v307 continuous learning in 3D: "how does a jet work?" builds the whole engine; "how does the compressor work?" is answered on the same model (the parts there stay, the camera moves in on the compressor, the rest fades, the case is seen through), and "Ask next" offers what to ask next, one tap each, answered on the same model', async (b) => {
   const fx = (n) => JSON.parse(fs.readFileSync(path.join(ROOT, 'tests/fixtures/live', n + '.json'), 'utf8'));
   const jet = { ...fx('jet3d'), next: ['How does the compressor work?', 'What does the turbine do?'] }, follow = fx('jet3d-follow');
