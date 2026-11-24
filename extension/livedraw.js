@@ -81,7 +81,11 @@ export function clean(raw) {
   })).filter((p) => p.shapes.length);
   if (!parts.length) return null;
   const ref = s.ref && typeof s.ref === 'object' && /^https:\/\//.test(String(s.ref.url || '')) ? { text: words(s.ref.text, 160), url: String(s.ref.url).slice(0, 400) } : null;
-  return { title: words(s.title, 90) || 'How it works', mode, intro: words(s.intro, 300), summary: words(s.summary, 300), photo: words(s.photo, 300), simple: !!s.simple, axis: ['x', 'y', 'z'].includes(s.axis) ? s.axis : 'x', parts, ref };
+  // (v306) an answer to a follow-up: the parts it added or changed are drawn; the rest is shown at once; focus is picked out
+  const ids = new Set(parts.map((p) => p.id));
+  const fresh = Array.isArray(s.fresh) ? s.fresh.map((x) => words(x, 40)).filter((x) => ids.has(x)) : null;
+  const focus = ids.has(words(s.focus, 40)) ? words(s.focus, 40) : null;
+  return { title: words(s.title, 90) || 'How it works', mode, intro: words(s.intro, 300), summary: words(s.summary, 300), photo: words(s.photo, 300), simple: !!s.simple, axis: ['x', 'y', 'z'].includes(s.axis) ? s.axis : 'x', parts, ref, ...(fresh ? { fresh } : {}), ...(focus ? { focus } : {}) };
 }
 
 // ---------- is it a good drawing? (2d) the points every shape reaches, and what is wrong ----------
@@ -369,6 +373,9 @@ async function fromOpenverse(subject, ms) {
 }
 export async function findReference(question, ms = 5000) {
   const q = String(question || '');
+  // (v306) on low data a reference picture (about 80 KB) is skipped: Lite mode, Data Saver, or a 2G or 3G connection
+  const net = (typeof navigator !== 'undefined' && navigator.connection) || {};
+  if (document.documentElement.classList.contains('lite') || net.saveData || /^(slow-2g|2g|3g)$/.test(String(net.effectiveType || ''))) return null;
   if (CREATURE.test(q) || NO_REF.test(q)) return null;
   const subject = subjectOf(q);
   if (subject.length < 3) return null;
@@ -383,6 +390,57 @@ export async function findReference(question, ms = 5000) {
   return null;
 }
 
+// ---------- (v306) a follow-up question about a drawing: she answers on the SAME drawing ----------
+// What is there stays where it is; she draws only the new parts the answer needs (or corrects one), and the part
+// the answer is about is picked out. A question about something else brings a whole new drawing ("new": true).
+export function followPrompt(rawSpec) {
+  const spec = clean(rawSpec);
+  if (!spec) return '';
+  const now = JSON.stringify({ title: spec.title, mode: spec.mode, ...(spec.mode === '3d' ? { axis: spec.axis } : {}), parts: spec.parts.map(({ id, label, say, color, box, anchor, inside, size, attached, shell, spin, glow, finish, shapes }) => (spec.mode === '3d' ? { id, label, say, color, inside, size, attached, shell, spin, glow, finish, shapes } : { id, label, say, color, box, anchor, shapes })) });
+  const room = Math.max(0, 10 - spec.parts.length);
+  const shapes = spec.mode === '3d'
+    ? 'New 3D parts use the same units and centre as the parts above (about 6 units long in all). Shapes: cylinder {r,r2,len,axis,pos}, disc {r,thick,axis,pos}, cone {r,len,axis,pos,dir}, sphere {r,pos}, box {size:[w,h,d],pos}, torus {r,tube,axis,pos}, blades {n,len,width,hub,axis,pos}, capsule {r,len,axis,pos}, pipe {pts,r}, arrow {pts,r}, lathe {profile,axis,pos}, plate {outline,thick,axis,pos}. Each new part touches or sits inside the part it belongs to.'
+    : 'New parts are drawn on the same picture (400 wide, 260 tall, x 10 to 390, y 20 to 250) at the same scale: in their real place on the drawing, touching what they connect to, in clear space where they can. Every part has "box", "anchor" (a point ON its main shape) and 2 to 24 strokes. 2d shapes: line, arrow (x1,y1,x2,y2), path (d, capital letters only), poly (pts), rect (x,y,w2,h), circle (cx,cy,r), ellipse (cx,cy,rx,ry), text (x,y,text, values only); "fill":true, "dash":true.';
+  return `You are Cassie, a careful tutor for students who explains by DRAWING. The student is looking at your ${spec.mode === '3d' ? '3D model' : 'drawing'} and asks a follow-up question about it.
+The ${spec.mode === '3d' ? 'model' : 'drawing'} now: ${now}
+Answer it ON this ${spec.mode === '3d' ? 'model' : 'drawing'}. Reply with ONLY one JSON object:
+{"answer": the direct answer in 1 to 3 short sentences, "focus": the id of the part your answer is about (an old one or a new one), "parts": [only the NEW parts the answer needs, 0 to ${Math.min(3, room)}, each in the same form as the parts above, with a new id], "changed": [an old part that must change to answer it (a new state, or a mistake), as the whole part with its own id; usually empty]}
+Everything else stays exactly where it is: do not send old parts again. ${shapes}
+Students learn from this: every fact, label, direction and count MUST be correct, and a new part looks like the real thing (its real outline and colour), never a symbol.
+If they ask about a different thing from this ${spec.mode === '3d' ? 'model' : 'drawing'}, reply instead with a whole new drawing in the same full form as the one above (title, mode, intro, summary, every part), with "new": true.
+Use the student's language (English, Filipino or Taglish). No dashes in the words. No emojis.`;
+}
+// her reply to a follow-up, put together with the drawing that is there → { spec, isNew, answer } or null
+export function mergeFollow(rawOld, reply) {
+  const old = clean(rawOld);
+  let d = reply;
+  if (typeof d === 'string') { const a = d.indexOf('{'), b = d.lastIndexOf('}'); if (a < 0 || b <= a) return null; try { d = JSON.parse(d.slice(a, b + 1)); } catch (e) { return null; } }
+  if (!old || !d || typeof d !== 'object') return null;
+  if (d.new === true) { const s = clean(d); return s ? { spec: s, isNew: true, answer: s.intro } : null; }
+  const answer = words(d.answer, 400);
+  const one = (x) => { const s = clean({ mode: old.mode, parts: [x] }); return s ? s.parts[0] : null; };
+  const parts = old.parts.map((p) => ({ ...p })), fresh = [];
+  for (const x of Array.isArray(d.changed) ? d.changed.slice(0, 3) : []) {
+    const p = x && one(x), k = p ? parts.findIndex((q) => q.id === p.id) : -1;
+    if (k >= 0) { parts[k] = { ...p, color: old.parts[k].color }; fresh.push(p.id); }
+  }
+  const taken = new Set(parts.map((p) => p.id));
+  for (const x of Array.isArray(d.parts) ? d.parts : []) {
+    if (parts.length >= 10) break;
+    const p = x && one(x); if (!p) continue;
+    if (taken.has(p.id)) { // (an old part sent again: a change, or a new part with a name already used)
+      const k = parts.findIndex((q) => q.id === p.id);
+      if (k >= 0 && JSON.stringify(parts[k].shapes) === JSON.stringify(p.shapes)) continue;
+      let n = 2; while (taken.has(`${p.id}${n}`)) n++; p.id = `${p.id}${n}`;
+    }
+    if (parts.some((q) => q.color === p.color)) { const free = PALETTE.map((c, i) => color(c, i)).find((c) => !parts.some((q) => q.color === c)); if (free) p.color = free; } // (its own colour, to tell it apart)
+    taken.add(p.id); parts.push(p); fresh.push(p.id);
+  }
+  if (!answer && !fresh.length) return null;
+  const focus = parts.some((p) => p.id === d.focus) ? String(d.focus) : fresh[0] || null;
+  return { spec: { ...old, parts, intro: answer, summary: answer || old.summary, fresh, focus }, isNew: false, answer };
+}
+
 // ---------- the frame around a drawing: the picture, what she says, and what you can do ----------
 export async function render(host, rawSpec, opts = {}) {
   const spec = clean(rawSpec);
@@ -391,7 +449,7 @@ export async function render(host, rawSpec, opts = {}) {
   host.classList.add('ld');
   host.innerHTML = '';
   const head = el('div', 'ld-head'); const dot = el('span', 'ld-live'); dot.setAttribute('aria-hidden', 'true');
-  const state = el('span', 'ld-state', animate ? 'Cassie is drawing' : spec.mode === '3d' ? 'Cassie built it in 3D' : 'Cassie drew it');
+  const state = el('span', 'ld-state', animate ? (spec.fresh ? 'Cassie is adding to it' : 'Cassie is drawing') : spec.mode === '3d' ? 'Cassie built it in 3D' : 'Cassie drew it');
   head.append(dot, state, el('b', 'ld-title', spec.title));
   const stage = el('div', 'ld-stage'); stage.setAttribute('role', 'img'); stage.setAttribute('aria-label', `${spec.title}: ${spec.parts.map((p) => p.label).filter(Boolean).join(', ')}`);
   const hint = el('div', 'ld-hint');
@@ -436,7 +494,10 @@ export async function render(host, rawSpec, opts = {}) {
     };
     const askBtn = btn('', () => {}, 'ld-askpart', 'ask'); askBtn.hidden = true;
     if (spec.mode === '3d' && view.setOpen && view.open) { view.setOpen(true); const ob = acts.querySelector('.ld-open'); if (ob) { setLabel(ob, 'Close the case'); ob.setAttribute('aria-pressed', 'true'); } }
-    if (animate) { await view.play(); done(); } else { await view.play(); done(); }
+    await view.play(); done();
+    // (v306) a follow-up's answer: the part it is about is picked out (the others dim), and her answer stays in view
+    const fi = spec.focus ? spec.parts.findIndex((p) => p.id === spec.focus) : -1;
+    if (fi >= 0 && view.focus) view.focus(fi);
   }
   return true;
 }
@@ -569,6 +630,8 @@ function draw2d(stage, spec, { animate, setSay, hint }) {
   const dropLabel = (i) => { const l = labelEls[i]; if (!l) return; l.g.remove(); const k = taken.indexOf(l.box); if (k >= 0) taken.splice(k, 1); labelEls[i] = null; };
   const view = {
     hintText,
+    // (v306) the part a follow-up is about: the others dim, without changing what she says (a tap shows them all again)
+    focus(i) { if (!groups[i]) return; picked = i; groups.forEach((g, k) => g.classList.toggle('dim', k !== i)); },
     get strokes() { return groups.flatMap((g) => [...g.children]); },
     // one part at a time, for a player with its own pace (the extension's card)
     has: (i) => !!groups[i],
@@ -613,8 +676,12 @@ function draw2d(stage, spec, { animate, setSay, hint }) {
       // everything hidden, then drawn: every stroke on its own, in order (0.3 to 0.6 s each, by its length)
       const all = groups.flatMap((g) => [...g.children]);
       all.forEach((n) => { n.style.visibility = 'hidden'; });
+      // (v306) a follow-up: what was there already is there at once; only the parts it adds are drawn
+      const old = (i) => !again && spec.fresh && !spec.fresh.includes(spec.parts[i].id);
+      for (let i = 0; i < groups.length; i++) if (old(i)) { [...groups[i].children].forEach((n) => { n.style.visibility = ''; n.dataset.drawn = '1'; }); labelEls[i] = placeLabel(i); if (labelEls[i]) { labelEls[i].t.textContent = labelEls[i].txt; labelEls[i].g.dataset.done = '1'; } }
       if (spec.intro) await setSay(spec.intro, true);
       for (let i = 0; i < groups.length; i++) {
+        if (old(i)) continue;
         const talk = setSay(spec.parts[i].say || spec.parts[i].label, true);
         for (const n of groups[i].children) {
           n.style.visibility = '';
@@ -630,7 +697,7 @@ function draw2d(stage, spec, { animate, setSay, hint }) {
           n.style.strokeDasharray = n.classList.contains('ld-flow') ? '' : ''; n.style.strokeDashoffset = ''; n.style.transition = '';
         }
         // the part's name writes on after its last stroke
-        const l = placeLabel(i); labelEls.push(l);
+        const l = placeLabel(i); labelEls[i] = l;
         if (l) { for (let k = 1; k <= l.txt.length; k++) { l.t.textContent = l.txt.slice(0, k); await sleep(28); } l.g.dataset.done = '1'; }
         await talk; await sleep(250);
       }
@@ -940,9 +1007,12 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
     stop() { cancelAnimationFrame(raf); renderer.dispose(); io && io.disconnect(); ro && ro.disconnect(); gone.disconnect(); },
     async play(again) {
       if (!animate && !again) return;
-      groups.forEach((g) => { g.visible = false; g.scale.setScalar(.6); });
+      // (v306) a follow-up: what was there already is there at once; only the parts it adds are built
+      const old = (g) => !again && spec.fresh && !spec.fresh.includes(g.userData.part.id);
+      groups.forEach((g) => { g.visible = old(g); g.scale.setScalar(old(g) ? 1 : .6); });
       if (spec.intro) await setSay(spec.intro, true);
       for (const g of groups) {
+        if (old(g)) continue;
         const sh = g.userData.part.shell;
         g.visible = true;
         const t0 = performance.now();

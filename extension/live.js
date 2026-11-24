@@ -236,7 +236,7 @@
     }
     // a flat drawing in the Cassie app's form: one beat for each part she draws, named as it is drawn
     if (d && d.mode !== '3d' && Array.isArray(d.parts)) {
-      const parts = d.parts.slice(0, 8).filter((x) => x && typeof x === 'object' && Array.isArray(x.shapes) && x.shapes.some((sh) => sh && typeof sh === 'object'));
+      const parts = d.parts.slice(0, 10).filter((x) => x && typeof x === 'object' && Array.isArray(x.shapes) && x.shapes.some((sh) => sh && typeof sh === 'object'));
       if (parts.length) {
         const intro = words(d.intro, 300), sum = words(d.summary, 300), beats = [];
         if (intro) beats.push({ say: intro, parts: [] });
@@ -379,6 +379,30 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
   const DRAW_IT = '\n  IMPORTANT: the student asked for a drawing and your last reply had none. Reply in the drawing form, and give every beat at least one part to draw.';
   // One reply from Cassie, read: send(prompt, maxTokens) → her reply. A reply that can't be used (or has no
   // drawing when one was asked for) is asked for once more, more strictly. → { kind, answer, scene, steps, noDraw }
+  // (v306) a follow-up on a flat drawing: she answers ON it (livedraw.js followPrompt and mergeFollow): what is there
+  // stays, she draws only what the answer needs. Its checks hold only what she adds; re-asked once with what is wrong.
+  // → { scene, from } (from: the beat her answer starts at; 0 for a whole new drawing), or null
+  async function followOn({ send, spec, q, maxTokens = 3600 }) {
+    const m = await load3d();
+    const ask = `${m.followPrompt(spec)}\nThe student asks: "${q}"`, subject = spec.q || spec.title || q;
+    const was = new Set(m.check(m.clean(spec), subject));
+    const issues = (r) => (!r ? ['the reply was not one valid JSON object in the form asked for'] : r.isNew ? m.check(r.spec, q) : m.check(r.spec, subject).filter((x) => !was.has(x)));
+    let r = m.mergeFollow(spec, await send(ask, maxTokens));
+    const wrong = issues(r);
+    if (wrong.length) {
+      const again = await send(`${ask}\n  IMPORTANT: your answer was checked, and these things are wrong:\n  - ${wrong.slice(0, 8).join('\n  - ')}\n  Send the whole JSON object again, corrected, in the same form.`, maxTokens).catch(() => '');
+      const r2 = again ? m.mergeFollow(spec, again) : null;
+      if (r2 && issues(r2).length <= wrong.length) r = r2;
+    }
+    if (!r) return null;
+    if (r.isNew) { const got = parse(JSON.stringify(r.spec)); return got.kind === 'card' ? { scene: got.scene, from: 0 } : null; }
+    const sp = { ...r.spec, q: subject }, fresh = new Set(sp.fresh || []), beats = [];
+    sp.parts.forEach((x, i) => { if (!fresh.has(x.id)) beats.push({ say: x.say || x.label, parts: [], part: i }); });
+    const at = beats.length;
+    beats.push({ say: r.answer || sp.summary, parts: [] });
+    sp.parts.forEach((x, i) => { if (fresh.has(x.id)) beats.push({ say: x.say || x.label, parts: [], part: i }); });
+    return { scene: { dim: 'flat', spec: sp, title: words(sp.title, 60) || 'How it works', caption: r.answer, view: '', about: [], keep: false, beats }, from: at };
+  }
   async function from({ send, ask, count = 0, draw = false, maxTokens = 3600 } = {}) {
     let last = null, nudge = '';
     const asked = (String(ask).match(/The student asks: "([^"]*)"/) || [])[1] || '';
@@ -1405,6 +1429,23 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
         }
         if (playing) pause();
         setStatus('looking');
+        // (v306) on a flat drawing she answers ON it: what is there stays, and only what the answer needs is drawn
+        if (isFlat() && !wants3d(q) && !cleared) {
+          let on = null;
+          try { on = await followOn({ send: opts.send, spec: cur.spec, q }); } catch (err) { on = null; } // (then the usual way, below)
+          if (my !== asking || !alive) return;
+          if (on) {
+            host.dataset.answered = String(+(host.dataset.answered || 0) + 1);
+            let first = 0;
+            if (!on.from) first = await newScene(on.scene);
+            else { adopt(on.scene, askedNow); beats[on.from].asked = q; if (!(await build())) await flatInstead(); first = on.from; }
+            if (my !== asking || !alive) return;
+            if (voiceOn && studio) await decideVoice(first);
+            if (my !== asking || !alive) return;
+            startBeat(first);
+            return;
+          }
+        }
         // on a flat drawing she may add to it; a 3D model (there now, or asked for now) is asked about afresh
         const afresh = is3d() || isFlat() || wants3d(q);
         const words_ = afresh ? prompt({ q, page: opts.page || null, draw: wants(q), said: beats.map((b) => b.say).filter(Boolean) }) : prompt({ q, page: opts.page || null, scene: { title: info.title, beats }, said: [] });
