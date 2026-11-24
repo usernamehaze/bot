@@ -2812,7 +2812,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=307'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=308'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2834,7 +2834,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=307'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=308'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -3110,7 +3110,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=307').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=308').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -7029,6 +7029,13 @@ async function handleSend(text, opts = {}) {
     // or draws ASCII art for something that isn't a graph → make a real picture.
     const marker = !doc && !image && reply.match(/\[\[\s*IMAGE\s*:\s*([^\]]+)\]\]/i);
     const asciiPic = !doc && !image && !marker && PICTURE_WORD_RE.test(sendText) && !GRAPH_ASK_RE.test(sendText) && looksLikeAsciiArt(reply);
+    if (marker && !LIVE_PIC_RE.test(sendText) && !PICTURE_WORD_RE.test(sendText) && sendText.length <= 400 && !LIVE_MATH_RE.test(sendText)) { // (v308)
+      typingBubble.remove(); setCursorMode('idle');
+      const last = state.messages[state.messages.length - 1];
+      if (last && last.role === 'user') { state.messages.pop(); const b = [...chatLog.querySelectorAll('.bubble-user, .msg-user')].pop(); const row = b && (b.closest('.msg') || b); if (row) row.remove(); save(); }
+      liveShowAsk(sendText);
+      return;
+    }
     if (marker || asciiPic) {
       const subject = marker ? marker[1].trim() : ((imageRequest(sendText) || {}).subject || (sendText.match(/\bof\s+(.+)$/i) || [0, sendText.replace(PICTURE_WORD_RE, '')])[1].replace(/[?!.\s]+$/, '').trim());
       setCursorMode('idle');
@@ -7251,6 +7258,17 @@ function loadImageUrl(url, ms = 90000) {
     img.src = url;
   });
 }
+// (v308) the free service says "at its limit" with a picture of those words (and a busy status): it is checked
+// before it is shown, and a busy answer counts as no picture (then her server, or a plain "try again")
+async function freeImageOk(url, ms) {
+  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), ms);
+  try {
+    const res = await fetch(url, { signal: ctl.signal });
+    const type = res.headers.get('content-type') || '';
+    if (!res.ok || res.status === 204 || (type && !/^image\//i.test(type))) throw new Error('busy');
+    await res.blob(); // (now it is in the browser's cache, for the picture itself)
+  } finally { clearTimeout(t); }
+}
 async function generateImage(prompt) {
   const g = await serverGeminiImage(picturePrompt(prompt));
   if (g) return { src: g, keep: false, gemini: true };
@@ -7259,7 +7277,7 @@ async function generateImage(prompt) {
   }
   for (let attempt = 0; attempt < 2; attempt++) {
     const url = freeImageUrl(prompt, Math.floor(Math.random() * 1e9), attempt > 0);
-    try { return { src: await loadImageUrl(url, attempt ? 60000 : 50000), keep: true }; } catch (e) { if (attempt === 0) await sleep(2500); }
+    try { await freeImageOk(url, attempt ? 60000 : 50000); return { src: await loadImageUrl(url, 20000), keep: true }; } catch (e) { if (attempt === 0) await sleep(2500); }
   }
   if (SERVER) return { src: await serverImage(prompt), keep: false };
   throw friendlyError(CassieErrors.say('picture_busy_free'));
@@ -7348,9 +7366,13 @@ async function answerPicture(label) {
 const LIVE_DRAW_RE = /\b(?:draw|sketch|diagram|illustrate|visuali[sz]e|iguhit|idrawing|i-?drawing|ipakita)\b|\bshow\s+(?:me|us)\b|\bbuild\s+(?:me|us)\b|\bmake\s+(?:me\s+)?an?\s+(?:diagram|model|drawing|sketch)\b|\b(?:explain|teach)\b.*\b(?:with|using|in)\s+(?:a\s+)?(?:drawing|diagram|graphics?|visuals?|3d)\b|\bin\s+3d\b/i;
 const LIVE_PIC_RE = /\b(?:picture|pic|photo|image|realistic|photorealistic|poster|logo|wallpaper|paint(?:ing)?|cartoon|anime|larawan|illustration\s+of\s+a\s+(?:person|character))\b/i;
 const LIVE_MATH_RE = /\b(?:graph|plot|chart|equation|function|parabola|slope|y\s*=|f\(x\)|x\^)/i;
+// (v308) "make a 3d bicycle", "create a 3D model of the heart", "can you make a bicycle": a thing to be shown, so she
+// draws or builds it (things to write or study, like a quiz, an essay or a reviewer, are not drawings)
+const LIVE_MAKE_3D_RE = /\b(?:make|create|build|generate|model|construct|gawa(?:n|in)?)\b[^.?!]{0,30}\b(?:3d|three[\s-]?d)\b|\b3d\s+(?:model|version|view)\b/i;
+const LIVE_MAKE_RE = /\b(?:make|create|build|construct)\s+(?:me\s+|us\s+)?an?\s+(?!(?:quiz|test|exam|reviewer|summary|study|schedule|plan|list|outline|essay|story|poem|song|rap|sentence|paragraph|note|table|report|letter|question|joke|flash|card|presentation|speech|script|email|caption|title|recipe|budget|timeline|mnemonic|acronym|word|reading|lesson|guide|program|code|app|website|game|cv|resume|review|research|thesis|reflection|journal|prayer|slogan|tagline|name|username|password|decision|choice|mistake|wish|difference|point|argument|claim|hypothesis|conclusion|introduction|intro|example|copy|backup|account|appointment|call|reservation)\w*\b)[a-z]+(?:\s+[a-z]+)?\s*(?:for\s+me|please|pls|po)?\s*[.?!]*$/i;
 function liveDrawRequest(text) {
   const t = String(text || '').trim();
-  if (t.length < 6 || t.length > 400 || !LIVE_DRAW_RE.test(t) || LIVE_PIC_RE.test(t) || LIVE_MATH_RE.test(t)) return null;
+  if (t.length < 6 || t.length > 400 || !(LIVE_DRAW_RE.test(t) || LIVE_MAKE_3D_RE.test(t) || LIVE_MAKE_RE.test(t)) || LIVE_PIC_RE.test(t) || LIVE_MATH_RE.test(t)) return null;
   return { topic: t };
 }
 const LIVE_3D_RE = /\b3d\b|\bthree[\s-]?d\b|\bturn\s+it\s+around\b|\brotate\s+it\b|\bfrom\s+all\s+sides\b/i;
@@ -7477,7 +7499,7 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=307')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=308')));
 // a real photo needs Gemini pictures (Cassie's server or the student's key); the free service draws toys and models
 const realPhotoOk = () => !!((SERVER && serverPictures) || (state.geminiKey && !geminiImageOff));
 // a drawing inside a chat bubble (a new one draws itself; one from history shows finished)
@@ -8868,7 +8890,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=307');
+      exploreMod = await import('./explore/cell3d.js?v=308');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -8918,7 +8940,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=307');
+      labsMod = await import('./labs/labs.js?v=308');
       islandRest();
     }
     labsMod.open({
@@ -10880,10 +10902,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=307').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=308').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=307', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=308', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
