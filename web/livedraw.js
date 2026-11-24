@@ -307,7 +307,10 @@ export function check3d(spec) {
   // only thin pieces (blades, rods, or cylinders much narrower than the ring), and only sideways past the rim (along the
   // axle is fine: a jet's casing is a wide cylinder that runs on past the ring at its mouth)
   const AXES = { x: 0, y: 1, z: 2 };
+  // (v309) only a part that IS a wheel, a fan or a rotor: a crank arm really does stick out past the chainring
+  const SPOKED = /\b(wheels?|tyres?|tires?|rims?|spokes?|fans?|rotors?|propellers?|impellers?|turbines?|compressors?|pulleys?|flywheels?)\b/i;
   for (const x of ok) {
+    if (!SPOKED.test(`${x.p.label || ''} ${x.p.id || ''}`)) continue;
     const rims = x.p.shapes.filter((sh) => /^(torus|ring|disc)$/.test(String(sh.t || '').toLowerCase()) && AXES[sh.axis] != null);
     if (!rims.length) continue;
     const rim = rims.reduce((a, sh) => (Math.abs(+sh.r || 0) > Math.abs(+a.r || 0) ? sh : a)), rb = box3(rim);

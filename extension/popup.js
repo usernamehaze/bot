@@ -168,3 +168,13 @@ document.getElementById('open-panel')?.addEventListener('click', () => {
   });
 });
 
+
+// (v307) the first try, until it is done: opens Wikipedia on volcanoes, where a small card walks through it
+try {
+  chrome.storage.local.get('firstRun', (o) => {
+    const b = document.getElementById('try-first');
+    if (!b || (o.firstRun && o.firstRun.done)) return;
+    b.hidden = false;
+    b.addEventListener('click', () => { chrome.storage.local.set({ firstRun: { at: Date.now() } }); chrome.tabs.create({ url: 'https://en.wikipedia.org/wiki/Volcano' }); window.close(); });
+  });
+} catch (e) { /* no storage here */ }

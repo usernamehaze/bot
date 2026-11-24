@@ -166,12 +166,14 @@ async function speakClip(text) {
   return { audio: bufToBase64(await r.arrayBuffer()) };
 }
 let lastServer = { source: '', plan: '' }; // (who answered the last question on Cassie's server, and the student's plan)
-async function viaServer(messages, maxTokens = 2048, most = 4000) {
+// effort: 'low' for a drawing. Her best brain (Claude) ignores it; the backup (gpt-oss on Groq) then answers in about half
+// the time and no longer spends its whole answer on thinking (an empty reply, asked again) (v307)
+async function viaServer(messages, maxTokens = 2048, most = 4000, effort = undefined) {
   let res;
   try {
     res = await fetch(CASSIE_SERVER + '/chat', {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ uid: await cassieUid(), model: 'openai/gpt-oss-120b', messages, max_tokens: Math.min(most, maxTokens), temperature: 0.5, brain: 'claude' }),
+      body: JSON.stringify({ uid: await cassieUid(), model: 'openai/gpt-oss-120b', messages, max_tokens: Math.min(most, maxTokens), temperature: 0.5, brain: 'claude', ...(effort ? { reasoning_effort: effort } : {}) }),
     });
   } catch (e) { throw new Error('Couldn’t connect to Cassie. Check your internet connection.'); }
   if (!res.ok) {
@@ -741,7 +743,7 @@ async function readPicture(keys, msg) {
     let firstErr = null;
     // (a drawing asks Cassie's best model first, on her server; the student's own keys are the fallback)
     if (msg.best) {
-      try { return await viaServer([...(msg.system ? [{ role: 'system', content: msg.system }] : []), { role: 'user', content: [{ type: 'text', text: prompt }, ...images.map((u) => ({ type: 'image_url', image_url: { url: u } }))] }], Math.max(5000, msg.maxTokens || 0), 6000); } catch (e) { if (!keys.geminiKey && !keys.groqKey) throw new Error(e.message === 'SERVER_OFF' ? 'no-vision' : e.message); }
+      try { return await viaServer([...(msg.system ? [{ role: 'system', content: msg.system }] : []), { role: 'user', content: [{ type: 'text', text: prompt }, ...images.map((u) => ({ type: 'image_url', image_url: { url: u } }))] }], Math.max(5000, msg.maxTokens || 0), 6000, msg.look ? undefined : 'low'); } catch (e) { if (!keys.geminiKey && !keys.groqKey) throw new Error(e.message === 'SERVER_OFF' ? 'no-vision' : e.message); }
     }
     if (keys.geminiKey) {
       try { return await visionViaGemini(keys.geminiKey, { ...msg, images, prompt }); } catch (e) { firstErr = e; }
@@ -757,7 +759,9 @@ async function readPicture(keys, msg) {
       throw new Error(e.message === 'SERVER_OFF' ? 'no-vision' : e.message);
     }
   };
-  let reply = await ask(prep.light ? [prep.original, prep.light] : [prep.original], msg.prompt + (prep.light ? DARK_NOTE : ''));
+  // (v307) a drawing may bring a free reference picture of the thing asked about: it goes after the screen's picture
+  const ref = typeof msg.ref === 'string' && /^data:image\/(png|jpe?g|webp|gif);base64,/.test(msg.ref) && msg.ref.length < 1500000 ? [msg.ref] : [];
+  let reply = await ask([...(prep.light ? [prep.original, prep.light] : [prep.original]), ...ref], msg.prompt + (prep.light ? DARK_NOTE : ''));
   // The model said it's blank, but the picture has content: one more careful look
   // at the easiest-to-read version.
   if (SEEMS_BLANK.test(reply) && !prep.flat) {
@@ -814,6 +818,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   // Cassie's voice on a page: Jessica's studio voice from Cassie's server, the only voice she speaks in
   if (msg?.type === 'CASSIE_SPEAK_LEFT') { speakLeft().then(sendResponse, () => sendResponse({ on: false, left: 0 })); return true; }
   if (msg?.type === 'CASSIE_SPEAK') { speakClip(String(msg.text || '').slice(0, 700)).then(sendResponse, (e) => sendResponse({ error: e.message || 'no voice', usedUp: !!e.usedUp })); return true; }
+  // (v307) Ctrl twice in a tiny frame (Google Docs types into one): the page's own top frame opens her box
+  if (msg?.type === 'CASSIE_SUMMON_TOP') {
+    if (sender && sender.tab && sender.tab.id >= 0) chrome.tabs.sendMessage(sender.tab.id, { type: 'CASSIE_SUMMON' }, { frameId: 0 }).catch(() => {});
+    return false;
+  }
   if (msg?.type === 'CASSIE_VISION') {
     (async () => {
       const keys = await getKeys();
@@ -977,6 +986,15 @@ function makeMenus() {
   } catch (e) { /* ignore */ }
 }
 chrome.runtime.onInstalled.addListener(makeMenus);
+// (v307) the first try: a new install opens a real page (Wikipedia on volcanoes) where welcome.js walks the
+// student through highlight, Ctrl twice to draw, and Ask next. Only on a fresh install, never on an update.
+chrome.runtime.onInstalled.addListener((d) => {
+  if (!d || d.reason !== 'install') return;
+  chrome.storage.local.set({ firstRun: { at: Date.now() } });
+  // (only a Chrome Web Store install opens the page by itself; a copy loaded by hand has "Try Cassie in 10 seconds" in its pop-up)
+  if (!chrome.runtime.getManifest().update_url) return;
+  try { chrome.tabs.create({ url: 'https://en.wikipedia.org/wiki/Volcano' }); } catch (e) { /* no tab: the card waits for the page */ }
+});
 chrome.runtime.onStartup.addListener(makeMenus);
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {

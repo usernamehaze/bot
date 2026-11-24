@@ -364,16 +364,23 @@
   }
   let lastCtrlTap = 0;      // when Ctrl was last released as a clean tap
   let ctrlUsedWithKey = false; // was another key pressed during this Ctrl hold?
-  document.addEventListener('keydown', (e) => {
+  // (v307) heard on the window, before the page's own key handlers (editors like Canva keep keys to themselves)
+  window.addEventListener('keydown', (e) => {
     if (e.key === 'Control') { if (!e.repeat) ctrlUsedWithKey = false; }
     else if (e.ctrlKey) { ctrlUsedWithKey = true; } // Ctrl+<something> — not a tap
   }, true);
-  document.addEventListener('keyup', (e) => {
+  // (v307) a tiny or hidden frame (Google Docs types into one) has no room for her box: the page itself shows it
+  const tinyFrame = () => window.top !== window && (innerWidth < 320 || innerHeight < 200);
+  window.addEventListener('keyup', (e) => {
     if (e.key !== 'Control' || ctrlUsedWithKey) return;
     const now = Date.now();
-    if (now - lastCtrlTap < 450) { lastCtrlTap = 0; summonHud(); }
-    else lastCtrlTap = now;
+    if (now - lastCtrlTap < 450) {
+      lastCtrlTap = 0;
+      if (tinyFrame()) { try { chrome.runtime.sendMessage({ type: 'CASSIE_SUMMON_TOP' }).catch(() => {}); } catch (err) { /* the extension was reloaded */ } return; }
+      summonHud();
+    } else lastCtrlTap = now;
   }, true);
+  if (window.top === window) chrome.runtime.onMessage.addListener((msg) => { if (msg && msg.type === 'CASSIE_SUMMON') summonHud(); });
 
   // Is this tab showing a file Cassie can read whole? (Chrome's PDF viewer,
   // Google Docs / Slides — pages where highlighting can't reach the text.)

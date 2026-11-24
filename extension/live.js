@@ -282,7 +282,7 @@
   - parts that are inside a case are placed inside it, and the case is "shell": true so the student can open it
   - real proportions: a part that is small in the real object is small here; a part inside another is smaller than it
   - parts that turn get "spin": true; hot or glowing parts get "glow": true
-  {"answer":the direct answer in one or two short sentences,"about":[x,y,w,h] the box around the thing on their screen the question is about, as shares of the picture from 0 to 1, or null,"title","mode":"3d","axis":the model's main length "x"|"y"|"z","intro":one sentence that says what you see on their screen,"summary":one sentence,"note":one short warning or tip for a sticky note (leave it out when there is none),"parts":[{"id","label":1 to 3 words,"say":1 or 2 short sentences,"color":"#hex","inside":the id of the part it sits in, or null,"attached":[ids of the parts it touches],"size":how big it really is (its longest side) against the whole object, 0 to 1,"shell","spin","glow","shapes":[...]}]}
+  {"answer":the direct answer in one or two short sentences,"about":[x,y,w,h] the box around the thing on their screen the question is about, as shares of the picture from 0 to 1, or null,"title","mode":"3d","axis":the model's main length "x"|"y"|"z","intro":one sentence that says what you see on their screen,"summary":one sentence,"next":[2 short questions the student could ask next to go deeper, each about one of its parts],"note":one short warning or tip for a sticky note (leave it out when there is none),"parts":[{"id","label":1 to 3 words,"say":1 or 2 short sentences,"color":"#hex","inside":the id of the part it sits in, or null,"attached":[ids of the parts it touches],"size":how big it really is (its longest side) against the whole object, 0 to 1,"shell","spin","glow","shapes":[...]}]}
   3 to 8 parts in building order, 1 to 8 shapes each. Each part is built while its "say" is said. The whole model about 6 units long, centred on 0,0,0. Every shape has "pos":[x,y,z] and, when it has a length, "axis":"x"|"y"|"z".
   Shapes: cylinder {r,r2,len,axis,pos,open,cut}, disc {r,thick,axis,pos}, cone {r,len,axis,pos,dir}, sphere {r,pos,cut}, box {size:[w,h,d],pos}, torus {r,tube,axis,pos}, blades {n,len,width,hub,axis,pos}, capsule {r,len,axis,pos}, pipe {pts:[[x,y,z],...],r} (a tube, hose or cable through 2 to 8 points), arrow {pts:[[x,y,z],...],r} (a flow or a push; its head is at the last point), lathe {profile:[[radius,along],...],axis,pos} (a profile turned round the axis), plate {outline:[[a,b],...],thick,axis,pos} (a flat board; its outline lies across the axis).
   To show how something is put together, give the part that moves "from":[dx,dy,dz], where it starts away from its place: it slides in. "view":"front"|"back"|"left"|"right"|"top" on a part turns the model to that side when it is built.`;
@@ -297,7 +297,7 @@
   Plan: "layout" says how it is arranged; every part has "box":[x,y,w,h] where it sits and "anchor":[x,y], a point ON its main shape (the sun's disc, the leaf's blade); its name's line ends there. Strokes stay inside the box. Spread parts over the picture and leave clear space for the names.
   Look at the picture of their screen first. If the thing they ask about is shown there (a photo, a figure, a diagram, a product), draw THAT one: its true outline and proportions, the side it is seen from, its real colours, and the parts you can see, each where it really is. If it is not shown, draw it the way a good textbook figure of the real thing looks, in its real colours. In "answer", describe it accurately in plain words: what it is, what its main parts are and what each one does.
   Draw REAL outlines, the way a textbook figure looks: a leaf with a pointed tip, a midrib and side veins; a heart with its curved walls, its four chambers and its vessels; an engine with its real profile. Never a plain circle or box for a real object, and never a cartoon symbol (no valentine heart for a real heart, no lightning zigzag for electricity). The main object is drawn large, about half the picture, with long curved paths (C and Q curves) for its true outline, and each of its inner parts is a part of its own, in its own colour, lightly filled ("fill":true) so the student can tell the parts apart. 5 to 8 parts in drawing order, 3 to 24 strokes each, 30 or more strokes in the whole drawing, each part's strokes in pen order. Arrows show what moves and which way. Each part is drawn, then named, while its "say" is said, so the student always knows what they are looking at.
-  {"answer":the direct answer in one or two short sentences,"about":[x,y,w,h] the box around the thing on their screen the question is about, as shares of the picture from 0 to 1, or null,"title":2 to 6 words,"mode":"2d","layout","intro":one sentence,"summary":one sentence,"parts":[{"id","label":1 to 3 words,"say":1 or 2 short, natural spoken sentences,"color":"#hex","box","anchor","shapes":[...]}]}
+  {"answer":the direct answer in one or two short sentences,"about":[x,y,w,h] the box around the thing on their screen the question is about, as shares of the picture from 0 to 1, or null,"title":2 to 6 words,"mode":"2d","layout","intro":one sentence,"summary":one sentence,"next":[2 short questions the student could ask next to go deeper, each about one of its parts],"parts":[{"id","label":1 to 3 words,"say":1 or 2 short, natural spoken sentences,"color":"#hex","box","anchor","shapes":[...]}]}
   2d shapes: {"t":"line","x1","y1","x2","y2"}, {"t":"arrow",...same} for movement, {"t":"path","d":"M L Q C Z, CAPITAL letters only"}, {"t":"poly","pts":[[x,y],...]}, {"t":"rect","x","y","w2","h"}, {"t":"circle","cx","cy","r"}, {"t":"ellipse","cx","cy","rx","ry"}, {"t":"text","x","y","text"} for values only ("H2O"); "fill":true, "dash":true. Never write a part's name as text: the card does.
   Students learn from this: every fact, label, direction and count MUST be correct. Show every main part a textbook figure of it shows, each in its real place (a bicycle: frame, both wheels, saddle, handlebars, pedals and cranks, chain, chainring, rear gear, fork and brakes; arrows for rain point down and for evaporation point up). Leave out only a small detail you are not sure of.
 ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No dashes in the words. No emojis.`;
@@ -580,6 +580,14 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
     .lv-ask { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; }
     .lv-ask input { flex: 1; min-width: 0; min-height: 44px; box-sizing: border-box; border-radius: 12px; border: 1px solid var(--edge); background: var(--card); color: var(--ink); padding: 0 12px; font: 15px/1.2 ${FONT}; }
     .lv-ask input::placeholder { color: var(--mute); opacity: 1; }
+    /* (v307) "Ask next": what to ask about her drawing next, one tap each, answered on the same drawing */
+    .lv-ref { margin: 0 0 4px; font: 12px/1.4 ${FONT}; color: var(--mute); }
+    .lv-ref[hidden] { display: none; }
+    .lv-ref a { color: var(--ink); text-decoration: underline; }
+    .lv-nextq { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 8px; }
+    .lv-nextq[hidden] { display: none; }
+    .lv-nextq-t { margin: 0; font: 700 12px/1.2 ${FONT}; letter-spacing: .04em; text-transform: uppercase; color: var(--mute); }
+    .lv .lv-nextq button { justify-content: flex-start; text-align: left; white-space: normal; border: 1px solid var(--edge); font-weight: 600; }
     .lv-ask input:focus { outline: 2px solid var(--ink); outline-offset: 1px; }
     /* (v303) with a mouse the controls are compact (32px), so her words and the drawing have the room; on touch they stay 44px */
     @media (pointer: fine) {
@@ -789,6 +797,7 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
           <div class="lv-paper">
             <p class="lv-title"></p>
             <p class="lv-sub"></p>
+            <p class="lv-ref" hidden></p>
             <p class="lv-hint" hidden>Drag to turn it. Tap a part to read about it.</p>
             <svg class="lv-svg" viewBox="0 0 ${GW * K} ${GH * K}" role="img"></svg>
             <div class="lv-stage lv-stage-card" role="img" hidden></div>
@@ -809,6 +818,7 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
               <button type="button" class="lv-apart" aria-pressed="false" hidden>Pull apart</button>
               ${onBoard ? '<button type="button" class="lv-board">Open on the board</button>' : ''}
             </div>
+            ${opts.send ? '<div class="lv-nextq" role="group" aria-label="Ask next" hidden></div>' : ''}
             ${opts.send ? '<form class="lv-ask" autocomplete="off"><input type="text" placeholder="Ask a follow-up" aria-label="Ask a follow-up" maxlength="300" enterkeyhint="send"><button type="submit" class="lv-send">Ask</button></form>' : ''}
           </div>
         </div>
@@ -1011,6 +1021,11 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
       wrapEl.classList.toggle('lv-flat', flat);
       $('.lv-title').textContent = info.title || 'Cassie’s drawing';
       $('.lv-sub').textContent = [info.view, 'Simplified sketch'].filter(Boolean).join(' · ');
+      { // (v307) drawn from a reference picture: where it came from (its licence asks for the credit)
+        const rf = $('.lv-ref'), r = cur && cur.ref;
+        rf.replaceChildren(); rf.hidden = !(r && r.url && /^https:\/\//.test(r.url));
+        if (!rf.hidden) { const a = document.createElement('a'); a.href = r.url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = words(r.text, 160) || 'the reference'; rf.append('Drawn from a reference: ', a); }
+      }
       const name = [info.title, info.caption].filter(Boolean).join(': ') || 'Cassie’s drawing';
       svg.setAttribute('aria-label', name);
       if (flat) {
@@ -1225,7 +1240,7 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
       if (i < beats.length - 1) { nextUp = i + 1; gap = setTimeout(() => { if (my === run && alive && playing) startBeat(i + 1); }, 320 * pace); }
       else finish();
     }
-    function finish() { playing = false; done = true; mid = null; setStatus('done'); paintNav(); shownParts(); if (focusLater >= 0 && isFlat() && model && model.view.focus) model.view.focus(focusLater); focusLater = -1; }
+    function finish() { playing = false; done = true; mid = null; setStatus('done'); paintNav(); shownParts(); showNext(); if (focusLater >= 0 && isFlat() && model && model.view.focus) model.view.focus(focusLater); focusLater = -1; }
     // a beat shown whole, with nothing moving (paused, and Back or Next)
     function showStill(i) {
       run++; cancelAnimationFrame(raf); clearTimeout(gap); hush();
@@ -1396,6 +1411,15 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
 
     /* follow-ups: typed or said. She answers from the same picture, and adds to the drawing or starts a new one. */
     const askForm = $('.lv-ask'), askIn = askForm && askForm.querySelector('input');
+    // (v307) "Ask next" once she has finished: the questions she suggests about this drawing, one tap asks it
+    function showNext() {
+      const row = $('.lv-nextq'); if (!row || !askForm) return;
+      const qs = (cur && cur.spec && Array.isArray(cur.spec.next) ? cur.spec.next : []).map((x) => words(x, 90).replace(/^[-*\d.\s]+/, '')).filter((x) => x.length > 8).slice(0, 3);
+      row.replaceChildren(); row.hidden = !qs.length;
+      if (!qs.length) return;
+      const t = document.createElement('p'); t.className = 'lv-nextq-t'; t.textContent = 'Ask next'; row.appendChild(t);
+      qs.forEach((q) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = q; b.addEventListener('click', () => { row.hidden = true; askIn.value = q; askForm.requestSubmit(); }); row.appendChild(b); });
+    }
     let mic = null;
     if (askForm) {
       mic = window.CassieMic ? window.CassieMic.attach(askIn, { send: () => askForm.requestSubmit() }) : null;
@@ -1408,7 +1432,7 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
         const q = askIn.value.trim();
         if (!q) { askIn.focus(); return; }
         askIn.value = '';
-        const my = ++asking; focusLater = -1;
+        const my = ++asking; focusLater = -1; { const nr = $('.lv-nextq'); if (nr) nr.hidden = true; }
         // more beats on the drawing that is there (on a 3D model they are words only), or a new scene in its place
         const addBeats = async (list) => {
           if (cleared) { cleared = false; if (!(await build())) await flatInstead(); }
@@ -1499,14 +1523,19 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
     stop(); T.stop();
     const page = T.scan();
     let image = null, out = null;
+    // (v307) asked to draw: a free reference picture of the thing is looked for while she looks at the screen (a few
+    // seconds at most; none on low data, for living or imaginary things, or when the drawer can't load)
+    const refP = wants(q) ? import(chrome.runtime.getURL('livedraw.js')).then((m) => (m.findReference ? m.findReference(q, 4000) : null)).catch(() => null) : Promise.resolve(null); // (read straight from the file, like mustHave: nothing for 3D is set up)
     hideUi(true); T.follow.hide(true);
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); // (her own buttons stay out of the picture)
     try { out = await chrome.runtime.sendMessage({ type: 'CASSIE_SNIP' }); } catch (e) { out = null; } finally { hideUi(false); T.follow.hide(false); }
     image = out && out.dataUrl && !(out.full && out.full.std < 4) ? out.dataUrl : null;
     if (!image) throw keyed('teach_no_picture');
+    const found = await refP, refUrl = found && found.base64 ? `data:${found.mimeType || 'image/png'};base64,${found.base64}` : null;
+    const refNote = refUrl ? `\n  A second picture comes after the picture of their screen: a reference picture of the thing they ask about, from a free picture library. If it is not on their screen, draw it as it really looks there: its true outline, proportions and parts, each where it really is. Leave out anything else in that picture, and write every name in English.` : '';
     const send = async (words_, maxTokens) => {
       let r = null;
-      try { r = await chrome.runtime.sendMessage({ type: 'CASSIE_VISION', image, prompt: words_, maxTokens, best: true }); } catch (e) { r = { error: e.message }; }
+      try { r = await chrome.runtime.sendMessage({ type: 'CASSIE_VISION', image, ...(refUrl ? { ref: refUrl } : {}), prompt: words_ + refNote, maxTokens, best: true }); } catch (e) { r = { error: e.message }; }
       if (!r || r.error) throw new Error((r && r.error) || 'ask failed');
       return String(r.reply || '');
     };
@@ -1515,6 +1544,7 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
     if (got.kind === 'card') {
       const about = got.scene.about && got.scene.about.el ? (() => { const it = page.items[got.scene.about.el - 1]; return it ? { x: it.box[0], y: it.box[1], w: it.box[2], h: it.box[3] } : null; })() : got.scene.about;
       const near = T.follow.at();
+      if (found && found.ref) got.scene.ref = found.ref; // (credited on her card)
       play(got.scene, { q, send, page: { title: page.title }, about, pointer: near ? { x: near.x - 16, y: near.y - 18 } : null });
     } else if (got.kind === 'page') {
       T.show({ steps: got.steps, title: document.title, q }, { from: startAt, shot: image, numbered, again });

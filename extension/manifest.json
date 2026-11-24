@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Cassie: Study Tutor",
-  "version": "3.75.0",
+  "version": "3.76.0",
   "description": "Highlight text on any page and ask Cassie for an explanation, answer, or code. Free, no key needed.",
   "homepage_url": "https://askcassie.study/",
   "icons": {
@@ -36,7 +36,8 @@
         "content.js",
         "errors.js",
         "teach.js",
-        "live.js"
+        "live.js",
+        "welcome.js"
       ],
       "run_at": "document_idle",
       "all_frames": true,

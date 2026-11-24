@@ -112,6 +112,7 @@
   };
   const tz = (Intl.DateTimeFormat().resolvedOptions().timeZone || '');
   const lang = (navigator.language || '').toLowerCase();
+  let curPicked = false; // (v309) the visitor's own pick wins over the server's later guess of where they are
   let cur = tz === 'Asia/Manila' || /-ph$|^fil|^tl/.test(lang) ? 'php' : 'usd';
   let bill = 'month'; // (₱149 a month first; the semester Pasado Pass is one tap away)
   // with payments on (Cassie's server says so), the buttons buy, and a US$ price says the pesos it is charged as
@@ -177,13 +178,13 @@
     $$('[data-bill]').forEach((b) => b.classList.toggle('on', b.dataset.bill === bill));
   }
   if (SERVER) fetch(SERVER + '/config').then((r) => (r.ok ? r.json() : null)).then((c) => {
-    if (c && /^[A-Z]{2}$/.test(c.country || '')) { cur = c.country === 'PH' ? 'php' : 'usd'; tier = c.tier === 'low' ? 'low' : 'std'; renderPrices(); } // (v300: where the visitor really is)
+    if (c && /^[A-Z]{2}$/.test(c.country || '')) { if (!curPicked) cur = c.country === 'PH' ? 'php' : 'usd'; tier = c.tier === 'low' ? 'low' : 'std'; renderPrices(); } // (v300: where the visitor really is)
     if (!c || !c.pay) return;
     payOn = true; payPrices = c.prices || null;
     const fine = $('#pricing .fine'); if (fine) fine.textContent = 'Every plan is one payment for the time you pick, and nothing renews by itself. Pay with GCash, Maya or a card on PayMongo’s secure page; US$ prices are charged in pesos. Daily limits start again at midnight, Philippine time, and weekly ones on Monday.';
     renderPrices();
   }).catch(() => { /* the early list still works */ });
-  $$('[data-cur]').forEach((b) => b.addEventListener('click', () => { cur = b.dataset.cur; renderPrices(); }));
+  $$('[data-cur]').forEach((b) => b.addEventListener('click', () => { cur = b.dataset.cur; curPicked = true; renderPrices(); }));
   $$('[data-bill]').forEach((b) => b.addEventListener('click', () => { bill = b.dataset.bill; renderPrices(); }));
   renderPrices();
 

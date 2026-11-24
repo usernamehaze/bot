@@ -1077,7 +1077,8 @@ async function chat(request, env, ctx) {
   if (env.AI && !cleaned.image) {
     try {
       const out = await env.AI.run(BACKUP_MODEL, { messages: textOnly(cleaned.messages), max_tokens: Math.min(maxTokens, 2048), temperature });
-      const reply = (out && (out.response ?? out.result?.response)) || '';
+      const raw = out && (out.response ?? out.result?.response);
+      const reply = raw && typeof raw === 'object' ? JSON.stringify(raw) : (raw || ''); // (a JSON answer, like a drawing, can come back already unpacked: it was sent as "[object Object]")
       if (reply) {
         ctx.waitUntil(countChat(env, today, 'backup'));
         return json({ choices: [{ index: 0, message: { role: 'assistant', content: String(reply) }, finish_reason: 'stop' }] }, 200, { ...h, ...left, 'x-cassie-source': 'backup' });

@@ -11,7 +11,7 @@ on:
 
 jobs:
   smoke:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04   # (ubuntu-latest is 26.04 now: Playwright 1.56 has no browser for it yet)
     timeout-minutes: ${{ (github.event_name == 'push' || github.event_name == 'pull_request') && 40 || 90 }}
     env:
       SUITE: ${{ (github.event_name == 'push' || github.event_name == 'pull_request') && 'fast' || '' }}
