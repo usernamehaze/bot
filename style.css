@@ -4559,3 +4559,11 @@ label.notif-top { cursor: pointer; min-height: 44px; }
 @supports not (color: color-mix(in srgb, red 50%, blue)) {
   :root:root:root { --lg-line: var(--border); --lg-pick: var(--surface-2); --lg-tint: transparent; --lg-glow: transparent; --amb-1: transparent; --amb-2: transparent; --amb-3: transparent; --aa-b1: var(--muted); }
 }
+
+/* (v307) "Ask next" under a drawing: the questions a student could ask next, one tap each, answered on the same drawing */
+.ld-next { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2, 8px); margin-top: var(--sp-2, 8px); }
+.ld-next-t { font-size: .75rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.ld-next-q { position: relative; display: inline-flex; align-items: center; min-height: 32px; padding: var(--sp-1, 4px) var(--sp-3, 12px); border: 1px solid var(--lg-line, var(--border)); border-radius: 16px; background: var(--surface); color: var(--text); font: inherit; font-size: .82rem; font-weight: 600; text-align: left; cursor: pointer; }
+.ld-next-q::before { content: ""; position: absolute; left: 0; right: 0; top: -6px; bottom: -6px; } /* (a 44px tap) */
+@media (hover: hover) { .ld-next-q:hover { border-color: var(--primary); } }
+@media (pointer: coarse) { .ld-next { row-gap: var(--sp-4, 16px); } .ld-next-q::before { top: -8px; bottom: -8px; } }

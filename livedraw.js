@@ -85,7 +85,9 @@ export function clean(raw) {
   const ids = new Set(parts.map((p) => p.id));
   const fresh = Array.isArray(s.fresh) ? s.fresh.map((x) => words(x, 40)).filter((x) => ids.has(x)) : null;
   const focus = ids.has(words(s.focus, 40)) ? words(s.focus, 40) : null;
-  return { title: words(s.title, 90) || 'How it works', mode, intro: words(s.intro, 300), summary: words(s.summary, 300), photo: words(s.photo, 300), simple: !!s.simple, axis: ['x', 'y', 'z'].includes(s.axis) ? s.axis : 'x', parts, ref, ...(fresh ? { fresh } : {}), ...(focus ? { focus } : {}) };
+  // (v307) the questions a student could ask next about it, for one tap each: the lesson goes on, on the same drawing
+  const next = (Array.isArray(s.next) ? s.next : []).slice(0, 3).map((x) => words(x, 90).replace(/^[-*\d.\s]+/, '')).filter((x) => x.length > 8);
+  return { ...(next.length ? { next } : {}), title: words(s.title, 90) || 'How it works', mode, intro: words(s.intro, 300), summary: words(s.summary, 300), photo: words(s.photo, 300), simple: !!s.simple, axis: ['x', 'y', 'z'].includes(s.axis) ? s.axis : 'x', parts, ref, ...(fresh ? { fresh } : {}), ...(focus ? { focus } : {}) };
 }
 
 // ---------- is it a good drawing? (2d) the points every shape reaches, and what is wrong ----------
@@ -404,7 +406,7 @@ export function followPrompt(rawSpec) {
   return `You are Cassie, a careful tutor for students who explains by DRAWING. The student is looking at your ${spec.mode === '3d' ? '3D model' : 'drawing'} and asks a follow-up question about it.
 The ${spec.mode === '3d' ? 'model' : 'drawing'} now: ${now}
 Answer it ON this ${spec.mode === '3d' ? 'model' : 'drawing'}. Reply with ONLY one JSON object:
-{"answer": the direct answer in 1 to 3 short sentences, "focus": the id of the part your answer is about (an old one or a new one), "parts": [only the NEW parts the answer needs, 0 to ${Math.min(3, room)}, each in the same form as the parts above, with a new id], "changed": [an old part that must change to answer it (a new state, or a mistake), as the whole part with its own id; usually empty]}
+{"answer": the direct answer in 1 to 3 short sentences, "focus": the id of the part your answer is about (an old one or a new one), "next": [2 short questions the student could ask next to go deeper, each about a part of this ${spec.mode === '3d' ? 'model' : 'drawing'} (how it works, what it does, what happens next)], "parts": [only the NEW parts the answer needs, 0 to ${Math.min(3, room)}, each in the same form as the parts above, with a new id], "changed": [an old part that must change to answer it (a new state, or a mistake), as the whole part with its own id; usually empty]}
 Everything else stays exactly where it is: do not send old parts again. ${shapes}
 Students learn from this: every fact, label, direction and count MUST be correct, and a new part looks like the real thing (its real outline and colour), never a symbol.
 If they ask about a different thing from this ${spec.mode === '3d' ? 'model' : 'drawing'}, reply instead with a whole new drawing in the same full form as the one above (title, mode, intro, summary, every part), with "new": true.
@@ -438,7 +440,7 @@ export function mergeFollow(rawOld, reply) {
   }
   if (!answer && !fresh.length) return null;
   const focus = parts.some((p) => p.id === d.focus) ? String(d.focus) : fresh[0] || null;
-  return { spec: { ...old, parts, intro: answer, summary: answer || old.summary, fresh, focus }, isNew: false, answer };
+  return { spec: { ...old, parts, intro: answer, summary: answer || old.summary, fresh, focus, next: Array.isArray(d.next) ? d.next : [] }, isNew: false, answer };
 }
 
 // ---------- the frame around a drawing: the picture, what she says, and what you can do ----------
@@ -486,6 +488,14 @@ export async function render(host, rawSpec, opts = {}) {
   if (opts.onQuiz) btn('Quiz me', () => opts.onQuiz(spec), '', 'quiz');
   if (opts.onRealistic && (!opts.canRealistic || opts.canRealistic())) btn('Real photo', () => opts.onRealistic(spec), 'ld-photo', 'photo');
   if (opts.onChange) btn('Show another way', () => opts.onChange(spec), 'ld-change', 'change');
+  // (v307) what to ask next: one tap asks it, and she answers on this same drawing
+  let nextRow = null;
+  if (spec.next && spec.next.length && opts.onNext) {
+    nextRow = el('div', 'ld-next'); nextRow.setAttribute('role', 'group'); nextRow.setAttribute('aria-label', 'Ask next');
+    nextRow.appendChild(el('span', 'ld-next-t', 'Ask next'));
+    spec.next.forEach((q) => { const b = el('button', 'ld-next-q', q); b.type = 'button'; b.addEventListener('click', () => { nextRow.remove(); opts.onNext(q, spec); }); nextRow.appendChild(b); });
+    host.appendChild(nextRow);
+  }
   if (view) {
     view.onPick = (p) => {
       if (!p) { setSay(spec.summary || spec.intro || ''); hint.textContent = view.hintText; askBtn.hidden = true; return; }
@@ -900,8 +910,10 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
   const fade = (g, o) => g.traverse((m) => { if (m.material) { m.material.opacity = o; m.material.depthWrite = o > .6; } });
   const hintText = 'Drag to turn it. Pinch to zoom. Tap a part';
   hint.textContent = hintText;
+  let focused = false, aimTo = null; // (moved in on a part by a follow-up: showing it all again stands back)
   const pick = (g) => {
     picked = picked === g ? null : g;
+    if (!picked && focused) { focused = false; aimTo = new T.Vector3(); camTo = cam.position.clone().sub(controls.target).normalize().multiplyScalar(home.length()); if (still()) { controls.target.set(0, 0, 0); cam.position.copy(camTo); aimTo = camTo = null; } }
     groups.forEach((x) => fade(x, picked && x !== picked ? .16 : x.userData.part.shell && (opened || exploded) ? .14 : 1));
     view.onPick && view.onPick(picked ? picked.userData.part : null);
   };
@@ -924,6 +936,7 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
     if (!still()) groups.forEach((g) => { if (g.visible && g.userData.spinners) g.userData.spinners.forEach((sp) => { sp.rotation[sp.userData.axle] += dt * 3; }); });
     groups.forEach((g) => { const to = g.userData.to; if (to) { g.position.lerp(to, Math.min(1, dt * 6)); if (g.position.distanceTo(to) < .002) { g.position.copy(to); g.userData.to = null; } } });
     groups.forEach((g) => { const sl = g.userData.slide; if (sl) { const k = Math.min(1, Math.max(0, (now - sl.t0 - 400) / 1100)), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2; g.position.lerpVectors(sl.from, g.userData.home, e); if (k >= 1) g.userData.slide = null; } }); // (it waits a moment, then slides home)
+    if (aimTo) { controls.target.lerp(aimTo, Math.min(1, dt * 5)); if (controls.target.distanceTo(aimTo) < .005) { controls.target.copy(aimTo); aimTo = null; } }
     if (camTo) { cam.position.lerp(camTo, Math.min(1, dt * 5)); if (cam.position.distanceTo(camTo) < .01) camTo = null; }
     else if (sway) { const a = Math.sin(now / 2600) * .32, d = cam.position.length(), y = home.y / home.length(), r = Math.sqrt(1 - y * y), a0 = Math.atan2(home.x, home.z); cam.position.set(Math.sin(a0 + a) * r * d, y * d, Math.cos(a0 + a) * r * d); }
     controls.update();
@@ -936,6 +949,7 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
       groups.forEach((g, i) => {
         const t = tagEls[i]; if (!t) return;
         if (!g.visible || (g.userData.part.shell && (opened || exploded))) { t.hidden = true; return; }
+        if (focused && picked && g !== picked && !(spec.fresh && spec.fresh.includes(g.userData.part.id))) { t.hidden = true; return; } // (moved in on a part: its name, and what the answer added)
         t.hidden = false; tmp.copy(g.userData.center).add(g.position).sub(g.userData.home); tmp.project(cam);
         shown.push({ t, px: (tmp.x + 1) / 2 * w, py: (1 - tmp.y) / 2 * h, tw: t.offsetWidth || 80, th: t.offsetHeight || 24 });
       });
@@ -1020,6 +1034,20 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
         await setSay(g.userData.part.say || g.userData.part.label, true);
         await sleep(450);
       }
+    },
+    // (v307) the part a follow-up is about: the camera moves in on it (from the side you are looking from), the other
+    // parts fade, and a case it sits in is seen through. A tap on the empty space, or on it again, shows it all.
+    focus(i) {
+      const g = groups.find((x) => x.userData.i === i); if (!g) return;
+      sway = false; picked = g; focused = true;
+      if (shells.length && !g.userData.part.shell) opened = true; // (a part in a case: seen through the case)
+      groups.forEach((x) => fade(x, x === g ? 1 : x.userData.part.shell && opened ? .08 : .16));
+      // the camera turns to look AT the part and comes close enough that it fills the middle of the view
+      const pb = new T.Box3().setFromObject(g), c = pb.getCenter(new T.Vector3()), big = pb.getSize(new T.Vector3()).length();
+      const dir = cam.position.clone().sub(controls.target).normalize();
+      const d = Math.min(home.length(), Math.max(R * .3, big / (Math.tan(cam.fov * Math.PI / 360) * Math.min(1, W() / H())) * (callout ? 1.1 : .8))); // (a narrow phone: fitted to the width)
+      aimTo = c.clone(); camTo = c.clone().add(dir.multiplyScalar(d));
+      if (still()) { controls.target.copy(aimTo); cam.position.copy(camTo); aimTo = camTo = null; }
     },
     get opened() { return opened; },
     setOpen(v) { opened = !!v; shells.forEach((g) => fade(g, opened ? .14 : 1)); },

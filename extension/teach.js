@@ -1002,14 +1002,33 @@
     if (followOn && !follow && document.documentElement) {
       follow = document.createElement('div');
       follow.id = FOLLOW_ID;
-      Object.assign(follow.style, { position: 'fixed', left: '0', top: '0', width: '26px', height: '26px', zIndex: '2147483639', pointerEvents: 'none', display: 'none', transition: 'transform .12s ease-out' });
+      Object.assign(follow.style, { position: 'fixed', left: '0', top: '0', width: '26px', height: '26px', zIndex: '2147483639', pointerEvents: 'none', display: 'none', willChange: 'transform' }); // (v307: moved by a spring each frame, not a CSS transition)
       follow.attachShadow({ mode: 'open' }).innerHTML = '<style>svg{width:26px;height:26px;fill:#fff;stroke:#141416;stroke-width:1.6;stroke-linejoin:round;filter:drop-shadow(0 2px 4px rgba(0,0,0,.35))}@media (prefers-reduced-motion: reduce){:host{transition:none!important}}</style>' + ARROW;
       document.documentElement.appendChild(follow);
       const a = followAt();
-      if (a) follow.style.transform = `translate(${Math.round(a.x)}px, ${Math.round(a.y)}px)`;
+      if (a) { spot = { ...a }; place(0); }
     }
     followPaint();
   }
+  // (v307) she trails the pointer on a spring: smooth at any frame rate (the step is worked out from the time each
+  // frame took, capped so a busy page never makes her jump), leaning a little the way she moves, and still when it is
+  // still (no frames are drawn then). With Reduce Motion she sits beside the pointer, with no trail and no lean.
+  let spot = null, lean = 0, fRaf = 0, fLast = 0;
+  const calmMotion = () => window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const place = (tilt) => { follow.style.transform = `translate(${spot.x.toFixed(1)}px, ${spot.y.toFixed(1)}px) rotate(${tilt.toFixed(1)}deg)`; };
+  function followStep(now) {
+    fRaf = 0;
+    const to = followAt(); if (!follow || !to) return;
+    if (!spot || calmMotion()) { spot = { ...to }; lean = 0; place(0); return; }
+    const dt = Math.min(0.05, fLast ? (now - fLast) / 1000 : 0.016); fLast = now;
+    const k = 1 - Math.exp(-dt * 20), dx = to.x - spot.x, dy = to.y - spot.y;
+    spot.x += dx * k; spot.y += dy * k;
+    lean += (Math.max(-10, Math.min(10, dx * 0.3)) - lean) * (1 - Math.exp(-dt * 18));
+    place(lean);
+    if (Math.abs(dx) + Math.abs(dy) > 0.5 || Math.abs(lean) > 0.5) fRaf = requestAnimationFrame(followStep);
+    else { spot = { ...to }; lean = 0; place(0); fLast = 0; }
+  }
+  const followMove = () => { if (!fRaf) { fLast = 0; fRaf = requestAnimationFrame(followStep); } };
   function followHide(h) { followHidden = !!h; followPaint(); }
   // where her cursor sits: beside the pointer, down and to the right, so it never covers what the student points at
   const followAt = () => (lastPointer ? { x: lastPointer.x + 16, y: lastPointer.y + 18 } : null);
@@ -1036,8 +1055,7 @@
     addEventListener('pointermove', (e) => {
       lastPointer = { x: e.clientX, y: e.clientY };
       if (!followOn || !follow) return;
-      const a = followAt();
-      follow.style.transform = `translate(${Math.round(a.x)}px, ${Math.round(a.y)}px)`;
+      followMove();
       followPaint();
     }, { passive: true, capture: true });
     store.get(['teachCursor']).then((o) => followSet(o.teachCursor === 'on'));
