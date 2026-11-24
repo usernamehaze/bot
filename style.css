@@ -4552,3 +4552,10 @@ label.notif-top { cursor: pointer; min-height: 44px; }
 @media (min-width: 1101px) {
   .topbar .top-search { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(480px, 36vw); flex: none; z-index: 2; }
 }
+
+/* (v306) older phones (iOS 15, Android browsers from before 2023) can't read color-mix(): without this, card edges and
+   tints disappear and cards blend into the page. Plain colours from the theme's own tokens instead. (:root three times:
+   so it wins over the light and dark theme blocks) */
+@supports not (color: color-mix(in srgb, red 50%, blue)) {
+  :root:root:root { --lg-line: var(--border); --lg-pick: var(--surface-2); --lg-tint: transparent; --lg-glow: transparent; --amb-1: transparent; --amb-2: transparent; --amb-3: transparent; --aa-b1: var(--muted); }
+}

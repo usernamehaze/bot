@@ -7540,8 +7540,64 @@ test('v294 tap targets: every button, link, switch and field on a computer’s H
 });
 
 // (v295) Cassie's grammar and vocabulary fit the student: by age or grade, then by how they write in the chat
+test('v306 follow-up questions on a drawing, and low data: a question about the drawing on screen is answered ON it (what is there stays and shows at once, only the parts the answer needs are drawn, the part it is about is picked out), through the same checks; a question about something else, a thank you or a quiz is an ordinary message; on low data no reference picture is fetched; older browsers without color-mix get plain colours', async (b) => {
+  const fx = (n) => JSON.parse(fs.readFileSync(path.join(ROOT, 'tests/fixtures/live', n + '.json'), 'utf8'));
+  const heart = fx('heart'), follow = fx('heart-follow');
+  const asks = [];
+  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: (body) => {
+    const all = JSON.stringify(body.messages || []); asks.push(all);
+    if (/You check drawings/.test(all)) return { text: JSON.stringify({ missing: [], labels: [], shapes: [], facts: [] }) };
+    if (/asks a follow-up question about it/.test(all)) return { text: JSON.stringify(follow) };
+    return { text: 'A plain answer in words.' };
+  } });
+  // the unit: what is kept, what is added, what is picked out
+  const u = await page.evaluate(async ([H, F]) => {
+    const m = await liveDrawLoad();
+    const pr = m.followPrompt(H), r = m.mergeFollow(H, JSON.stringify(F));
+    const changed = m.mergeFollow(H, { answer: 'The septum is a wall.', changed: [{ ...H.parts[4], say: 'A thick wall of muscle between the two sides.' }] });
+    const fresh = m.mergeFollow(H, { new: true, ...H, title: 'The lungs' });
+    const dup = m.mergeFollow(H, { answer: 'x', parts: [{ ...F.parts[0], id: 'lv' }] });
+    return { pr: /The drawing now: \{/.test(pr) && /"id":"lv"/.test(pr) && /do not send old parts again/.test(pr) && /"new": true/.test(pr),
+      ids: r.spec.parts.map((p) => p.id), kept: JSON.stringify(r.spec.parts.slice(0, 7).map((p) => p.shapes)) === JSON.stringify(m.clean(H).parts.map((p) => p.shapes)), fresh: r.spec.fresh, focus: r.spec.focus, intro: r.spec.intro,
+      changed: changed && [changed.spec.parts.length, changed.spec.fresh.join(), changed.spec.parts[4].say], isNew: fresh && fresh.isNew && fresh.spec.title, dup: dup && dup.spec.parts.map((p) => p.id).slice(-1)[0] };
+  }, [heart, follow]);
+  expect(u.pr, 'she is shown the drawing, and told to send only what is new');
+  expect(u.ids.join() === 'wall,atria,rv,lv,septum,vessels,flow,body' && u.kept && u.fresh.join() === 'body' && u.focus === 'lv' && /pumps oxygen rich blood/.test(u.intro), 'the old parts stay exactly as they were, the new one is added, the left ventricle is picked out: ' + JSON.stringify(u));
+  expect(u.changed && u.changed[0] === 7 && u.changed[1] === 'septum' && /thick wall/.test(u.changed[2]), 'a part she changes takes its own place: ' + JSON.stringify(u.changed));
+  expect(u.isNew === 'The lungs' && u.dup === 'lv2', 'a different thing is a new drawing; a new part never takes an old one’s name: ' + JSON.stringify([u.isNew, u.dup]));
+  // the chat: her drawing is the latest message
+  await page.evaluate((H) => { const sp = { ...H, q: 'how does the heart work' }; state.messages.push({ role: 'user', content: 'draw how the heart works' }); state.messages.push({ role: 'assistant', content: '[I drew a live diagram: How the human heart works.]', display: '```cassie-draw\n' + JSON.stringify(sp) + '\n```' }); save(); renderMessage('user', 'draw how the heart works'); renderMessage('assistant', '```cassie-draw\n' + JSON.stringify(sp) + '\n```'); }, heart);
+  await page.waitForSelector('#chat-log .ld .ld-labels > g');
+  const fits = await page.evaluate(() => ['what does the left ventricle do?', 'why is it red?', 'Tell me more about the Septum in How the human heart works', 'thanks!', 'what is the capital of France?', 'quiz me on this', 'draw it again', 'show it in 3D', 'draw me how the heart works', 'add the valves to it'].map((q) => liveDrawFollowFits(q)));
+  expect(fits.join() === 'true,true,true,false,false,false,false,false,false,true', 'a question about the drawing is a follow-up on it; thanks, another subject, a quiz, "draw it again", 3D and a new "draw me" are not; "add the valves to it" is: ' + fits.join());
+  await page.fill('#prompt-input', 'what does the left ventricle do?'); await page.click('#send-btn');
+  await page.waitForFunction(() => document.querySelectorAll('#chat-log .ld').length === 2, null, { timeout: 15000 });
+  await page.waitForTimeout(150);
+  const mid = await page.evaluate(() => { const ld = [...document.querySelectorAll('#chat-log .ld')].pop(), gs = [...ld.querySelectorAll('.ld-part')]; const on = (g) => [...g.children].some((n) => getComputedStyle(n).visibility !== 'hidden'); return { n: gs.length, old: gs.slice(0, 7).every(on), oldNames: ld.querySelectorAll('.ld-labels > g[data-done]').length, state: ld.querySelector('.ld-state').textContent }; });
+  expect(mid.n === 8 && mid.old && mid.oldNames >= 7 && mid.state === 'Cassie is adding to it', 'what was there shows at once, named, while she adds to it: ' + JSON.stringify(mid));
+  await page.waitForFunction(() => { const ld = [...document.querySelectorAll('#chat-log .ld')].pop(); return ld.querySelector('.ld-live.off'); }, null, { timeout: 20000 });
+  const end = await page.evaluate(() => { const ld = [...document.querySelectorAll('#chat-log .ld')].pop(), gs = [...ld.querySelectorAll('.ld-part')]; return { dim: gs.map((g) => g.classList.contains('dim')), say: ld.querySelector('.ld-say').textContent, names: [...ld.querySelectorAll('.ld-labels > g')].map((g) => g.textContent), last: state.messages[state.messages.length - 1].content }; });
+  expect(end.dim.join() === 'true,true,true,false,true,true,true,true' && /pumps oxygen rich blood/.test(end.say), 'the left ventricle is picked out and her answer stays in view: ' + JSON.stringify(end));
+  expect(end.names.some((t) => /^8 To the body/.test(t)) && /^\[I answered on my drawing of How the human heart works: The left ventricle pumps/.test(end.last) && /I added: To the body/.test(end.last), 'the new part is named, and the chat remembers the answer: ' + JSON.stringify(end.names) + ' ' + end.last);
+  const followAsk = asks.find((a) => /asks a follow-up question about it/.test(a));
+  expect(followAsk && /what does the left ventricle do\?/.test(followAsk) && /\\"id\\":\\"lv\\"/.test(followAsk), 'she was asked with the drawing that is there and the question');
+  // something else is an ordinary message
+  const before = asks.length;
+  await page.fill('#prompt-input', 'what is the capital of France?'); await page.click('#send-btn');
+  await page.waitForFunction(() => /A plain answer in words/.test(document.getElementById('chat-log').innerText), null, { timeout: 10000 });
+  expect(!asks.slice(before).some((a) => /asks a follow-up question about it/.test(a)) && await page.evaluate(() => document.querySelectorAll('#chat-log .ld').length) === 2, 'another subject gets an ordinary answer');
+  // low data: no reference picture at all
+  let fetched = 0;
+  await ctx.route(/commons\.wikimedia\.org|openverse\.org/, (route) => { fetched++; route.abort(); });
+  const low = await page.evaluate(async () => { const m = await liveDrawLoad(); document.documentElement.classList.add('lite'); const t0 = Date.now(); const r = await m.findReference('draw how a volcano erupts'); document.documentElement.classList.remove('lite'); return { r, ms: Date.now() - t0 }; });
+  expect(low.r === null && low.ms < 50 && fetched === 0, 'in Lite mode (low data) no reference picture is fetched: ' + JSON.stringify(low) + ' ' + fetched);
+  const css = fs.readFileSync(path.join(ROOT, 'style.css'), 'utf8');
+  expect(/@supports not \(color: color-mix\(in srgb, red 50%, blue\)\)/.test(css), 'an older browser without color-mix gets plain colours');
+  expect(!errors.length, 'page errors: ' + errors.join(' | '));
+  await ctx.close();
+});
 test('v305 drawings, more realistic: every way the AI writes a shape is read (a fan no longer vanishes); spokes stay inside the wheel; planets never sit inside each other; a creature is one body (no floating head), its legs have thickness, and no two parts share a name; dark colours show on dark paper; a dragon in 3D is drawn flat; a real thing is drawn from a free reference picture (an English diagram from Wikimedia Commons), credited on the card; none for living or imaginary things', async (b) => {
-  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, state: { groqKey: 'gsk_test', theme: 'dark' } });
+  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' } });
   const fx = (n) => JSON.parse(fs.readFileSync(path.join(ROOT, 'tests/fixtures/live', n + '.json'), 'utf8'));
   const r = await page.evaluate(async (F) => {
     const m = await liveDrawLoad();
@@ -9820,6 +9876,32 @@ test('Cassie’s live drawing, real outlines (3.68): a drawing comes in the Cass
     // a reply cut off mid-part keeps its whole parts
     const cut = await inWorld(`(() => { const t = ${JSON.stringify(fixture('heart'))}; const g = CassieLive.parse(t.slice(0, Math.floor(t.length * 0.7))); return g.kind + ':' + (g.scene ? g.scene.dim + ':' + g.scene.spec.parts.length : ''); })()`);
     expect(/^card:flat:[3-6]$/.test(cut), 'a reply cut short keeps its whole parts: ' + cut);
+    expect(!X.errors.length, 'no script errors: ' + X.errors.join(' | '));
+  } finally { await X.close(); }
+});
+
+test('Cassie’s live drawing, follow-ups (3.74): a question about her flat drawing is answered ON it: the parts there stay and show at once, her answer is said, then only the new part is drawn; the same checks; a 3D question still starts afresh', async () => {
+  const X = await liveExt();
+  const { page, replies, prompts, card, tap, until, ask, fixture, LIVE } = X;
+  try {
+    await X.open(`http://localhost:${APP_PORT}/tests/fixtures/live/pictures.html`);
+    const flat = () => page.evaluate((h) => { const r = document.querySelector(h).shadowRoot, sv = r.querySelector('.lv-stage-flat svg.ld-svg'); if (!sv) return null; const on = (g) => [...g.children].some((n) => getComputedStyle(n).visibility !== 'hidden'); return { parts: sv.querySelectorAll('.ld-part').length, shown: [...sv.querySelectorAll('.ld-part')].map(on), names: [...sv.querySelectorAll('.ld-labels > g')].map((g) => g.textContent) }; }, LIVE);
+    await replies([fixture('heart')]);
+    await ask('how does the heart pump blood?');
+    await until({ beat: '0' });
+    await replies([fixture('heart-follow')]);
+    await page.evaluate(([h, q]) => { const r = document.querySelector(h).shadowRoot; r.querySelector('.lv-ask input').value = q; r.querySelector('.lv-ask').requestSubmit(); }, [LIVE, 'what does the left ventricle do?']);
+    await until({ beat: '7' }, 15000);
+    let c = await card();
+    await tap('.lv-play');
+    let f = await flat();
+    const P = await prompts();
+    expect(P.length === 1 && /asks a follow-up question about it/.test(P[0]) && /The student asks: "what does the left ventricle do\?"/.test(P[0]) && /"id":"lv"/.test(P[0]), 'she was asked with the drawing that is there: ' + P.length);
+    expect(f && f.parts === 8 && f.shown.slice(0, 7).every(Boolean) && !f.shown[7] && f.names.length === 7, 'the old parts stay, shown and named at once; the new one is not drawn yet: ' + JSON.stringify(f));
+    expect(/pumps oxygen rich blood/.test(c.now) && c.title === 'How the human heart works', 'her answer is said on the same drawing: ' + c.now);
+    await tap('.lv-next'); await page.waitForTimeout(300);
+    f = await flat();
+    expect(f.shown.every(Boolean) && f.names.some((t) => /^8 To the body/.test(t)), 'then the new part is drawn and named: ' + JSON.stringify(f.names));
     expect(!X.errors.length, 'no script errors: ' + X.errors.join(' | '));
   } finally { await X.close(); }
 });
