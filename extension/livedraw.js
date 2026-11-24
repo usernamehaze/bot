@@ -56,12 +56,44 @@ function kindOf(x, mode) {
   return said;
 }
 const box4 = (b) => (Array.isArray(b) && b.length === 4 ? [num(b[0], 0, 400), num(b[1], 0, 260), num(b[2], 4, 400, 60), num(b[3], 4, 260, 40)] : null);
+// (v310) a reply that was cut off (a long drawing can run past the answer's length): every whole part is kept, with
+// the title, mode and words that came before them, so she still draws what she finished instead of showing code
+function closeOf(t, i) { // the index of the } that closes the { at i (strings and their escapes skipped), or -1
+  let depth = 0, inStr = false;
+  for (let k = i; k < t.length; k++) {
+    const c = t[k];
+    if (inStr) { if (c === '\\') k++; else if (c === '"') inStr = false; continue; }
+    if (c === '"') inStr = true; else if (c === '{' || c === '[') depth++; else if (c === '}' || c === ']') { depth--; if (depth === 0) return k; }
+  }
+  return -1;
+}
+export function salvage(text) {
+  const t = String(text || '').replace(/```(?:json|cassie-draw)?/gi, ''), i = t.indexOf('{');
+  if (i < 0) return null;
+  const j = closeOf(t, i);
+  if (j > 0) { try { return JSON.parse(t.slice(i, j + 1)); } catch (e) { /* whole parts are picked out below */ } }
+  const at = t.search(/"parts"\s*:\s*\[/);
+  if (at < 0) return null;
+  const parts = [];
+  for (let k = t.indexOf('[', at) + 1; k < t.length;) {
+    while (k < t.length && /[\s,]/.test(t[k])) k++;
+    if (t[k] !== '{') break;
+    const e = closeOf(t, k);
+    if (e < 0) break;
+    try { parts.push(JSON.parse(t.slice(k, e + 1))); } catch (err) { break; }
+    k = e + 1;
+  }
+  if (!parts.length) return null;
+  const word = (key) => { const m = t.slice(0, at).match(new RegExp('"' + key + '"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"')); try { return m ? JSON.parse('"' + m[1] + '"') : ''; } catch (e) { return ''; } };
+  const next = (() => { const m = t.slice(0, at).match(/"next"\s*:\s*(\[[^\]]*\])/); try { return m ? JSON.parse(m[1]) : undefined; } catch (e) { return undefined; } })();
+  return { title: word('title'), mode: word('mode') === '3d' ? '3d' : '2d', axis: word('axis'), layout: word('layout'), intro: word('intro'), summary: word('summary'), photo: word('photo'), ...(next ? { next } : {}), parts, cut: true };
+}
 export function clean(raw) {
   let s = raw;
-  if (typeof s === 'string') { const a = s.indexOf('{'), b = s.lastIndexOf('}'); if (a < 0 || b <= a) return null; try { s = JSON.parse(s.slice(a, b + 1)); } catch (e) { return null; } }
+  if (typeof s === 'string') { s = salvage(s); if (!s) return null; }
   if (!s || typeof s !== 'object' || !Array.isArray(s.parts)) return null;
   const mode = s.mode === '3d' ? '3d' : '2d';
-  const parts = s.parts.slice(0, 10).map((p, i) => ({
+  const parts = s.parts.slice(0, 12).map((p, i) => ({ // (v310: 12, so a full bicycle keeps its brakes)
     id: words(p && p.id, 40) || 'p' + i,
     label: words(p && p.label, 40),
     say: words(p && p.say, 360),
@@ -402,7 +434,7 @@ export function followPrompt(rawSpec) {
   const spec = clean(rawSpec);
   if (!spec) return '';
   const now = JSON.stringify({ title: spec.title, mode: spec.mode, ...(spec.mode === '3d' ? { axis: spec.axis } : {}), parts: spec.parts.map(({ id, label, say, color, box, anchor, inside, size, attached, shell, spin, glow, finish, shapes }) => (spec.mode === '3d' ? { id, label, say, color, inside, size, attached, shell, spin, glow, finish, shapes } : { id, label, say, color, box, anchor, shapes })) });
-  const room = Math.max(0, 10 - spec.parts.length);
+  const room = Math.max(0, 12 - spec.parts.length);
   const shapes = spec.mode === '3d'
     ? 'New 3D parts use the same units and centre as the parts above (about 6 units long in all). Shapes: cylinder {r,r2,len,axis,pos}, disc {r,thick,axis,pos}, cone {r,len,axis,pos,dir}, sphere {r,pos}, box {size:[w,h,d],pos}, torus {r,tube,axis,pos}, blades {n,len,width,hub,axis,pos}, capsule {r,len,axis,pos}, pipe {pts,r}, arrow {pts,r}, lathe {profile,axis,pos}, plate {outline,thick,axis,pos}. Each new part touches or sits inside the part it belongs to.'
     : 'New parts are drawn on the same picture (400 wide, 260 tall, x 10 to 390, y 20 to 250) at the same scale: in their real place on the drawing, touching what they connect to, in clear space where they can. Every part has "box", "anchor" (a point ON its main shape) and 2 to 24 strokes. 2d shapes: line, arrow (x1,y1,x2,y2), path (d, capital letters only), poly (pts), rect (x,y,w2,h), circle (cx,cy,r), ellipse (cx,cy,rx,ry), text (x,y,text, values only); "fill":true, "dash":true.';
@@ -431,7 +463,7 @@ export function mergeFollow(rawOld, reply) {
   }
   const taken = new Set(parts.map((p) => p.id));
   for (const x of Array.isArray(d.parts) ? d.parts : []) {
-    if (parts.length >= 10) break;
+    if (parts.length >= 12) break;
     const p = x && one(x); if (!p) continue;
     if (taken.has(p.id)) { // (an old part sent again: a change, or a new part with a name already used)
       const k = parts.findIndex((q) => q.id === p.id);
@@ -471,7 +503,9 @@ export async function render(host, rawSpec, opts = {}) {
   const setSay = async (text, type) => {
     if (!type) { say.textContent = text; return; }
     say.textContent = '';
-    for (let i = 0; i < text.length; i += 3) { say.textContent = text.slice(0, i + 3); await sleep(16); }
+    // (v310) typed by the clock, not by the frame: about a second a sentence even on a slow or busy phone
+    const t0 = performance.now(), total = Math.min(1100, text.length * 14);
+    for (let n = 0; n < text.length;) { n = Math.max(n + 1, Math.ceil(text.length * Math.min(1, (performance.now() - t0) / total))); say.textContent = text.slice(0, n); if (n < text.length) await sleep(16); }
   };
   const view = spec.mode === '3d' ? await draw3d(stage, spec, { animate, setSay, hint, real: true, callout: true }) : draw2d(stage, spec, { animate, setSay, hint });
   if (!view) { // no 3D on this phone: say what it would have shown
@@ -879,12 +913,14 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
   const box = new T.Box3().setFromObject(model), size = box.getSize(new T.Vector3()), mid = box.getCenter(new T.Vector3());
   model.position.sub(mid); model.updateMatrixWorld(true);
   const R = Math.max(size.x, size.y, size.z, 1);
-  const VIEW = new T.Vector3(.55, .38, 1.02).normalize();
+  // (v310) a flat model (the solar system, an atom's shells) is seen from higher up, so it fills the frame instead of a thin line
+  const VIEW = (size.y < Math.max(size.x, size.z) * .3 ? new T.Vector3(.35, .95, .75) : new T.Vector3(.55, .38, 1.02)).normalize();
+  const narrowFit = callout && W() < 520 && spec.parts.filter((p) => p.label).length > 6; // (v310: numbers, not name columns)
   // (v253) the camera stands back far enough that the whole model (or the pulled-apart one) is in the frame from any side
   // the nearest distance along a direction at which every corner of the box is inside the frame, with room for the names
   const fitBox = (bx, dir) => {
     const cs = []; for (const x of [bx.min.x, bx.max.x]) for (const y of [bx.min.y, bx.max.y]) for (const z of [bx.min.z, bx.max.z]) cs.push(new T.Vector3(x, y, z));
-    const probe = cam.clone(), fits = (d) => { probe.position.copy(dir).multiplyScalar(d); probe.lookAt(0, 0, 0); probe.updateMatrixWorld(); probe.updateProjectionMatrix(); return cs.every((c) => { if (c.clone().applyMatrix4(probe.matrixWorldInverse).z > -probe.near * 4) return false; const q = c.clone().project(probe); return Math.abs(q.x) <= (callout ? .5 : .78) && Math.abs(q.y) <= (callout ? .8 : .72); }); };
+    const probe = cam.clone(), fits = (d) => { probe.position.copy(dir).multiplyScalar(d); probe.lookAt(0, 0, 0); probe.updateMatrixWorld(); probe.updateProjectionMatrix(); return cs.every((c) => { if (c.clone().applyMatrix4(probe.matrixWorldInverse).z > -probe.near * 4) return false; const q = c.clone().project(probe); return Math.abs(q.x) <= (callout && !narrowFit ? .5 : .78) && Math.abs(q.y) <= (callout && !narrowFit ? .8 : .72); }); };
     let lo = .5, hi = 400; for (let k = 0; k < 40; k++) { const mid = (lo + hi) / 2; if (fits(mid)) hi = mid; else lo = mid; }
     return hi;
   };
@@ -908,6 +944,8 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
   });
   const order = groups.filter((g) => !g.userData.part.shell).sort((a, b) => a.userData.center.dot(ax) - b.userData.center.dot(ax));
   const tagEls = groups.map((g, i) => { const p = g.userData.part; if (!p.label) return null; const t = el('button', 'ld-tag', `${spec.parts.indexOf(p) + 1} ${p.label}`); t.type = 'button'; t.hidden = true; t.addEventListener('click', (e) => { e.stopPropagation(); pick(g); }); tags.appendChild(t); return t; });
+  let wasCompact = null;
+  const legend3 = el('p', 'ld-legend', spec.parts.filter((p) => p.label).map((p) => `${spec.parts.indexOf(p) + 1}\u00a0${p.label.replace(/ /g, '\u00a0')}`).join('   ')); legend3.hidden = true; stage.after(legend3);
   let exploded = false, opened = false, picked = null, raf = 0, last = performance.now(), visible = true, calloutAz = null, calloutApart = false;
   const shells = groups.filter((g) => g.userData.part.shell);
   const fade = (g, o) => g.traverse((m) => { if (m.material) { m.material.opacity = o; m.material.depthWrite = o > .6; } });
@@ -946,7 +984,15 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
     renderer.render(scene, cam);
     // each name: a spot near its part, clear of the other names, with a thin line to the part
     const spots = [], segs = [], w = W(), h = H();
-    if (callout) {
+    // (v310) a narrow screen (a phone, the side panel) and many parts: a small number on each part, the names listed
+    // under the model, so names never cover it (a tap on a part still shows its name and what it does)
+    const compact = callout && w < 520 && tagEls.filter(Boolean).length > 6;
+    if (compact !== wasCompact) {
+      wasCompact = compact;
+      tagEls.forEach((t, i) => { if (!t) return; const p = groups[i].userData.part, n = spec.parts.indexOf(p) + 1; t.textContent = compact ? String(n) : `${n} ${p.label}`; t.classList.toggle('ld-num', compact); if (compact) t.setAttribute('aria-label', `${n} ${p.label}`); else t.removeAttribute('aria-label'); t._spot = null; });
+      legend3.hidden = !compact;
+    }
+    if (callout && !compact) {
       // (names stand in a column on each side of the model, never on it, each with a line to its part)
       const shown = [];
       groups.forEach((g, i) => {

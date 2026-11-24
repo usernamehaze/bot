@@ -77,14 +77,15 @@ async function googleTap(page, ctx, who) {
 }
 // an ID token signed with the fake server's test keys (like Google's or Apple's)
 const idToken = async (o) => (await fetch(SERVER + '/__idtoken', { method: 'POST', body: JSON.stringify(o) })).text();
-async function open(browser, { server = true, state = {}, fakeGroq, lite = 'on', device = 'Pixel 7', viewport, touch, scale, setup, noOffline, ph } = {}) {
+async function open(browser, { server = true, state = {}, fakeGroq, lite = 'on', device = 'Pixel 7', viewport, touch, scale, setup, noOffline, ph, book } = {}) {
   const ctx = await browser.newContext({ ...devices[device], ...(viewport ? { viewport } : {}), ...(ph ? { timezoneId: 'Asia/Manila', locale: 'en-PH' } : {}), // (ph: a student in the Philippines, who sees prices in pesos)
     ...(touch ? { hasTouch: true } : {}), ...(scale ? { deviceScaleFactor: scale } : {}), ...(noOffline ? { serviceWorkers: 'block' } : {}), acceptDownloads: true }); // (noOffline: no offline cache, which fetches files on its own)
   const seed = state && { profile: PROFILE, seenVersion: APP_VERSION, analytics: { usage: true, topics: false }, lite, tab: 'chat', plan: { plan: 'pro', until: 0 }, ...state }; // (Pro, so the Plus extras are there; a test passes plan: null for Free)
-  await ctx.addInitScript(([srv, seedJson]) => {
+  await ctx.addInitScript(([srv, seedJson, book]) => {
     window.CASSIE_SERVER = srv; // '' = no server (never the real one in tests)
+    if (!book) window.CASSIE_NO_BOOK = true; // (the AI's own drawing is what most tests check; v310 turns the book on)
     if (seedJson && !sessionStorage.getItem('seeded')) { sessionStorage.setItem('cassie.deskPage', 'chat'); /* (a computer starts on Home, with no ask box: the tests start in a new chat, and the dashboard tests open Home) */ localStorage.setItem('cassie.v2', seedJson); localStorage.setItem('cassie.labs.ui', '{"tries":"max"}'); sessionStorage.setItem('seeded', '1'); } // (the tests read the goals: keep "Try this" open on phone screens)
-  }, [server ? SERVER : '', seed ? JSON.stringify(seed) : '']);
+  }, [server ? SERVER : '', seed ? JSON.stringify(seed) : '', !!book]);
   await ctx.route(/pollinations\.ai/, (route) => route.fulfill({ body: PNG, contentType: 'image/png', headers: { 'access-control-allow-origin': '*' } })); // (the picture service allows other sites to use its pictures)
   await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (route) => route.abort());
   await ctx.route(/workers\.dev/, (route) => route.abort()); // never touch the real Cassie server
@@ -7546,6 +7547,39 @@ test('v294 tap targets: every button, link, switch and field on a computer’s H
 });
 
 // (v295) Cassie's grammar and vocabulary fit the student: by age or grade, then by how they write in the chat
+test('v310 drawings, accurate, fast and reliable: her drawing book shows a checked bicycle, solar system, atom, heart, water cycle, photosynthesis, volcano or jet engine at once (no AI, no key, offline too), a narrow question still goes to the AI; a reply cut off mid-way keeps every whole part, and drawing code is never shown as an answer', async (b) => {
+  const calls = [];
+  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 860 }, server: false, book: true, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: (body) => { calls.push(JSON.stringify(body.messages || []).slice(0, 200)); return { text: '{"title":"Dragon","mode":"2d","parts":[{"id":"head","label":"Head","shapes":[{"t":"path","d":"M40,100 C45,70' }; } });
+  // the book: which questions it answers
+  const hits = await page.evaluate(async () => { const bk = await liveBookLoad(); return ['draw a bicycle', 'make a 3d bicycle', 'how do a bicycle’s gears shift', 'draw a motorbike', 'show me the human heart', 'draw a heart emoji', 'explain the water cycle', 'how does photosynthesis work', 'draw how a volcano erupts', 'how does a jet engine work', 'draw the solar system', 'build an atom in 3D', 'draw a bicycle for my science project', 'paano gumagana ang bisikleta'].map((q) => { const x = bk.fromBook(q, /3d/i.test(q)); return x ? x.book + ':' + x.mode : '-'; }).join(' '); });
+  expect(hits === 'bicycle:2d bicycle:3d - - heart:2d - water:2d photosynthesis:2d volcano:2d jet:3d solar:3d atom:3d - bicycle:2d', 'the book answers the subject, the AI answers a narrow question: ' + hits);
+  // every book drawing is whole, named and passes the app's own checks for a real figure
+  const book = await page.evaluate(async () => { const bk = await liveBookLoad(), m = await liveDrawLoad(); return bk.bookKeys().map((k) => { const raw = bk.fromBook({ bicycle: 'draw a bicycle', solar: 'the solar system', atom: 'an atom', heart: 'the heart', water: 'the water cycle', photosynthesis: 'photosynthesis', volcano: 'a volcano', jet: 'a jet engine' }[k], false), sp = m.clean(raw); return [k, sp && sp.parts.length, sp && sp.parts.every((p) => p.label && p.say), sp ? (sp.mode === '2d' ? m.check(sp, sp.title).filter((x) => /leaves (it|them) out|used for more than one/.test(x)) : []) : ['none']]; }); });
+  expect(book.every(([, n, named, bad]) => n >= 4 && named && !bad.length), 'every book drawing is whole and named, with every textbook part: ' + JSON.stringify(book));
+  const b3 = await page.evaluate(async () => { const bk = await liveBookLoad(), m = await liveDrawLoad(); const sp = m.clean(bk.fromBook('make a 3d bicycle', true)); return { n: sp.parts.length, labels: sp.parts.map((p) => p.label).join(','), issues: m.check3d(sp) }; });
+  expect(b3.n === 11 && /Brakes/.test(b3.labels) && !b3.issues.length, 'the 3D bicycle keeps all 11 parts (brakes too) and passes the model checks: ' + JSON.stringify(b3));
+  // asked for: drawn at once, with no AI
+  calls.length = 0;
+  await page.fill('#prompt-input', 'draw a bicycle'); await page.click('#send-btn'); await pickWay(page);
+  await page.waitForSelector('#chat-log .ld .ld-part', { timeout: 8000 });
+  const shown = await page.evaluate(() => ({ title: document.querySelector('#chat-log .ld .ld-title').textContent, parts: document.querySelectorAll('#chat-log .ld .ld-part').length }));
+  expect(shown.title === 'How a bicycle works' && shown.parts === 11 && calls.length === 0, 'the book’s bicycle is drawn with no AI call: ' + JSON.stringify(shown) + ' calls ' + calls.length);
+  // offline: the book still draws
+  await ctx.setOffline(true); await page.evaluate(() => window.dispatchEvent(new Event('offline')));
+  await page.fill('#prompt-input', 'show me the solar system in 3D'); await page.click('#send-btn');
+  await page.waitForFunction(() => [...document.querySelectorAll('#chat-log .ld .ld-title')].some((t) => t.textContent === 'The solar system'), null, { timeout: 15000 });
+  await ctx.setOffline(false); await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  // a reply cut off mid-way: the whole parts are kept
+  const cut = await page.evaluate(async (H) => { const m = await liveDrawLoad(); const t = JSON.stringify(H); return [1, 0.8, 0.5].map((k) => { const c = m.clean('```json\n' + t.slice(0, Math.floor(t.length * k))); return c ? c.parts.length : 0; }); }, JSON.parse(fs.readFileSync(fileAt('tests/fixtures/live/heart.json'), 'utf8')));
+  expect(cut[0] === 7 && cut[1] >= 4 && cut[2] >= 1 && cut[1] < 7, 'a drawing cut short keeps every whole part: ' + cut.join());
+  // nothing to keep: a plain "couldn't finish", never the drawing's code
+  await page.fill('#prompt-input', 'draw a dragon with scales'); await page.click('#send-btn'); await pickWay(page);
+  await page.waitForFunction(() => /couldn.t finish that drawing/i.test(document.getElementById('chat-log').innerText), null, { timeout: 20000 });
+  const log = await page.evaluate(() => document.getElementById('chat-log').innerText);
+  expect(!/"title"|"parts"|"shapes"|M40,100/.test(log), 'no drawing code in the chat: ' + log.slice(-300));
+  expect(!errors.length, 'page errors: ' + errors.join(' | '));
+  await ctx.close();
+});
 test('v308: "make a 3d bicycle" and "can you make a bicycle" are drawn live (a model for 3D), not sent to the picture maker; a quiz, a reviewer, an essay or a poster are not drawings; the free picture service at its limit (its notice is a picture) is never shown as the student’s picture', async (b) => {
   const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, lite: 'off', state: { groqKey: 'gsk_test' } });
   const r = await page.evaluate(() => ['make a 3d bicycle', 'can you make a bicycle', 'build a 3D model of the heart', 'create a bicycle in 3D', 'make me a volcano please', 'make a quiz about cells', 'make a reviewer for science', 'make an essay about my mom', 'make a poster about recycling', 'can you make a summary', 'make a list of planets', 'make a study plan'].map((q) => (liveDrawRequest(q) ? 1 : 0)).join(''));
@@ -9963,7 +9997,7 @@ test('Cassie’s live drawing, follow-ups (3.74): a question about her flat draw
     await X.gone();
     // (v307) a 3D model: "how does the compressor work?" is answered on the same engine, the camera moves in on it
     await replies([fixture('jet3d')]);
-    await ask('Draw the full jet engine for me in 3D and explain how it works');
+    await ask('Draw the full jet engine of an airliner for me in 3D and explain how it works');
     await until({ dim: '3d', beat: '0' }, 30000);
     await replies([fixture('jet3d-follow')]);
     await page.evaluate(([h, q]) => { const r = document.querySelector(h).shadowRoot; r.querySelector('.lv-ask input').value = q; r.querySelector('.lv-ask').requestSubmit(); }, [LIVE, 'how does the compressor work?']);
@@ -9990,7 +10024,7 @@ test('Cassie’s live drawing, like the app (3.76): asked to draw, she looks up 
     await ctx.route(/upload\.wikimedia\.org/, (route) => route.fulfill({ body: PNG, contentType: 'image/png', headers: { 'access-control-allow-origin': '*' } }));
     const volcano = { ...JSON.parse(fixture('volcano2d-good')), next: ['What is inside the magma chamber?', 'Why does lava flow down the sides?'] };
     await replies([volcano]);
-    await ask('draw how a volcano erupts');
+    await ask('draw how a geyser erupts');
     await until({ beat: '0' }, 20000);
     const P = await prompts();
     expect(P.length === 1 && /A second picture comes after the picture of their screen: a reference picture/.test(P[0]), 'she was told about the reference picture: ' + P.length);
@@ -10064,6 +10098,27 @@ test('Cassie for Chrome on more pages and on first install (3.76): Ctrl twice ty
     expect(fr && fr.done === true, 'the first try is done, for good');
     await page.reload(); await page.waitForTimeout(1500);
     expect(await page.evaluate(() => !document.getElementById('cassie-welcome-92f1')), 'it never shows again');
+    expect(!X.errors.length, 'no script errors: ' + X.errors.join(' | '));
+  } finally { await X.close(); }
+});
+
+test('Cassie for Chrome draws from her book (3.77): "draw a bicycle" on any page shows her checked bicycle at once, with no AI asked; a follow-up still asks her, on that drawing', async () => {
+  const X = await liveExt();
+  const { page, replies, prompts, card, until, ask, LIVE } = X;
+  try {
+    await X.open(`http://localhost:${APP_PORT}/tests/fixtures/live/pictures.html`);
+    await replies([]);
+    const t0 = Date.now();
+    await ask('draw a bicycle');
+    await until({ beat: '0' }, 15000);
+    const ms = Date.now() - t0, c = await card(), P = await prompts();
+    expect(c.title === 'How a bicycle works' && P.length === 0, 'her book’s bicycle, with no AI asked: ' + c.title + ' prompts ' + P.length);
+    expect(ms < 6000, 'and at once: ' + ms + ' ms');
+    await replies([{ answer: 'The chain pulls the rear gear round, and the rear wheel turns with it.', focus: 'chain', parts: [], changed: [] }]);
+    await page.evaluate(([h, q]) => { const r = document.querySelector(h).shadowRoot; r.querySelector('.lv-ask input').value = q; r.querySelector('.lv-ask').requestSubmit(); }, [LIVE, 'how does the chain turn the wheel?']);
+    await page.waitForFunction((h) => /The chain pulls the rear gear round/.test(document.querySelector(h).shadowRoot.querySelector('.lv-words').textContent), LIVE, { timeout: 15000 });
+    const P2 = await prompts();
+    expect(P2.length === 1 && /asks a follow-up question about it/.test(P2[0]) && /"id":"chain"/.test(P2[0]), 'the follow-up asks her, with the book’s bicycle');
     expect(!X.errors.length, 'no script errors: ' + X.errors.join(' | '));
   } finally { await X.close(); }
 });
@@ -10267,10 +10322,11 @@ test('Cassie’s live drawing in the side panel: Ask Cassie draws on the page wh
 test('Cassie’s live drawing in 3D: asked for 3D, or to be shown how parts go together, she builds a model part by part over the page on a soft backing of its own, each part named as it is built; Close the case, Pull apart, a tapped part, a sticky note; Clear and Escape remove it; the model builder and three.js are the app’s own copies and load only then; where 3D can’t show (no WebGL, Reduce Motion) the same answer is a flat drawing; in the side panel the model sits in her card; no new permission', async () => {
   const same = (a, c) => fs.readFileSync(fileAt(a)).equals(fs.readFileSync(fileAt(c)));
   expect(same('livedraw.js', 'extension/livedraw.js'), 'extension/livedraw.js is the app’s livedraw.js: copy it over');
+  expect(same('drawbook.js', 'extension/drawbook.js'), 'extension/drawbook.js is the app’s drawbook.js: copy it over');
   expect(same('explore/three.module.min.js', 'extension/vendor/three.module.min.js') && same('explore/OrbitControls.js', 'extension/vendor/OrbitControls.js') && same('explore/THREE-LICENSE.txt', 'extension/vendor/THREE-LICENSE.txt'), 'the extension’s three.js, its controls and its licence are the repo’s own');
   const manifest = JSON.parse(fs.readFileSync(fileAt('extension/manifest.json'), 'utf8'));
   expect(manifest.permissions.slice().sort().join() === 'activeTab,contextMenus,scripting,sidePanel,storage' && manifest.host_permissions.join() === 'https://api.groq.com/*,<all_urls>', 'no new permission: ' + JSON.stringify([manifest.permissions, manifest.host_permissions]));
-  expect(JSON.stringify(manifest.web_accessible_resources) === JSON.stringify([{ resources: ['livedraw.js', 'vendor/three.module.min.js', 'vendor/OrbitControls.js'], matches: ['<all_urls>'] }]), 'only the model builder and three.js can be loaded by her page script: ' + JSON.stringify(manifest.web_accessible_resources));
+  expect(JSON.stringify(manifest.web_accessible_resources) === JSON.stringify([{ resources: ['livedraw.js', 'drawbook.js', 'vendor/three.module.min.js', 'vendor/OrbitControls.js'], matches: ['<all_urls>'] }]), 'only the model builder, her drawing book and three.js can be loaded by her page script: ' + JSON.stringify(manifest.web_accessible_resources));
   // the plan-first 3D guide is the app's own: its lines are the same in both
   const appSrc = fs.readFileSync(fileAt('app.js'), 'utf8'), liveSrc = fs.readFileSync(fileAt('extension/live.js'), 'utf8');
   for (const line of ['every part touches or sits inside the part it connects to; nothing floats in the air', 'parts that are inside a case are placed inside it, and the case is "shell": true so the student can open it', 'real proportions: a part that is small in the real object is small here; a part inside another is smaller than it', 'Shapes: cylinder {r,r2,len,axis,pos,open,cut}, disc {r,thick,axis,pos}, cone {r,len,axis,pos,dir}, sphere {r,pos,cut}, box {size:[w,h,d],pos}, torus {r,tube,axis,pos}, blades {n,len,width,hub,axis,pos}']) expect(appSrc.includes(line) && liveSrc.includes(line), 'the 3D guide in the extension keeps the app’s line: ' + line);
@@ -10302,11 +10358,11 @@ test('Cassie’s live drawing in 3D: asked for 3D, or to be shown how parts go t
     // 2. asked in 3D: a model, built part by part over the page
     expect(await inWorld('["draw the full jet engine in 3D", "turn it around", "show me how to attach the camera", "draw how a jet works", "how do I attach a file to an email?"].map((q) => +CassieLive.wants3d(q)).join("")') === '11100', 'what asks for a 3D model');
     await replies([fixture('jet3d')]);
-    await ask('Draw the full jet engine for me in 3D and explain how it works');
+    await ask('Draw the full jet engine of an airliner for me in 3D and explain how it works');
     await page.waitForSelector(LIVE, { state: 'attached', timeout: 20000 });
     await until({ dim: '3d', beat: '0' }, 30000);
     let P = await prompts();
-    expect(P.length === 1 && P[0].includes('The student asks: "Draw the full jet engine for me in 3D and explain how it works"') && /"mode":"3d"/.test(P[0]) && /nothing floats in the air/.test(P[0]) && /answer from what you know/.test(P[0]) && !/"beats"/.test(P[0]), 'she is asked for a 3D model, with the app’s guide and the rule for questions: ' + P[0].slice(0, 200));
+    expect(P.length === 1 && P[0].includes('The student asks: "Draw the full jet engine of an airliner for me in 3D and explain how it works"') && /"mode":"3d"/.test(P[0]) && /nothing floats in the air/.test(P[0]) && /answer from what you know/.test(P[0]) && !/"beats"/.test(P[0]), 'she is asked for a 3D model, with the app’s guide and the rule for questions: ' + P[0].slice(0, 200));
     expect(await inWorld('CassieLive.has3d') === true, 'the model builder is asked for now');
     let c = await card(), m = await model();
     expect(c.sub === '3D model · Simplified sketch' && c.title === 'How a jet engine works' && c.parts.length === 0 && c['parts'] !== undefined, 'the card names the model and says it is a simplified sketch: ' + JSON.stringify([c.title, c.sub]));
@@ -10405,7 +10461,7 @@ test('Cassie’s live drawing in 3D: asked for 3D, or to be shown how parts go t
     await gone();
     // (a model comes back anyway: she is asked once more, for the flat drawing)
     await replies([fixture('jet3d'), fixture('leaf')]);
-    await ask('draw how a jet works');
+    await ask('draw how a jet plane works'); // (not her book's jet engine: the AI is asked)
     await page.waitForSelector(LIVE, { state: 'attached', timeout: 15000 });
     await until({ dim: '2d', beat: '0' }, 20000);
     P = await prompts();

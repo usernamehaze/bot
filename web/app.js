@@ -2812,7 +2812,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=309'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=310'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2834,7 +2834,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=309'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=310'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -3110,7 +3110,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=309').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=310').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -6909,6 +6909,8 @@ async function handleSend(text, opts = {}) {
   // (a student at risk still gets care at once, below: that needs no internet)
   if (isOffline() && !images.length && !docs.length && text.trim() && !(window.CassieCare && window.CassieCare.check(text))) {
     if (quizMode || /^\s*(quiz me|quiz)\b/i.test(text)) { resetQuizUi(); promptInput.value = ''; autoGrow(); offlineQuiz(); return; }
+    // (v310) a drawing from her book needs no internet: it is drawn now
+    if (liveDrawRequest(text) && !opts.noDraw && await liveDrawBook(text.trim(), LIVE_3D_RE.test(text)).catch(() => null)) { liveShowClose(false); return liveDrawReply(text, LIVE_3D_RE.test(text)); }
     queueOffline(text.trim()); return;
   }
   const image = !many && images.length ? images[0] : null;
@@ -7500,7 +7502,20 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=309')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=310')));
+// (v310) Cassie's drawing book: a checked drawing of a common subject (a bicycle, the heart, the solar system...) shows
+// at once, right every time, with no AI and no question used (offline too). Anything else is drawn by the AI.
+let liveBookLib = null;
+const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=310').catch(() => null)));
+async function liveDrawBook(subject, want3d) {
+  if (window.CASSIE_NO_BOOK) return null; // (tests of the AI's own drawing turn the book off)
+  const bk = await liveBookLoad(), m = await liveDrawLoad();
+  const raw = bk && bk.fromBook(subject, want3d);
+  const spec = raw && m.clean(raw);
+  if (!spec) return null;
+  spec.q = String(subject).slice(0, 300); spec.book = raw.book;
+  return { text: JSON.stringify(raw), spec, messages: [{ role: 'system', content: liveDrawPrompt(spec.mode === '3d') }, { role: 'user', content: String(subject) }], issues: () => [], image: null, book: true };
+}
 // a real photo needs Gemini pictures (Cassie's server or the student's key); the free service draws toys and models
 const realPhotoOk = () => !!((SERVER && serverPictures) || (state.geminiKey && !geminiImageOff));
 // a drawing inside a chat bubble (a new one draws itself; one from history shows finished)
@@ -7582,6 +7597,18 @@ function liveDrawAbout(label) {
   const said = last ? noDashes(String(last.content).replace(/```[\s\S]*?```/g, ' ').replace(/[#*_>`]/g, '').replace(/\s+/g, ' ').trim()).slice(0, 900) : '';
   return { subject, ask: `${label}\n(They mean what this chat is about: "${subject}". Draw that, not anything else.${said ? ` What you told them before, to keep the drawing true to it: "${said}"` : ''})` };
 }
+// (v310) a drawing that could not be read: her words when she answered in words, never the drawing's code; else a plain
+// "couldn't finish it" with Try again
+function liveDrawWords(text, again) {
+  const t = String(text || '').replace(/```[\s\S]*?```/g, ' ').trim();
+  const code = /[{\[]\s*"(title|mode|parts|answer|shapes|layout)"\s*:/.test(t) || (t.match(/[{}":\[\]]/g) || []).length > Math.max(20, t.length * 0.08);
+  const words = code ? '' : noDashes(t);
+  if (words) { state.messages.push({ role: 'assistant', content: words }); save(); renderMessage('assistant', words); return; }
+  const say = 'I couldn\u2019t finish that drawing. Try again, or ask it a little differently.';
+  state.messages.push({ role: 'assistant', content: say }); save();
+  const bubble = renderMessage('assistant', say);
+  if (bubble && again) { const e = CassieErrors.empty({ title: 'The drawing didn\u2019t finish', text: 'Cassie\u2019s answer was cut short.', action: 'Try again', onAction: () => { e.remove(); state.messages.pop(); state.messages.pop(); save(); bubble.remove(); const u = [...chatLog.querySelectorAll('.bubble-user')].pop(); if (u) u.remove(); again(); } }); e.classList.add('es-inline'); bubble.appendChild(cassieEmpty(e, 'failed')); }
+}
 async function liveDrawReply(text, want3d = LIVE_3D_RE.test(text), image = null) {
   const label = text.trim();
   const about = image ? null : liveDrawAbout(label); // (worked out before her new message is added)
@@ -7592,18 +7619,19 @@ async function liveDrawReply(text, want3d = LIVE_3D_RE.test(text), image = null)
   const asked = renderMessage('user', label);
   if (image && image.dataUrl && asked) addImageToBubble(asked, image.dataUrl);
   promptInput.value = ''; autoGrow(); clearFollowups();
-  if (!canChat()) { const b = renderMessage('assistant', 'I need a key to draw. Add one in Settings.'); b.classList.add('need-key-msg'); openSettings(); return; }
+  // (v310) her drawing book needs no AI: it draws with no key and with no internet
+  const fromBook = image ? null : await liveDrawBook(about ? about.subject : label, want3d).catch(() => null);
+  if (!fromBook && !canChat()) { const b = renderMessage('assistant', 'I need a key to draw. Add one in Settings.'); b.classList.add('need-key-msg'); openSettings(); return; }
   mascotReact('image'); setCursorMode('thinking'); botMood('drawing');
   const typing = renderTyping(); setTypingStatus(typing, 'Cassie is sketching…');
   const done = busyButton(sendBtn);
   let first;
   try {
-    first = await liveDrawFirst(question, want3d, image);
+    first = fromBook || await liveDrawFirst(question, want3d, image);
     if (first.spec) first.spec.q = (about ? about.subject : label).slice(0, 300); // (Draw again redraws the real subject)
     typing.remove();
-    if (!first.spec) { // she answered in words: show them as usual
-      const words = noDashes(String(first.text || '').replace(/```[\s\S]*?```/g, '').trim()) || 'I could not draw that one. Try asking it a little differently.';
-      state.messages.push({ role: 'assistant', content: words }); save(); renderMessage('assistant', words); return;
+    if (!first.spec) { // she answered in words: show them as usual (never drawing code: v310)
+      liveDrawWords(first.text, () => liveDrawReply(label, want3d, image)); return;
     }
   } catch (err) {
     typing.remove(); done(); setCursorMode('idle');
@@ -7616,8 +7644,9 @@ async function liveDrawReply(text, want3d = LIVE_3D_RE.test(text), image = null)
   state.messages.push(msg); save();
   liveDrawFresh = true;
   const bubble = renderMessage('assistant', fenced(first.spec)); // (she starts drawing now, while the check runs)
-  track('feature', first.spec.mode === '3d' ? 'live-draw-3d' : 'live-draw');
+  track('feature', first.book ? 'live-draw-book' : first.spec.mode === '3d' ? 'live-draw-3d' : 'live-draw');
   done(); setCursorMode('idle'); mascotCelebrate();
+  if (first.book) return; // (a checked drawing from her book: nothing to look over)
   // the check starts once she is drawing (or building), so it never holds up her first line; 3D models are checked too
   for (let k = 0; k < 40 && bubble.isConnected && !bubble.querySelector('.ld-part > [data-drawing], .ld-part > [data-drawn], .ld-canvas'); k++) await new Promise((r) => setTimeout(r, 50));
   try {
@@ -7693,9 +7722,8 @@ async function liveDrawFollow(text, before = liveDrawLast()) {
   try { first = await liveDrawFollowFirst(label, before); }
   catch (err) { typing.remove(); done(); setCursorMode('idle'); renderError(err, () => liveDrawFollow(label, before), 'unknown'); return; }
   typing.remove();
-  if (!first.got || !first.got.spec) { // she answered in words: show them as usual
-    const words = noDashes(String(first.text || '').replace(/```[\s\S]*?```/g, '').replace(/^\s*\{[\s\S]*\}\s*$/, '').trim()) || 'I could not add that to the drawing. Try asking it a little differently.';
-    state.messages.push({ role: 'assistant', content: words }); save(); renderMessage('assistant', words); done(); setCursorMode('idle'); return;
+  if (!first.got || !first.got.spec) { // she answered in words: show them as usual (never drawing code: v310)
+    liveDrawWords(first.text, () => liveDrawFollow(label, before)); done(); setCursorMode('idle'); return;
   }
   const fenced = (sp) => '```cassie-draw\n' + JSON.stringify(sp) + '\n```';
   const note = (r) => (r.isNew ? `[I drew a live ${r.spec.mode === '3d' ? '3D model' : 'diagram'}: ${r.spec.title}. Parts: ${r.spec.parts.map((p) => p.label).join(', ')}. ${r.spec.summary}]`
@@ -8891,7 +8919,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=309');
+      exploreMod = await import('./explore/cell3d.js?v=310');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -8941,7 +8969,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=309');
+      labsMod = await import('./labs/labs.js?v=310');
       islandRest();
     }
     labsMod.open({
@@ -10903,10 +10931,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=309').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=310').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=309', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=310', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.

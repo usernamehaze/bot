@@ -4567,3 +4567,8 @@ label.notif-top { cursor: pointer; min-height: 44px; }
 .ld-next-q::before { content: ""; position: absolute; left: 0; right: 0; top: -6px; bottom: -6px; } /* (a 44px tap) */
 @media (hover: hover) { .ld-next-q:hover { border-color: var(--primary); } }
 @media (pointer: coarse) { .ld-next { row-gap: var(--sp-4, 16px); } .ld-next-q::before { top: -8px; bottom: -8px; } }
+
+/* (v310) a 3D model's names as small numbers on a narrow screen (the names are listed under it) */
+.ld-tag.ld-num { min-width: 28px; padding: 2px var(--sp-2, 8px); text-align: center; }
+.ld-tag.ld-num { min-height: 24px; font-size: .75rem; line-height: 1.2; }
+@media (pointer: coarse) { .ld-tag.ld-num { min-height: 24px; min-width: 28px; } .ld-tag.ld-num::before { content: ""; position: absolute; inset: -12px -10px; } } /* (a small number, a 48px tap) */

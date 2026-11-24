@@ -11,7 +11,7 @@ const walk = (dir) => fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true
   return /\.(js|css|json|svg|webp|png|jpg|glb|bin|wasm)$/i.test(e.name) ? [rel] : [];
 });
 const files = [...walk('labs'), ...walk('explore'), 'cassie-bot3d.js'].sort();
-const versioned = ['labs/labs.js', 'labs/museum.js', 'labs/level-lessons.js', 'labs/previews.js', 'livedraw.js', 'explore/cell3d.js', 'cassie-3d.js'];
+const versioned = ['labs/labs.js', 'labs/museum.js', 'labs/level-lessons.js', 'labs/previews.js', 'livedraw.js', 'drawbook.js', 'explore/cell3d.js', 'cassie-3d.js'];
 const fixed = ['labs/labs.css?v=22'];
 const bytes = files.reduce((n, f) => n + fs.statSync(path.join(ROOT, f)).size, 0);
 fs.writeFileSync(path.join(ROOT, 'offline-files.json'), JSON.stringify({ files, versioned, fixed, bytes }, null, 0) + '\n');

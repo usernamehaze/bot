@@ -225,7 +225,7 @@
     const answer = words(d && d.answer, 1500) || (T ? T.answer(reply) : '');
     // a 3D model: one beat for each part she builds (the parts are made safe by the model builder itself)
     if (d && d.mode === '3d' && Array.isArray(d.parts)) {
-      const parts = d.parts.slice(0, 10).filter((x) => x && typeof x === 'object' && Array.isArray(x.shapes) && x.shapes.some((sh) => sh && typeof sh === 'object'));
+      const parts = d.parts.slice(0, 12).filter((x) => x && typeof x === 'object' && Array.isArray(x.shapes) && x.shapes.some((sh) => sh && typeof sh === 'object'));
       if (parts.length) {
         const intro = words(d.intro, 300), sum = words(d.summary, 300), beats = [];
         if (intro) beats.push({ say: intro, parts: [] });
@@ -236,7 +236,7 @@
     }
     // a flat drawing in the Cassie app's form: one beat for each part she draws, named as it is drawn
     if (d && d.mode !== '3d' && Array.isArray(d.parts)) {
-      const parts = d.parts.slice(0, 10).filter((x) => x && typeof x === 'object' && Array.isArray(x.shapes) && x.shapes.some((sh) => sh && typeof sh === 'object'));
+      const parts = d.parts.slice(0, 12).filter((x) => x && typeof x === 'object' && Array.isArray(x.shapes) && x.shapes.some((sh) => sh && typeof sh === 'object'));
       if (parts.length) {
         const intro = words(d.intro, 300), sum = words(d.summary, 300), beats = [];
         if (intro) beats.push({ say: intro, parts: [] });
@@ -1540,6 +1540,16 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
       return String(r.reply || '');
     };
     const numbered = !page.pictureOnly, draw = wants(q);
+    // (v310) her drawing book: a checked drawing of a common subject shows at once, with no AI (follow-ups still ask it)
+    if (draw) {
+      const bk = await import(chrome.runtime.getURL('drawbook.js')).catch(() => null), book = bk && bk.fromBook(q, wants3d(q));
+      const fromBook = book ? parse(JSON.stringify(book)) : null;
+      if (fromBook && fromBook.kind === 'card') {
+        const near = T.follow.at();
+        play(fromBook.scene, { q, send, page: { title: page.title }, about: null, pointer: near ? { x: near.x - 16, y: near.y - 18 } : null });
+        return fromBook;
+      }
+    }
     const got = await from({ send, ask: prompt({ q, page, draw }), count: numbered ? page.items.length : 0, draw });
     if (got.kind === 'card') {
       const about = got.scene.about && got.scene.about.el ? (() => { const it = page.items[got.scene.about.el - 1]; return it ? { x: it.box[0], y: it.box[1], w: it.box[2], h: it.box[3] } : null; })() : got.scene.about;
