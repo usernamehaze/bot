@@ -1730,6 +1730,9 @@ if (mascotBtn && mascot) {
     else restMascot();
     requestAnimationFrame(keepMascotClear);
   });
+  // (v311) scrolling the chat brings new buttons under her (a drawing's Real photo, Draw again): once the scroll settles, she moves clear
+  let scrollRest = 0;
+  document.addEventListener('scroll', (e) => { if (!chatLog || !(e.target === document || (e.target.contains && e.target.contains(chatLog)))) return; clearTimeout(scrollRest); scrollRest = setTimeout(() => requestAnimationFrame(keepMascotClear), 180); }, { capture: true, passive: true });
   // the Hint/Quiz row or the chat box changing (a row shown or hidden, the box growing, a file
   // attached, the phone tab bar showing) moves her floor: re-dock, so she never sits on a button
   if (window.ResizeObserver) {
@@ -2812,7 +2815,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=310'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=311'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2834,7 +2837,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=310'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=311'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -3110,7 +3113,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=310').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=311').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -5146,7 +5149,7 @@ const waitAtMost = (ms) => (typeof AbortSignal !== 'undefined' && AbortSignal.ti
 var SERVER_WAIT = { chat: 90000, picture: 60000, hear: 45000 }; // (chat: the server's own backups can take a while)
 const tooSlow = (e) => !!e && (e.name === 'TimeoutError' || e.name === 'AbortError');
 let serverSource = ''; // (v280) which brain answered the last question on Cassie's server: 'claude', or a backup such as 'groq'
-async function serverChat(messages, { model, maxTokens = 2048, onWait, lean = false, brain, q } = {}) {
+async function serverChat(messages, { model, maxTokens = 2048, onWait, lean = false, brain, q, draw } = {}) {
   let waits = 0;
   while (true) {
     let res;
@@ -5154,7 +5157,7 @@ async function serverChat(messages, { model, maxTokens = 2048, onWait, lean = fa
       res = await fetch(SERVER + '/chat', {
         method: 'POST',
         headers: chatHeaders(),
-        body: JSON.stringify({ uid: installId(), model: model || GROQ_MODELS[0], messages, max_tokens: maxTokens, temperature: 0.6, reasoning_effort: lean ? 'low' : undefined, brain, q: q ? 1 : undefined }),
+        body: JSON.stringify({ uid: installId(), model: model || GROQ_MODELS[0], messages, max_tokens: maxTokens, temperature: 0.6, reasoning_effort: lean ? 'low' : undefined, brain, q: q ? 1 : undefined, draw: draw || undefined }),
         signal: waitAtMost(SERVER_WAIT.chat),
       });
     } catch (e) {
@@ -7407,7 +7410,7 @@ ${care}
 "mode": "2d" (a flat pen drawing). Picture: 400 wide, 260 tall, absolute coordinates, x 10 to 390, y 20 to 250.
 Plan: "layout" says how it is arranged; every part has "box":[x,y,w,h] where it sits and "anchor":[x,y], a point ON its main shape (the sun's disc, the leaf's blade); its name's line ends there. Strokes stay inside the box. Spread parts over the picture and leave clear space for the names.
 Draw REAL outlines: a leaf with a pointed tip, a midrib and side veins; a cell with its real organelle shapes; an engine with its real profile. Never a plain circle or box for a real object. 3 to 8 parts in drawing order, 2 to 24 strokes each, each part's strokes in pen order.
-${seen}${flatNote}Draw it the way a good textbook figure of the real thing looks, in its real colours, and never as a cartoon symbol (no valentine heart for a real heart, no lightning zigzag for electricity). The main object is drawn large, about half the picture, with long curved paths (C and Q curves) for its true outline, and each of its inner parts is a part of its own, in its own colour, lightly filled ("fill":true) so the student can tell the parts apart. Aim for 5 to 8 parts and 30 or more strokes in the whole drawing. Arrows show what moves and which way.
+${seen}${flatNote}${opts.process ? opts.process + '\n' : ''}Draw it the way a good textbook figure of the real thing looks, in its real colours, and never as a cartoon symbol (no valentine heart for a real heart, no lightning zigzag for electricity). The main object is drawn large, about half the picture, with long curved paths (C and Q curves) for its true outline, and each of its inner parts is a part of its own, in its own colour, lightly filled ("fill":true) so the student can tell the parts apart. Aim for 5 to 8 parts and 30 or more strokes in the whole drawing. Arrows show what moves and which way.
 {"title","mode","layout","intro":one sentence,"summary":one sentence,"next":[2 short questions the student could ask next to go deeper, each about one of its parts],"photo":what a real photo of it shows,"parts":[{"id","label":1 to 3 words,"say":1 or 2 short sentences,"color":"#hex","box","anchor","shapes":[...]}]}
 2d shapes: {"t":"line","x1","y1","x2","y2"}, {"t":"arrow",...same} for movement, {"t":"path","d":"M L Q C Z, CAPITAL letters only"}, {"t":"poly","pts":[[x,y],...]}, {"t":"rect","x","y","w2","h"}, {"t":"circle","cx","cy","r"}, {"t":"ellipse","cx","cy","rx","ry"}, {"t":"text","x","y","text"} for values only ("H2O"); "fill":true, "dash":true. Never write a part's name as text: the app does.
 Three good drawings (this level of care, not these subjects):
@@ -7417,17 +7420,19 @@ ${JSON.stringify(LD_EXAMPLE_WATER)}
 ${tail}`;
 }
 // one drawing call: Cassie's best brain (Claude on her server) when it is there; otherwise the usual one, marked simpler
-// (v307) lean: her best brain ignores it; the backup (gpt-oss) thinks less, answers in about half the time and never spends the whole answer on thinking
+// (v311) drawings go to her best brain (Claude), then Gemini, then Groq (the server picks); draw: 1 is the drawing, 2 her own
+// redo of it, which never uses the student's daily share. "A simpler drawing" only when Groq drew it.
+const liveSimple = () => !!serverSource && !/^(claude|gemini)$/.test(serverSource);
 async function liveDrawCall(messages, q, image) {
   if (image && image.base64) {
     // (v279) a picture came with the question: her best brain looks at it with the drawing form; else whichever brain reads pictures
     const url = `data:${image.mimeType || 'image/jpeg'};base64,${image.base64}`;
     const seen = messages.map((m, i) => (i === messages.findIndex((x) => x.role === 'user') ? { role: 'user', content: [{ type: 'text', text: String(m.content) }, { type: 'image_url', image_url: { url } }] } : m));
-    if (SERVER && serverClaude) { try { const t = await serverChat(seen, { brain: 'claude', maxTokens: 5000, q, lean: true }); if (t) return { text: t, simple: !!serverSource && serverSource !== 'claude' }; } catch (e) { /* the usual picture reader below */ } }
+    if (SERVER && serverClaude) { try { const t = await serverChat(seen, { brain: 'claude', maxTokens: 5000, q, draw: q ? 1 : 2 }); if (t) return { text: t, simple: liveSimple() }; } catch (e) { /* the usual picture reader below */ } }
     return { text: await askCassie([{ role: 'user', content: messages.map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n\n') }], image, {}), simple: true };
   }
   // (v280) her server answers with a backup brain once the day's share of her best one is used: that drawing is marked simpler
-  if (SERVER && serverClaude) { try { const t = await serverChat(messages, { brain: 'claude', maxTokens: 5000, q, lean: true }); if (t) return { text: t, simple: !!serverSource && serverSource !== 'claude' }; } catch (e) { /* the usual brain below */ } }
+  if (SERVER && serverClaude) { try { const t = await serverChat(messages, { brain: 'claude', maxTokens: 5000, q, draw: q ? 1 : 2 }); if (t) return { text: t, simple: liveSimple() }; } catch (e) { /* the usual brain below */ } }
   if (state.groqKey || SERVER) { try { const t = await groqChat(messages, { model: state.groqModel, maxTokens: 5000, rotate: true, q }); if (t) return { text: t, simple: true }; } catch (e) { if (!state.geminiKey) throw e; } }
   return { text: await askCassie([{ role: 'user', content: messages.map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n\n') }], null, {}), simple: true };
 }
@@ -7436,7 +7441,7 @@ async function liveDrawLook(text, png) {
   const image = { mimeType: 'image/png', base64: String(png).split(',')[1] || '' };
   const sys = 'You check drawings made for students. Be strict and specific. Reply with ONLY one JSON object.';
   try {
-    if (SERVER && serverClaude) return await serverChat([{ role: 'system', content: sys }, { role: 'user', content: [{ type: 'text', text }, { type: 'image_url', image_url: { url: png } }] }], { brain: 'claude', maxTokens: 900 });
+    if (SERVER && serverClaude) return await serverChat([{ role: 'system', content: sys }, { role: 'user', content: [{ type: 'text', text }, { type: 'image_url', image_url: { url: png } }] }], { brain: 'claude', maxTokens: 900, draw: 2 });
     if (state.geminiKey) return await askGeminiVision([{ role: 'user', content: sys + '\n\n' + text }], image, {});
     if (SERVER) return await serverChat([{ role: 'system', content: sys }, { role: 'user', content: [{ type: 'text', text }, { type: 'image_url', image_url: { url: png } }] }], { model: 'vision', maxTokens: 900 });
     if (state.groqKey) return await askGroqVision([{ role: 'user', content: text }], [image], { system: sys, maxTokens: 900 });
@@ -7465,7 +7470,8 @@ function liveDrawFixes(verdict, spec) {
 // the first drawing: as soon as one passes the app's own checks (re-asked once with what is wrong); shown at once
 async function liveDrawFirst(question, want3d, image = null) {
   const m = await liveDrawLoad();
-  const soft = want3d && LIVE_SOFT_RE.test(question); // (v279: a heart, a leaf, a cycle asked for in 3D is drawn flat, and she says so)
+  const proc = !!(m.isProcess && m.isProcess(question)); // (v311: steps in order, drawn as a flow)
+  const soft = want3d && (LIVE_SOFT_RE.test(question) || proc); // (v279: a heart, a leaf, a cycle asked for in 3D is drawn flat, and she says so)
   if (soft) want3d = false;
   // (v305) no picture from the student: a free reference picture of the real thing to draw from, when one helps (a few seconds at most)
   let ref = null;
@@ -7473,7 +7479,7 @@ async function liveDrawFirst(question, want3d, image = null) {
     const found = await m.findReference(question).catch(() => null);
     if (found) { image = { mimeType: found.mimeType, base64: found.base64 }; ref = found.ref; }
   }
-  const messages = [{ role: 'system', content: liveDrawPrompt(want3d, { picture: !!image, reference: !!ref, flatNote: soft }) }, { role: 'user', content: question }];
+  const messages = [{ role: 'system', content: liveDrawPrompt(want3d, { picture: !!image, reference: !!ref, flatNote: soft, process: proc ? m.PROCESS_NOTE : '' }) }, { role: 'user', content: question }];
   let { text, simple } = await liveDrawCall(messages, true, image); // (the drawing is the one question it counts as)
   let spec = m.clean(text);
   const issues = (sp) => (!sp ? ['the reply was not one valid JSON object in the schema'] : [...(!want3d && sp.mode === '3d' ? ['it must be a flat 2d pen drawing, mode "2d"'] : []), ...m.check(sp, question)]);
@@ -7502,11 +7508,11 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=310')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=311')));
 // (v310) Cassie's drawing book: a checked drawing of a common subject (a bicycle, the heart, the solar system...) shows
 // at once, right every time, with no AI and no question used (offline too). Anything else is drawn by the AI.
 let liveBookLib = null;
-const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=310').catch(() => null)));
+const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=311').catch(() => null)));
 async function liveDrawBook(subject, want3d) {
   if (window.CASSIE_NO_BOOK) return null; // (tests of the AI's own drawing turn the book off)
   const bk = await liveBookLoad(), m = await liveDrawLoad();
@@ -7564,7 +7570,7 @@ function liveShowAsk(text) {
   pop.innerHTML = '<div class="ld-pop-head"><p class="ld-pop-q" id="ld-pop-q">How should I show it?</p><button type="button" class="ld-pop-x" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div><div class="ld-ask" role="group" aria-labelledby="ld-pop-q"></div><p class="ld-pop-foot">Tip: say \u201cin 3D\u201d to go straight to a model.</p>';
   const row = pop.querySelector('.ld-ask');
   const lastWay = state.lastShowAs; // (v253: asked every time; the way she showed it last time is first, marked)
-  SHOW_WAYS.filter(([k]) => k !== 'photo' || realPhotoOk()).sort((x, y) => (y[0] === lastWay) - (x[0] === lastWay)).forEach(([k, t, d]) => {
+  SHOW_WAYS.filter(([k]) => k !== 'photo' || realPhotoOk()).forEach(([k, t, d]) => { // (v311: always in the same order; the last way is marked, not moved first)
     const btn = document.createElement('button'); btn.type = 'button'; btn.dataset.show = k;
     btn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${SHOW_ICON[k]}</svg><span class="ld-pop-t"></span><span class="ld-pop-d"></span>`;
     const name = document.createElement('span'); name.className = 'ld-pop-name'; name.textContent = t; btn.querySelector('.ld-pop-t').append(name);
@@ -7695,7 +7701,7 @@ async function liveDrawFollowFirst(question, before) {
   let { text, simple } = await liveDrawCall(messages, true, null); // (the one question it counts as)
   const was = new Set(m.check(m.clean(before), subject)); // (a problem the drawing already had is not this answer's)
   const merge = (t) => m.mergeFollow(before, t);
-  const issues = (r) => (!r ? ['the reply was not one valid JSON object in the form asked for'] : r.isNew ? m.check(r.spec, question) : m.check(r.spec, subject).filter((x) => !was.has(x)));
+  const issues = (r) => (!r ? ['the reply was not one valid JSON object in the form asked for'] : r.isNew ? m.check(r.spec, question) : [...m.check(r.spec, subject).filter((x) => !was.has(x)), ...(m.followIssues ? m.followIssues(r) : [])]);
   let got = merge(text), wrong = issues(got);
   if (wrong.length) {
     const again = await liveDrawCall([...messages, { role: 'assistant', content: String(text).slice(0, 12000) }, { role: 'user', content: `Your answer has these problems:\n- ${wrong.join('\n- ')}\nSend the whole JSON object again, corrected, in the same form.` }], false, null).catch(() => null);
@@ -8919,7 +8925,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=310');
+      exploreMod = await import('./explore/cell3d.js?v=311');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -8969,7 +8975,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=310');
+      labsMod = await import('./labs/labs.js?v=311');
       islandRest();
     }
     labsMod.open({
@@ -10931,10 +10937,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=310').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=311').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=310', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=311', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.

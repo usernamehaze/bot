@@ -189,6 +189,12 @@ const MUST = [
 ];
 // (v303) the parts a textbook figure of what was asked about shows, told to her before she draws, so her first
 // drawing has them all (a drawing sent back for a missing part costs the student a second wait)
+// (v311) a question about a PROCESS (steps that happen in order: how we feel emotions, how a refrigerator keeps food cold,
+// digestion, a cycle) is drawn as a flow, each step a small picture joined to the next by an arrow, never as a map of
+// parts or a 3D box (a thing, like a bicycle or the heart's parts, is still drawn as the thing)
+const PROCESS = /\b(emotions?|feelings?|feel\s+(emotions?|feelings?|sad|happy|angry|afraid|scared|fear)|cycles?|process(es)?|steps?\s+(of|in|to)|stages?\s+(of|in)|life\s*cycle|phases?\s+of|refrigerat\w*|fridges?|air\s*con\w*|heat\s+pumps?|digest(ion|s|ed)?|circulat(ion|es)|respiration|breath(e|ing)\s+works?|photosynthesis|mitosis|meiosis|fermentation|evaporat\w*|condensation|erosion|weathering|fertili[sz]ation|pollination|germination|metamorphosis|food\s+(chain|web)|supply\s+chain|how\s+(a\s+)?bill\s+becomes|elections?|immune\s+response|nerve\s+signals?|reflex(es)?|how\s+(is|are)\s+\w+(\s+\w+)?\s+(made|formed|produced)|how\s+(do|does|did)\s+[\w\s]{1,30}\s+(form|happen|grow|spread|develop|change))\b/i;
+export const isProcess = (asked = '') => PROCESS.test(String(asked || ''));
+export const PROCESS_NOTE = 'This is a PROCESS, so draw it as a flow, never as a map of parts or a box: one part for each step, in the order it happens, left to right (or round a loop for a cycle), each a small real picture of what happens at that step (a nose smelling, a heart beating fast, a coil giving off heat), never a plain box, and each joined to the next step by an arrow. Its "say" tells what happens at that step and what it leads to. Colour the steps by what they are (hot red, cold blue, signals yellow).';
 export function mustHave(asked = '') {
   const about = String(asked || '');
   const rule = MUST.find((r) => r.is.test(about) && !(r.not && r.not.test(about)));
@@ -220,6 +226,11 @@ export function check(spec, asked = '') {
   const out = [];
   if (spec && spec.mode === '3d') return check3d(spec);
   if (!spec || spec.mode !== '2d') return out;
+  // (v311) a process: each step joined to the next by an arrow
+  if (isProcess(asked) && spec.parts.length >= 3) {
+    const arrows = spec.parts.reduce((n, p) => n + p.shapes.filter((x) => String(x.t || '').toLowerCase() === 'arrow').length, 0);
+    if (arrows < spec.parts.length - 1) out.push(`this is a process: join each step to the next with an arrow, in the order it happens (${arrows} arrows for ${spec.parts.length} steps now)`);
+  }
   const lack = missingParts(spec, asked);
   if (lack) out.push(`a textbook figure of ${lack.what} shows ${lack.gone.length > 1 ? 'these parts' : 'this part'}, and your drawing leaves ${lack.gone.length > 1 ? 'them' : 'it'} out: ${lack.gone.join(', ')}. Draw ${lack.gone.length > 1 ? 'each one' : 'it'} in its real place and shape, and name it (a part of its own, or in the "say" of the part it belongs to)`);
   for (const p of spec.parts) { const w = wrongWay(p); if (w) out.push(w); }
@@ -248,7 +259,7 @@ export function check(spec, asked = '') {
   const twice = [...new Set(names.filter((n, i) => names.indexOf(n) !== i))];
   if (twice.length) out.push(`these names are used for more than one part: ${twice.join(', ')}; give each part its own name, like "Front leg" and "Back leg"`);
   // (v305) a creature is one body: its parts touch (a head never floats away from its neck), and its legs, arms and tail have thickness
-  if (CREATURE.test(`${spec.title} ${asked}`)) {
+  if (CREATURE.test(`${spec.title} ${asked}`) && !/\bcells?\b|\bcellular\b/i.test(`${spec.title} ${asked}`)) { // (v311: an animal cell is not a creature)
     const own = spec.parts.map((p) => { const pts = p.shapes.flatMap(outlinePoints).filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y)); return pts.length ? pts : null; });
     const near = (a, b) => a && b && a.some(([x, y]) => b.some(([u, v]) => Math.abs(x - u) <= 6 && Math.abs(y - v) <= 6 && (x - u) ** 2 + (y - v) ** 2 <= 36));
     spec.parts.forEach((p, i) => {
@@ -447,6 +458,26 @@ Students learn from this: every fact, label, direction and count MUST be correct
 If they ask about a different thing from this ${spec.mode === '3d' ? 'model' : 'drawing'}, reply instead with a whole new drawing in the same full form as the one above (title, mode, intro, summary, every part), with "new": true.
 Use the student's language (English, Filipino or Taglish). No dashes in the words. No emojis.`;
 }
+// (v311) what a follow-up added must sit where it belongs: on or next to the part it is about (a wing's bones inside the
+// wing, not a long line across the picture), and no new part as big as the whole drawing
+export function followIssues(merged) {
+  const sp = merged && merged.spec, out = [];
+  if (!sp || sp.mode !== '2d' || !Array.isArray(sp.fresh) || !sp.fresh.length) return out;
+  const boxOf = (p) => { const pts = p.shapes.flatMap(shapePoints).filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y)); if (!pts.length) return null; const xs = pts.map((q) => q[0]), ys = pts.map((q) => q[1]); return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]; };
+  const old = sp.parts.filter((p) => !sp.fresh.includes(p.id)), focus = sp.parts.find((p) => p.id === sp.focus && !sp.fresh.includes(p.id));
+  const near = (a, b, pad) => a && b && a[0] <= b[2] + pad && b[0] <= a[2] + pad && a[1] <= b[3] + pad && b[1] <= a[3] + pad;
+  for (const p of sp.parts.filter((x) => sp.fresh.includes(x.id))) {
+    const b = boxOf(p); if (!b) continue;
+    const host = focus || old.find((o) => near(boxOf(o), b, 0));
+    const hb = host && boxOf(host), pts = p.shapes.filter((x) => String(x.t || '').toLowerCase() !== 'arrow').flatMap(outlinePoints).filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y));
+    const inside = hb && pts.length ? pts.filter(([x, y]) => x >= hb[0] - 30 && x <= hb[2] + 30 && y >= hb[1] - 30 && y <= hb[3] + 30).length / pts.length : 1;
+    if (host && !near(hb, b, 24)) out.push(`"${p.label}" is drawn away from "${host.label}", the part it belongs to: draw it on or right beside it`);
+    else if (host && inside < 0.6) out.push(`"${p.label}" runs far outside "${host.label}", the part it belongs to: keep it on that part, its real size`);
+    else if (!host && !old.some((o) => near(boxOf(o), b, 24))) out.push(`"${p.label}" is drawn away from the drawing: draw it on or right beside the part it belongs to`);
+    if ((b[2] - b[0]) * (b[3] - b[1]) > 400 * 260 * 0.45) out.push(`"${p.label}" is almost as big as the whole picture: draw it the size it really is, on its part`);
+  }
+  return out;
+}
 // her reply to a follow-up, put together with the drawing that is there → { spec, isNew, answer } or null
 export function mergeFollow(rawOld, reply) {
   const old = clean(rawOld);
@@ -535,16 +566,18 @@ export async function render(host, rawSpec, opts = {}) {
   }
   if (view) {
     view.onPick = (p) => {
+      allBtn.hidden = !p; // (v311: one part picked out, the rest faded: a clear way back)
       if (!p) { setSay(spec.summary || spec.intro || ''); hint.textContent = view.hintText; askBtn.hidden = true; return; }
-      setSay(p.say || p.label); hint.textContent = `${p.label}. Tap it again, or tap the empty space, to see it all`;
+      setSay(p.say || p.label); hint.textContent = `Showing: ${p.label}`;
       askBtn.hidden = !opts.onAsk; setLabel(askBtn, `Ask about the ${p.label}`); askBtn.onclick = () => opts.onAsk(p, spec);
     };
     const askBtn = btn('', () => {}, 'ld-askpart', 'ask'); askBtn.hidden = true;
+    const allBtn = btn('Show all', () => { if (view.unpick) view.unpick(); allBtn.hidden = true; }, 'ld-showall', 'open'); allBtn.hidden = true;
     if (spec.mode === '3d' && view.setOpen && view.open) { view.setOpen(true); const ob = acts.querySelector('.ld-open'); if (ob) { setLabel(ob, 'Close the case'); ob.setAttribute('aria-pressed', 'true'); } }
     await view.play(); done();
     // (v306) a follow-up's answer: the part it is about is picked out (the others dim), and her answer stays in view
     const fi = spec.focus ? spec.parts.findIndex((p) => p.id === spec.focus) : -1;
-    if (fi >= 0 && view.focus) view.focus(fi);
+    if (fi >= 0 && view.focus) { view.focus(fi); const allBtn = acts.querySelector('.ld-showall'); if (allBtn) allBtn.hidden = false; hint.textContent = `Showing: ${spec.parts[fi].label}`; }
   }
   return true;
 }
@@ -679,6 +712,7 @@ function draw2d(stage, spec, { animate, setSay, hint }) {
     hintText,
     // (v306) the part a follow-up is about: the others dim, without changing what she says (a tap shows them all again)
     focus(i) { if (!groups[i]) return; picked = i; groups.forEach((g, k) => g.classList.toggle('dim', k !== i)); },
+    unpick() { if (picked >= 0) pick(picked); },
     get strokes() { return groups.flatMap((g) => [...g.children]); },
     // one part at a time, for a player with its own pace (the extension's card)
     has: (i) => !!groups[i],
@@ -858,9 +892,9 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
   const lines = document.createElementNS(NS, 'svg'); lines.setAttribute('class', 'ld-tag-lines'); lines.setAttribute('aria-hidden', 'true'); stage.insertBefore(lines, tags); // (each name's thin line to its part)
   const offscreen = !!stage.closest('.ld-shot'); // (the copy she takes a picture of: always drawn)
   const scene = new T.Scene(), cam = new T.PerspectiveCamera(34, W() / H(), 0.05, 200);
-  scene.add(new T.HemisphereLight(0xe4ecff, 0x1a1a22, 1.15));
+  scene.add(new T.HemisphereLight(0xe4ecff, 0x3a3a48, 1.2)); // (v311: a lighter ground light, so black tyres and grey bodies show)
   const sun = new T.DirectionalLight(0xffffff, 1.7); sun.position.set(4, 6, 5); scene.add(sun);
-  const rim = new T.DirectionalLight(0x8fb4ff, .6); rim.position.set(-5, -2, -4); scene.add(rim);
+  const rim = new T.DirectionalLight(0xbfd4ff, .95); rim.position.set(-5, 2, -4); scene.add(rim); // (v311: a stronger back light outlines dark parts on dark paper)
   // (real: the model looks like the thing itself: its finishes catch a soft studio light, and it throws a soft shadow on the floor under it)
   if (real) {
     try {
@@ -1084,6 +1118,7 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
         await sleep(450);
       }
     },
+    unpick() { if (picked) pick(picked); },
     // (v307) the part a follow-up is about: the camera moves in on it (from the side you are looking from), the other
     // parts fade, and a case it sits in is seen through. A tap on the empty space, or on it again, shows it all.
     focus(i) {

@@ -262,6 +262,8 @@
   const WANTS_3D = /\b3d\b|\bthree[\s-]?d\b|\bturn\s+it\s+around\b|\brotate\s+it\b|\bfrom\s+all\s+sides\b/i;
   const FITS = /\b(attach|assembl|connect|install|plug|insert|mount|screw)\w*|\bput\b[^.?!]{0,20}\btogether\b|\bfits?\b[^.?!]{0,12}\b(in|into|onto|together)\b/i;
   // soft and living things, and processes: her 3D is made of simple solids and would look wrong, so these are drawn flat
+  // (v311) a process (emotions, a refrigerator, digestion, a cycle): drawn as a flow; the full note is livedraw.js's PROCESS_NOTE
+  const PROC = /\b(emotions?|feelings?|cycles?|process(es)?|stages?\s+of|steps?\s+of|refrigerat\w*|fridges?|air\s*con\w*|digest\w*|circulation|respiration|photosynthesis|mitosis|meiosis|fermentation|evaporat\w*|erosion|pollination|germination|metamorphosis|food\s+(chain|web)|how\s+(is|are)\s+\w+(\s+\w+)?\s+(made|formed))\b/i;
   const SOFT = /\b(heart|lungs?|brain|kidneys?|liver|stomach|intestines?|eyes?|ears?|skin|muscles?|bones?|skeleton|tooth|teeth|tongue|nerves?|neurons?|veins?|arter(y|ies)|blood|organs?|body|digestive|respiratory|circulatory|nervous system|cells?|bacteri\w*|virus\w*|dna|plants?|lea(f|ves)|flowers?|roots?|seeds?|trees?|animals?|insects?|fish|birds?|frogs?|dragons?|dinosaurs?|unicorns?|creatures?|monsters?|horses?|dogs?|cats?|butterfl\w*|puso|baga|utak|halaman|dahon|bulaklak|hayop|cycle|photosynthesis|respiration|digestion|mitosis|meiosis|evaporation|erosion|food (chain|web)|ecosystem)\b/i;
   const glOk = () => { try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch (e) { return false; } };
   const stillNow = () => !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -340,7 +342,7 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
   ${truth}`;
     }
     const seen = `A student is looking at their screen right now (the picture)${title}.\n  ${text}${sofar}The student asks: "${q}"`;
-    if (d3 && SOFT.test(q)) {
+    if (d3 && (SOFT.test(q) || PROC.test(q))) { // (v311: a process too: steps in order are drawn as a flow)
       return `${seen}
   Answer like a kind tutor sitting beside them, and draw it for them while you explain. They asked for 3D, but your 3D models are built from simple solids and would look wrong for something soft, living or a process, so draw it flat, and say that in a few words at the start of "intro".
   Reply with ONLY one minified JSON object, no other text.
@@ -386,11 +388,11 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
     const m = await load3d();
     const ask = `${m.followPrompt(spec)}\nThe student asks: "${q}"`, subject = spec.q || spec.title || q;
     const was = new Set(m.check(m.clean(spec), subject));
-    const issues = (r) => (!r ? ['the reply was not one valid JSON object in the form asked for'] : r.isNew ? m.check(r.spec, q) : m.check(r.spec, subject).filter((x) => !was.has(x)));
+    const issues = (r) => (!r ? ['the reply was not one valid JSON object in the form asked for'] : r.isNew ? m.check(r.spec, q) : [...m.check(r.spec, subject).filter((x) => !was.has(x)), ...(m.followIssues ? m.followIssues(r) : [])]);
     let r = m.mergeFollow(spec, await send(ask, maxTokens));
     const wrong = issues(r);
     if (wrong.length) {
-      const again = await send(`${ask}\n  IMPORTANT: your answer was checked, and these things are wrong:\n  - ${wrong.slice(0, 8).join('\n  - ')}\n  Send the whole JSON object again, corrected, in the same form.`, maxTokens).catch(() => '');
+      const again = await send(`${ask}\n  IMPORTANT: your answer was checked, and these things are wrong:\n  - ${wrong.slice(0, 8).join('\n  - ')}\n  Send the whole JSON object again, corrected, in the same form.`, maxTokens, true).catch(() => '');
       const r2 = again ? m.mergeFollow(spec, again) : null;
       if (r2 && issues(r2).length <= wrong.length) r = r2;
     }
@@ -410,7 +412,9 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
     // (v303) the parts a textbook figure of it shows, said before she draws: a first drawing that has them all is shown
     // at once, instead of being sent back and waited for twice
     // (read straight from the drawer's file: nothing for 3D is set up until a drawing comes back)
-    const must = await import(chrome.runtime.getURL('livedraw.js')).then((m) => (m.mustHave ? m.mustHave(asked) : null)).catch(() => null);
+    const lib = await import(chrome.runtime.getURL('livedraw.js')).catch(() => null);
+    const must = lib && lib.mustHave ? lib.mustHave(asked) : null;
+    if (lib && lib.isProcess && lib.isProcess(asked) && !/"mode":"3d"/.test(ask)) ask += `\n  ${lib.PROCESS_NOTE}`; // (v311)
     if (must) ask += `\n  If you draw it: a textbook figure of ${must.what} shows ${must.parts.join(', ')}. Draw and name every one of them, each in its real place with its real shape (never a symbol or an icon).`;
     for (let tries = 0; tries < 2; tries++) {
       let reply = '';
@@ -431,7 +435,7 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
         // first what her own check found (a missing part, a wrong arrow), then her look at a picture of it (Plus and Pro)
         const first = got.scene, words_ = ask + nudge, what = first.dim === '3d' ? 'model' : 'drawing';
         const redo = async (fixes, base, how) => {
-          const again = parse(await send(`${words_}\n  IMPORTANT: ${how}, and these things are wrong:\n  - ${fixes.join('\n  - ')}\n  Send the whole corrected JSON object again, with these fixed and everything that was right kept exactly as it was: ${JSON.stringify(base.spec)}`, maxTokens), count);
+          const again = parse(await send(`${words_}\n  IMPORTANT: ${how}, and these things are wrong:\n  - ${fixes.join('\n  - ')}\n  Send the whole corrected JSON object again, with these fixed and everything that was right kept exactly as it was: ${JSON.stringify(base.spec)}`, maxTokens, true), count);
           return again.kind === 'card' && again.scene.dim === base.dim ? again.scene : null;
         };
         first.better = (async () => {
@@ -1533,9 +1537,9 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
     if (!image) throw keyed('teach_no_picture');
     const found = await refP, refUrl = found && found.base64 ? `data:${found.mimeType || 'image/png'};base64,${found.base64}` : null;
     const refNote = refUrl ? `\n  A second picture comes after the picture of their screen: a reference picture of the thing they ask about, from a free picture library. If it is not on their screen, draw it as it really looks there: its true outline, proportions and parts, each where it really is. Leave out anything else in that picture, and write every name in English.` : '';
-    const send = async (words_, maxTokens) => {
+    const send = async (words_, maxTokens, again = false) => {
       let r = null;
-      try { r = await chrome.runtime.sendMessage({ type: 'CASSIE_VISION', image, ...(refUrl ? { ref: refUrl } : {}), prompt: words_ + refNote, maxTokens, best: true }); } catch (e) { r = { error: e.message }; }
+      try { r = await chrome.runtime.sendMessage({ type: 'CASSIE_VISION', image, ...(refUrl ? { ref: refUrl } : {}), prompt: words_ + refNote, maxTokens, best: true, again }); } catch (e) { r = { error: e.message }; }
       if (!r || r.error) throw new Error((r && r.error) || 'ask failed');
       return String(r.reply || '');
     };
@@ -1571,8 +1575,8 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
     chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       if (!msg) return false;
       if (msg.type === 'CASSIE_LIVE_SHOW') {
-        const send = async (ask_, maxTokens) => {
-          const r = await chrome.runtime.sendMessage({ type: 'CASSIE_VISION', image: msg.shot, prompt: ask_, maxTokens, best: true });
+        const send = async (ask_, maxTokens, again = false) => {
+          const r = await chrome.runtime.sendMessage({ type: 'CASSIE_VISION', image: msg.shot, prompt: ask_, maxTokens, best: true, again });
           if (!r || r.error) throw new Error((r && r.error) || 'ask failed');
           return String(r.reply || '');
         };

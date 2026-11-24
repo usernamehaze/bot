@@ -3626,7 +3626,7 @@ test('v280: what the screen recording showed: “draw it” draws what the chat 
   expect(built === null || built.length >= 5, 'the bicycle builds, every part named: ' + JSON.stringify(built));
   // her server’s backup brain: the drawing is marked simpler, in words that fit
   const app = fs.readFileSync(fileAt('app.js'), 'utf8');
-  expect(/serverSource = res\.headers\.get\('x-cassie-source'\)/.test(app) && (app.match(/simple: !!serverSource && serverSource !== 'claude'/g) || []).length === 2 && /wasn’t free for this one \(busy, or today’s share is used up\)/.test(app), 'a drawing from the backup brain is marked simpler');
+  expect(/serverSource = res\.headers\.get\('x-cassie-source'\)/.test(app) && (app.match(/simple: liveSimple\(\)/g) || []).length === 2 && /const liveSimple = \(\) => !!serverSource && !\/\^\(claude\|gemini\)\$\/\.test\(serverSource\)/.test(app) && /wasn’t free for this one \(busy, or today’s share is used up\)/.test(app), 'a drawing from the backup brain is marked simpler');
   expect(!errors.length, 'no script errors: ' + errors.join(' | '));
   await ctx.close();
 });
@@ -3731,7 +3731,7 @@ test('v253: "draw" asks how to show it (Draw it, 3D model, Real photo with Gemin
   await page.fill('#prompt-input', 'sketch how photosynthesis works'); await page.click('#send-btn');
   await page.waitForSelector('.ld-pop .ld-ask button', { timeout: 10000 });
   const again = await page.evaluate(() => { const b = document.querySelector('.ld-pop .ld-ask button'); return { first: b.dataset.show, last: (b.querySelector('.ld-pop-last') || {}).textContent, marks: document.querySelectorAll('.ld-pop .ld-pop-last').length }; });
-  expect(again.first === 'draw' && again.last === 'Last used' && again.marks === 1, '6. asked again for the next drawing, with the way used last time first and marked Last used: ' + JSON.stringify(again));
+  expect(again.first === 'draw' && again.last === 'Last used' && again.marks === 1, '6. asked again for the next drawing, Draw it first and marked Last used: ' + JSON.stringify(again));
   await page.click('.ld-pop [data-show="draw"]');
   await page.waitForFunction(() => document.querySelectorAll('#chat-log .ld').length === 2, null, { timeout: 30000 });
   expect(calls.slice(before).some((c) => c.sys), '6. then she draws it');
@@ -3759,7 +3759,7 @@ test('v253: "draw" asks how to show it (Draw it, 3D model, Real photo with Gemin
   expect(!(await page.locator('.ld-pop').count()) && calls.slice(b4).some((c) => /"mode": "2d"/.test(c.sys || '') && /They asked for 3D, but a 3D model here is built from simple solids/.test(c.sys || '') && /never as a cartoon symbol/.test(c.sys || '')), '9b. a heart asked for in 3D is drawn flat');
   await page.waitForFunction(() => !document.querySelector('#chat-log .ld-loading') && !!document.querySelector('#chat-log .ld'), null, { timeout: 30000 });
   const four = await page.evaluate(() => { createNewChat(); state.geminiKey = 't'; geminiImageOff = false; liveShowAsk('draw me a leaf'); const r = [...document.querySelectorAll('.ld-pop .ld-pop-name')].map((x) => x.textContent); liveShowClose(false); state.geminiKey = ''; return r; });
-  expect(four.join() === 'Just explain,Draw it,3D model,Real photo', '9. with Gemini there are four ways (the one used last first): ' + four.join());
+  expect(four.join() === 'Draw it,3D model,Real photo,Just explain', '9. with Gemini there are four ways, always in the same order (v311: the last way is marked, not moved first): ' + four.join());
   // 10. the app's own check: plain circles standing in for a leaf, and an anchor off its shape
   const chk = await page.evaluate(async () => { const m = await import('./livedraw.js?v=253'); const leaf = { title: 'x', mode: '2d', parts: [{ id: 'leaf', label: 'Leaf', box: [100, 60, 200, 140], shapes: [{ t: 'circle', cx: 200, cy: 130, r: 60, fill: true }, { t: 'circle', cx: 200, cy: 130, r: 30 }] }, { id: 'sun', label: 'Sun', box: [10, 10, 80, 80], anchor: [300, 240], shapes: [{ t: 'circle', cx: 40, cy: 40, r: 20 }, { t: 'line', x1: 40, y1: 10, x2: 40, y2: 2 }] }] }; return m.check(m.clean(JSON.stringify(leaf))); });
   expect(chk.some((x) => /"Leaf" is only plain circles or boxes/.test(x)) && chk.some((x) => /anchor of "Sun" is not on its own main shape/.test(x)) && !chk.some((x) => /"Sun" is only plain/.test(x)), '10. check flags a circle for a leaf and an anchor off its shape (a round sun is fine): ' + JSON.stringify(chk));
@@ -7548,6 +7548,43 @@ test('v294 tap targets: every button, link, switch and field on a computer’s H
 });
 
 // (v295) Cassie's grammar and vocabulary fit the student: by age or grade, then by how they write in the chat
+test('v311 drawings: a process (how we feel emotions, how a refrigerator works) is asked for as a flow with an arrow between steps, and drawn flat even when 3D was asked; a follow-up’s new part must sit on the part it is about; a picked part shows "Show all"; the book has a brain, a refrigerator cycle, a dragon, the Earth’s layers, an animal cell and an airplane', async (b) => {
+  const sys = [];
+  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 860 }, server: false, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: (body) => { sys.push(JSON.stringify(body.messages || []).slice(0, 9000)); return { text: JSON.stringify(JSON.parse(fs.readFileSync(fileAt('tests/fixtures/live/leaf.json'), 'utf8'))) }; } });
+  const u = await page.evaluate(async () => {
+    const m = await liveDrawLoad();
+    const proc = ['can you describe and draw how we feel emotions', 'draw me how refrigerator works', 'how does digestion work', 'stages of mitosis'].map((q) => m.isProcess(q));
+    const thing = ['draw a bicycle', 'show me the heart', 'make me a 3D of an airplane', 'draw a dragon'].map((q) => m.isProcess(q));
+    const flow = m.check(m.clean({ title: 'How we feel', mode: '2d', parts: [1, 2, 3, 4].map((i) => ({ id: 'p' + i, label: 'Step ' + i, say: 'x', anchor: [i * 80, 130], box: [i * 80 - 30, 100, 60, 60], shapes: [{ t: 'path', d: `M${i * 80 - 20} 120 Q${i * 80} 100 ${i * 80 + 20} 120 Q${i * 80} 150 ${i * 80 - 20} 120 Z` }, { t: 'line', x1: i * 80 - 10, y1: 130, x2: i * 80 + 10, y2: 130 }] })) }), 'how do we feel emotions').filter((x) => /process/.test(x));
+    return { proc, thing, flow };
+  });
+  expect(u.proc.every(Boolean) && !u.thing.some(Boolean), 'processes are told apart from things: ' + JSON.stringify(u));
+  expect(u.flow.length === 1 && /join each step to the next with an arrow/.test(u.flow[0]), 'a process with no arrows between its steps is sent back: ' + JSON.stringify(u.flow));
+  // asked in 3D, a process is drawn flat, as a flow
+  await page.fill('#prompt-input', 'show me how a refrigerator works in 3D'); await page.click('#send-btn');
+  for (let k = 0; k < 40 && !sys.some((x) => /This is a PROCESS/.test(x)); k++) await page.waitForTimeout(250); // (her request; the drawing follows)
+  const asked = sys.find((x) => /This is a PROCESS/.test(x));
+  expect(asked && /\\"mode\\": \\"2d\\"|"mode": "2d"|mode\\\\": \\\\"2d/.test(asked) && /They asked for 3D/.test(asked), 'asked as a flat flow, and told to say why it is not 3D');
+  // a follow-up's stray part is sent back
+  const fi = await page.evaluate(async () => { const m = await liveDrawLoad(), bk = await liveBookLoad(); const d = bk.fromBook('draw a dragon'); const stray = m.mergeFollow(d, { answer: 'x', focus: 'wings', parts: [{ id: 'bones', label: 'Wing bones', say: 'x', anchor: [200, 200], box: [160, 120, 60, 120], shapes: [{ t: 'line', x1: 200, y1: 60, x2: 170, y2: 230 }, { t: 'line', x1: 210, y1: 60, x2: 175, y2: 230 }] }] }); const good = m.mergeFollow(d, { answer: 'x', focus: 'wings', parts: [{ id: 'bones', label: 'Wing bones', say: 'x', anchor: [240, 60], box: [214, 40, 110, 60], shapes: [{ t: 'line', x1: 215, y1: 42, x2: 300, y2: 60 }, { t: 'line', x1: 215, y1: 42, x2: 290, y2: 94 }] }] }); return [m.followIssues(stray), m.followIssues(good)]; });
+  expect(fi[0].length === 1 && /runs far outside "Wings"/.test(fi[0][0]) && !fi[1].length, 'wing bones drawn across the picture are sent back; on the wing they pass: ' + JSON.stringify(fi));
+  // a picked part: Show all
+  await page.evaluate(() => { chatLog.innerHTML = ''; });
+  await page.evaluate(async () => { const bk = await liveBookLoad(); renderMessage('assistant', '```cassie-draw\n' + JSON.stringify(bk.fromBook('draw the human brain')) + '\n```'); });
+  await page.waitForSelector('#chat-log .ld .ld-part');
+  await page.waitForFunction(() => document.querySelector('#chat-log .ld .ld-live.off'), null, { timeout: 30000 });
+  await page.evaluate(() => document.querySelector('#chat-log .ld .ld-part[data-i="1"]').dispatchEvent(new MouseEvent('click', { bubbles: true })));
+  const picked = await page.evaluate(() => { const l = document.querySelector('#chat-log .ld'); const b2 = l.querySelector('.ld-showall'); return { all: b2 && !b2.hidden, hint: l.querySelector('.ld-hint').textContent, dim: l.querySelectorAll('.ld-part.dim').length }; });
+  expect(picked.all && picked.hint === 'Showing: Prefrontal cortex' && picked.dim >= 9, 'a picked part says what is shown and offers Show all: ' + JSON.stringify(picked));
+  await page.click('#chat-log .ld .ld-showall');
+  const back = await page.evaluate(() => { const l = document.querySelector('#chat-log .ld'); return { all: l.querySelector('.ld-showall').hidden, dim: l.querySelectorAll('.ld-part.dim').length }; });
+  expect(back.all && back.dim === 0, 'Show all brings every part back: ' + JSON.stringify(back));
+  // the new book subjects
+  const keys = await page.evaluate(async () => { const bk = await liveBookLoad(); return ['draw the human brain', 'how does a fridge work', 'how about draw me a dragon', 'layers of the earth', 'draw an animal cell', 'make me a 3D of an airplane', 'how does an airplane fly'].map((q) => { const x = bk.fromBook(q, /3d/i.test(q)); return x ? x.book + ':' + x.mode : '-'; }).join(' '); });
+  expect(keys === 'brain:2d fridge:2d dragon:2d earth:2d animalcell:2d airplane:3d airplane:3d', 'the book’s new subjects: ' + keys);
+  expect(!errors.length, 'page errors: ' + errors.join(' | '));
+  await ctx.close();
+});
 test('v310 drawings, accurate, fast and reliable: her drawing book shows a checked bicycle, solar system, atom, heart, water cycle, photosynthesis, volcano or jet engine at once (no AI, no key, offline too), a narrow question still goes to the AI; a reply cut off mid-way keeps every whole part, and drawing code is never shown as an answer', async (b) => {
   const calls = [];
   const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 860 }, server: false, book: true, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: (body) => { calls.push(JSON.stringify(body.messages || []).slice(0, 200)); return { text: '{"title":"Dragon","mode":"2d","parts":[{"id":"head","label":"Head","shapes":[{"t":"path","d":"M40,100 C45,70' }; } });
@@ -7555,7 +7592,7 @@ test('v310 drawings, accurate, fast and reliable: her drawing book shows a check
   const hits = await page.evaluate(async () => { const bk = await liveBookLoad(); return ['draw a bicycle', 'make a 3d bicycle', 'how do a bicycle’s gears shift', 'draw a motorbike', 'show me the human heart', 'draw a heart emoji', 'explain the water cycle', 'how does photosynthesis work', 'draw how a volcano erupts', 'how does a jet engine work', 'draw the solar system', 'build an atom in 3D', 'draw a bicycle for my science project', 'paano gumagana ang bisikleta'].map((q) => { const x = bk.fromBook(q, /3d/i.test(q)); return x ? x.book + ':' + x.mode : '-'; }).join(' '); });
   expect(hits === 'bicycle:2d bicycle:3d - - heart:2d - water:2d photosynthesis:2d volcano:2d jet:3d solar:3d atom:3d - bicycle:2d', 'the book answers the subject, the AI answers a narrow question: ' + hits);
   // every book drawing is whole, named and passes the app's own checks for a real figure
-  const book = await page.evaluate(async () => { const bk = await liveBookLoad(), m = await liveDrawLoad(); return bk.bookKeys().map((k) => { const raw = bk.fromBook({ bicycle: 'draw a bicycle', solar: 'the solar system', atom: 'an atom', heart: 'the heart', water: 'the water cycle', photosynthesis: 'photosynthesis', volcano: 'a volcano', jet: 'a jet engine' }[k], false), sp = m.clean(raw); return [k, sp && sp.parts.length, sp && sp.parts.every((p) => p.label && p.say), sp ? (sp.mode === '2d' ? m.check(sp, sp.title).filter((x) => /leaves (it|them) out|used for more than one/.test(x)) : []) : ['none']]; }); });
+  const book = await page.evaluate(async () => { const bk = await liveBookLoad(), m = await liveDrawLoad(); return bk.bookKeys().map((k) => { const raw = bk.fromBook({ bicycle: 'draw a bicycle', solar: 'the solar system', atom: 'an atom', heart: 'the heart', water: 'the water cycle', photosynthesis: 'photosynthesis', volcano: 'a volcano', jet: 'a jet engine', brain: 'the human brain', fridge: 'how does a fridge work', dragon: 'draw a dragon', earth: 'layers of the earth', animalcell: 'an animal cell', airplane: 'an airplane' }[k], false), sp = m.clean(raw); return [k, sp && sp.parts.length, sp && sp.parts.every((p) => p.label && p.say), sp ? (sp.mode === '2d' ? m.check(sp, sp.title).filter((x) => /leaves (it|them) out|used for more than one/.test(x)) : []) : ['none']]; }); });
   expect(book.every(([, n, named, bad]) => n >= 4 && named && !bad.length), 'every book drawing is whole and named, with every textbook part: ' + JSON.stringify(book));
   const b3 = await page.evaluate(async () => { const bk = await liveBookLoad(), m = await liveDrawLoad(); const sp = m.clean(bk.fromBook('make a 3d bicycle', true)); return { n: sp.parts.length, labels: sp.parts.map((p) => p.label).join(','), issues: m.check3d(sp) }; });
   expect(b3.n === 11 && /Brakes/.test(b3.labels) && !b3.issues.length, 'the 3D bicycle keeps all 11 parts (brakes too) and passes the model checks: ' + JSON.stringify(b3));
@@ -10126,7 +10163,7 @@ test('Cassie for Chrome draws from her book (3.77): "draw a bicycle" on any page
 
 test('Cassie’s live drawing, accurate (3.69): she is told to draw the very thing in the picture of the screen, in its real colours, and to describe it; the first drawing shows at once, then her own look at a picture of it (Plus and Pro, when her best model drew it) swaps in a corrected one with a line that says so, unless the student has moved on; a 3D model has real finishes, a soft shadow and names beside it; a smaller model is asked again without the examples', async () => {
   const bgSrc = fs.readFileSync(fileAt('extension/background.js'), 'utf8'), ldSrc = fs.readFileSync(fileAt('livedraw.js'), 'utf8');
-  expect(/if \(msg\.look && !\(lastServer\.source === 'claude' && \/\^\(plus\|pro\)\$\/\.test\(lastServer\.plan\)\)\) return '';/.test(bgSrc), 'her look at her own drawing is for Plus and Pro, when her best model drew it');
+  expect(/her look at every drawing, on every plan/.test(bgSrc) && /msg\.look \|\| msg\.again \? 2 : 1/.test(bgSrc), 'her look at her own drawing is for every drawing (it is part of the drawing: never the student\u2019s share)');
   expect(/finish: \['metal', 'plastic', 'rubber', 'wood'\]/.test(ldSrc) && /ShadowMaterial/.test(ldSrc) && /PMREMGenerator/.test(ldSrc), 'a model has real finishes, a studio light and a soft shadow');
   const X = await liveExt();
   const { page, sw, replies, prompts, card, tap, until, ask, fixture, LIVE } = X;
@@ -14897,26 +14934,38 @@ test('one copy of the truth: the extension’s board is the app’s, and the ser
   expect(built === fs.readFileSync(fileAt('server/worker.js'), 'utf8'), 'server/worker.js is out of date: run  cd server && python3 build.py');
 });
 
-test('Claude on the server: the main chat and photos use Claude, Groq covers when it fails', async (b) => {
+test('Claude on the server (v311): a free student\u2019s words come from Groq and their drawings from Claude (her own redo of a drawing never uses the share; Gemini draws when Claude can\u2019t); Plus and Pro keep Claude for words; Groq covers when it fails', async (b) => {
   await serverMode({ claude: 'ok', claudeReply: 'Claude here: plants turn light into food.', claudeCalls: [] });
   try {
-    const { ctx, page } = await open(b, { state: { groqKey: 'gsk_own' } }); // even with their own key, Claude answers
+    const { ctx, page } = await open(b, { state: { groqKey: 'gsk_own' } });
     await page.waitForFunction(() => serverClaude === true, null, { timeout: 5000 });
-    const a = await ask(page, 'What is photosynthesis?');
-    expect(/Claude here/.test(await a.textContent()), 'Claude should answer: ' + await a.textContent());
     let m = await (await fetch(SERVER + '/__mode')).json();
+    const before0 = m.claudeCount;
+    const a = await ask(page, 'What is photosynthesis?');
+    m = await (await fetch(SERVER + '/__mode')).json();
+    expect(!/Claude here/.test(await a.textContent()) && m.claudeCount === before0, 'a free student\u2019s words come from Groq, not Claude: ' + await a.textContent());
+    // a drawing: Claude (Haiku for Free), counted once; her redo of it (draw 2) does not use the share
+    const drawAs = (draw, image, uid) => page.evaluate(async ([srv, d, img, id]) => { const content = img ? [{ type: 'text', text: 'Check this drawing' }, { type: 'image_url', image_url: { url: img } }] : 'Draw how a leaf makes food'; const r = await fetch(srv + '/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ uid: id || installId(), brain: 'claude', q: d === 1 ? 1 : undefined, draw: d, messages: [{ role: 'system', content: 'You are Cassie, a careful tutor who explains by DRAWING.' }, { role: 'user', content }] }) }); return [r.headers.get('x-cassie-source'), r.status]; }, [SERVER, draw, image || null, uid || null]);
+    let [src] = await drawAs(1);
+    m = await (await fetch(SERVER + '/__mode')).json();
     const call = m.claudeCalls.at(-1);
-    expect(call && call.model === 'test-haiku', 'a free student gets Haiku (when the owner allows any Claude for free): ' + (call && call.model));
+    expect(src === 'claude' && call && call.model === 'test-haiku', 'a free student\u2019s drawing gets Claude (Haiku): ' + src + ' ' + (call && call.model));
     expect(call.effort === 'medium' && call.fallbacks === 'default' && call.beta === 'server-side-fallback-2026-07-01', 'effort + refusal fallback: ' + JSON.stringify(call).slice(0, 200));
     expect(/You are Cassie/.test(call.system) && call.messages[0].role === 'user', 'system prompt goes on its own, chat starts with the user');
-    // a photo goes to Claude as an image block
-    const red = await page.evaluate(() => { const c = document.createElement('canvas'); c.width = c.height = 40; const g = c.getContext('2d'); g.fillStyle = 'red'; g.fillRect(0, 0, 40, 40); return c.toDataURL('image/png').split(',')[1]; });
-    await page.setInputFiles('#file-input', { name: 'photo.png', mimeType: 'image/png', buffer: Buffer.from(red, 'base64') });
-    await page.waitForSelector('#attach-preview:not([hidden])', { timeout: 10000 });
-    await ask(page, 'What is in this photo?');
+    // her look at a picture of the drawing (draw 2) goes to Claude as an image block
+    const red = await page.evaluate(() => { const c = document.createElement('canvas'); c.width = c.height = 40; const g = c.getContext('2d'); g.fillStyle = 'red'; g.fillRect(0, 0, 40, 40); return c.toDataURL('image/png'); });
+    [src] = await drawAs(2, red);
     m = await (await fetch(SERVER + '/__mode')).json();
     const blocks = m.claudeCalls.at(-1).messages.at(-1).content;
-    expect(blocks.some((x) => x.type === 'image' && x.source.type === 'base64' && /^image\//.test(x.source.media_type)), 'photo should be an image block');
+    expect(src === 'claude' && blocks.some((x) => x.type === 'image' && x.source.type === 'base64' && /^image\//.test(x.source.media_type)), 'her look is an image block, on Claude');
+    // the share: with 3 Claude drawings a day, redos never use it up
+    await serverMode({ freeClaude: 3, dailyAll: 100, gemini: 'ok' }); // (the test server allows 5 a day; the real one 150)
+    const shares = [], sid = 'share-' + Date.now(); // (a student of their own: 12 a minute each)
+    for (let k = 0; k < 6; k++) shares.push((await drawAs(2, null, sid))[0]);
+    for (let k = 0; k < 4; k++) shares.push((await drawAs(1, null, sid))[0]);
+    expect(shares.slice(0, 6).every((x) => x === 'claude'), 'her redos are on Claude and don\u2019t use the share: ' + shares.join());
+    expect(shares.slice(6, 9).every((x) => x === 'claude') && shares[9] === 'gemini', 'all 3 drawings of the share are still Claude\u2019s after her redos, and the 4th is Gemini\u2019s: ' + shares.join());
+    await serverMode({ dailyAll: null, gemini: null });
     // paid plans: the owner gives an account Pro with the dashboard password → Sonnet answers
     const email = `pro${Date.now()}@example.com`;
     const token = await page.evaluate(async ([srv, em]) => (await (await fetch(srv + '/auth/signup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: em, password: 'secret-pass-1', age: 17 }) })).json()).token, [SERVER, email]);

@@ -166,14 +166,14 @@ async function speakClip(text) {
   return { audio: bufToBase64(await r.arrayBuffer()) };
 }
 let lastServer = { source: '', plan: '' }; // (who answered the last question on Cassie's server, and the student's plan)
-// effort: 'low' for a drawing. Her best brain (Claude) ignores it; the backup (gpt-oss on Groq) then answers in about half
-// the time and no longer spends its whole answer on thinking (an empty reply, asked again) (v307)
-async function viaServer(messages, maxTokens = 2048, most = 4000, effort = undefined) {
+// draw: 1 a drawing, 2 her own look at it or redo of it (never the student's daily share). The server draws with her best
+// brain (Claude), then Gemini, then Groq (v311)
+async function viaServer(messages, maxTokens = 2048, most = 4000, draw = 0) {
   let res;
   try {
     res = await fetch(CASSIE_SERVER + '/chat', {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ uid: await cassieUid(), model: 'openai/gpt-oss-120b', messages, max_tokens: Math.min(most, maxTokens), temperature: 0.5, brain: 'claude', ...(effort ? { reasoning_effort: effort } : {}) }),
+      body: JSON.stringify({ uid: await cassieUid(), model: 'openai/gpt-oss-120b', messages, max_tokens: Math.min(most, maxTokens), temperature: 0.5, brain: 'claude', ...(draw ? { draw } : {}) }),
     });
   } catch (e) { throw new Error('Couldn’t connect to Cassie. Check your internet connection.'); }
   if (!res.ok) {
@@ -734,7 +734,7 @@ async function composeBoard(b) {
 async function readPicture(keys, msg) {
   // Her own look at a drawing she just made costs one more answer from her best model, so it is for Plus and Pro,
   // when that model drew it. For everyone else there is no look, and the drawing shows as it is.
-  if (msg.look && !(lastServer.source === 'claude' && /^(plus|pro)$/.test(lastServer.plan))) return '';
+  // (v311) her look at every drawing, on every plan: it is part of that drawing, so it never uses the student's share
   if (msg.board && (msg.board.image || (msg.board.strokes || []).length)) {
     try { msg = { ...msg, image: await composeBoard(msg.board) }; } catch (e) { /* use the page's own snapshot */ }
   }
@@ -743,7 +743,7 @@ async function readPicture(keys, msg) {
     let firstErr = null;
     // (a drawing asks Cassie's best model first, on her server; the student's own keys are the fallback)
     if (msg.best) {
-      try { return await viaServer([...(msg.system ? [{ role: 'system', content: msg.system }] : []), { role: 'user', content: [{ type: 'text', text: prompt }, ...images.map((u) => ({ type: 'image_url', image_url: { url: u } }))] }], Math.max(5000, msg.maxTokens || 0), 6000, msg.look ? undefined : 'low'); } catch (e) { if (!keys.geminiKey && !keys.groqKey) throw new Error(e.message === 'SERVER_OFF' ? 'no-vision' : e.message); }
+      try { return await viaServer([...(msg.system ? [{ role: 'system', content: msg.system }] : []), { role: 'user', content: [{ type: 'text', text: prompt }, ...images.map((u) => ({ type: 'image_url', image_url: { url: u } }))] }], Math.max(5000, msg.maxTokens || 0), 6000, msg.look || msg.again ? 2 : 1); } catch (e) { if (!keys.geminiKey && !keys.groqKey) throw new Error(e.message === 'SERVER_OFF' ? 'no-vision' : e.message); }
     }
     if (keys.geminiKey) {
       try { return await visionViaGemini(keys.geminiKey, { ...msg, images, prompt }); } catch (e) { firstErr = e; }

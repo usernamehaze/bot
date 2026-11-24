@@ -1187,15 +1187,19 @@ async function chat(request, env, ctx) {
   }
   const left = { 'x-cassie-left': String(Math.max(0, question ? L.questions - usedQ : perDay - usedU)), 'x-cassie-plan': plan };
 
-  // Claude first for the main chat: Free gets Haiku for its first answers each day (FREE_CLAUDE_LIMIT),
-  // then Groq; Pro gets Sonnet for its first answers each day, then Haiku; Plus gets Haiku
-  if (env.ANTHROPIC_KEY && body.brain === 'claude' && uid !== 'anon') {
+  // Claude first: Pro gets Sonnet for its first answers each day, then Haiku; Plus gets Haiku; Free gets Haiku for its
+  // first drawings each day (FREE_CLAUDE_LIMIT), and its explanations go to Groq, then Gemini (v311: the share is kept for
+  // drawings, where the best brain matters most). draw: 1 is a drawing; draw: 2 is her own check or redraw of that same
+  // drawing, which never uses the student's share (a side allowance of three times it, so it can't be used for anything else)
+  const draw = body.draw === 1 || body.draw === 2 ? body.draw : 0;
+  if (env.ANTHROPIC_KEY && body.brain === 'claude' && uid !== 'anon' && (draw || plan !== 'free')) {
     let family = null;
     for (const [fam, max] of L.claude) {
       if (!(max > 0)) continue;
+      const key = (draw === 2 ? 'cx:' : 'c:') + fam + ':' + who, cap = draw === 2 ? max * 3 : max;
       let usedC = Infinity, usedCi = Infinity;
-      try { [usedC, usedCi] = (await env.DB.batch([bump('c:' + fam + ':' + who), bump('ci:' + ip)])).map((r) => r.results?.[0]?.n || 0); } catch (e) { /* treat as used up */ }
-      if (usedC <= max && usedCi <= Math.max(max, 40) * 25) { family = fam; break; }
+      try { [usedC, usedCi] = (await env.DB.batch([bump(key), bump('ci:' + ip)])).map((r) => r.results?.[0]?.n || 0); } catch (e) { /* treat as used up */ }
+      if (usedC <= cap && usedCi <= Math.max(max, 40) * 25 * (draw ? 2 : 1)) { family = fam; break; }
     }
     if (family) {
       let reply = null;
@@ -1204,6 +1208,14 @@ async function chat(request, env, ctx) {
         ctx.waitUntil(countChat(env, today, 'claude'));
         return json({ choices: [{ index: 0, message: { role: 'assistant', content: reply }, finish_reason: 'stop' }] }, 200, { ...h, ...left, 'x-cassie-source': 'claude' });
       }
+    }
+  }
+  // a drawing Claude couldn't make (busy, or today's share used up): Gemini next, which draws better than Groq (v311)
+  if (draw && env.GEMINI_KEY) {
+    const g = await askGemini(env, cleaned.messages, Math.max(+body.max_tokens || 0, 5000));
+    if (g.reply) {
+      ctx.waitUntil(countChat(env, today, 'gemini-draw'));
+      return json({ choices: [{ index: 0, message: { role: 'assistant', content: g.reply }, finish_reason: 'stop' }] }, 200, { ...h, ...left, 'x-cassie-source': 'gemini' });
     }
   }
 
