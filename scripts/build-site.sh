@@ -1,22 +1,25 @@
 #!/usr/bin/env bash
-# Builds the website into _site/ — only the files the site needs.
+# Builds the website (web/) into _site/ — only the files the site needs.
 # Cloudflare Pages runs this on every push:
 #   Build command:          bash scripts/build-site.sh
 #   Build output directory: _site
 # (Promo videos and sources stay out: Cloudflare refuses files over 25 MB.)
 set -euo pipefail
 cd "$(dirname "$0")/.."
-rm -rf _site && mkdir _site
+REPO="$PWD"; OUT="$REPO/_site"
+rm -rf "$OUT" && mkdir "$OUT"
+cd web   # (the website's own files; the extension, the server, the docs and these scripts sit beside it)
 # (a list, not *.js: a stray script in the folder never ships by accident)
-cp index.html app.html start.html privacy.html terms.html support.html bot.html rescue.html let.html rescue.css rescue.js style.css rewards.css manifest.json _site/
+cp index.html app.html start.html privacy.html terms.html support.html bot.html rescue.html let.html rescue.css rescue.js style.css rewards.css manifest.json "$OUT"/
 cp app.js errors.js mic.js care.js board.js bot-page.js cards.js cassie-bot.js cassie-bot3d.js cassie-3d.js cite.js config.js export.js gradient.js listen.js memory.js rewards.js \
-   native.js sketch.js start.js study-room.js sw.js tour.js voice.js extlink.js opening.js boardprep.js livedraw.js _site/
-cp _headers _site/   # Cloudflare Pages response headers (security)
-cp -r icons landing explore labs vendor _site/
+   native.js sketch.js start.js study-room.js sw.js tour.js voice.js extlink.js opening.js boardprep.js livedraw.js "$OUT"/
+cp _headers "$OUT"/   # Cloudflare Pages response headers (security)
+cp -r icons landing explore labs vendor "$OUT"/
 # notes for developers and an unused logo aren't needed to run the site (they stay in the repo)
-rm -f _site/explore/body/README.md _site/icons/logo.svg
-[ -d .well-known ] && cp -r .well-known _site/ || true   # Play Store app link (assetlinks.json)
-mkdir -p _site/promo && cp promo/cassie-ad-60s.mp4 _site/promo/
+rm -f "$OUT"/explore/body/README.md "$OUT"/icons/logo.svg
+[ -d .well-known ] && cp -r .well-known "$OUT"/ || true   # Play Store app link (assetlinks.json)
+mkdir -p "$OUT"/promo && cp "$REPO"/docs/promo/cassie-ad-60s.mp4 "$OUT"/promo/
+cd "$REPO"
 # A new version on every deploy, so phones never keep yesterday's files: the ?v= on every script
 # and stylesheet and the offline cache's name become this commit's id (no bumping by hand).
 ver="${CF_PAGES_COMMIT_SHA:-$(git rev-parse --short HEAD 2>/dev/null || date +%s)}"; ver="${ver:0:10}"
@@ -25,8 +28,8 @@ find _site -name '*.html' -o -name '*.js' -not -path '_site/vendor/*' -not -path
 sed -i -E "s/cassie-v[0-9]+/cassie-$ver/" _site/sw.js
 # the Chrome extension, ready to download from the site (a folder inside, for "Load unpacked")
 tmp="$(mktemp -d)" && cp -r extension "$tmp/cassie-extension" && rm -f "$tmp"/cassie-extension/*.zip
-cp board.js sketch.js care.js mic.js livedraw.js "$tmp/cassie-extension/"   # the board, the mic and the model builder are the app's own (one copy of each to keep up)
-cp explore/three.module.min.js explore/OrbitControls.js explore/THREE-LICENSE.txt "$tmp/cassie-extension/vendor/"   # (and its three.js, for 3D drawings)
+(cd web && cp board.js sketch.js care.js mic.js livedraw.js "$tmp/cassie-extension/")   # the board, the mic and the model builder are the app's own (one copy of each to keep up)
+(cd web && cp explore/three.module.min.js explore/OrbitControls.js explore/THREE-LICENSE.txt "$tmp/cassie-extension/vendor/")   # (and its three.js, for 3D drawings)
 python3 - "$tmp" "$PWD/_site/cassie-extension.zip" <<'PY'
 import os, sys, zipfile
 src, out = sys.argv[1], sys.argv[2]
@@ -40,8 +43,8 @@ rm -rf "$tmp"
 # Always the newest extension: its download links and the "Version" under the button carry
 # extension/manifest.json's version, and the extension checks extension-version.json for a newer one.
 extver="$(python3 -c 'import json; print(json.load(open("extension/manifest.json"))["version"])')"
-# (the Version under "Add to Chrome" is the Chrome Web Store's, from store-version.json: that button installs the store's copy)
-storever="$(python3 -c 'import json; print(json.load(open("store-version.json"))["chrome"])')"
+# (the Version under "Add to Chrome" is the Chrome Web Store's, from web/store-version.json: that button installs the store's copy)
+storever="$(python3 -c 'import json; print(json.load(open("web/store-version.json"))["chrome"])')"
 sed -i -E "s/cassie-extension\.zip\?v=[0-9a-z.]+/cassie-extension.zip?v=$extver/g; s/(data-ext-version>)Version [0-9.]+/\1Version $storever/" _site/index.html
 printf '{ "version": "%s" }\n' "$extver" > _site/extension-version.json
 echo "Built _site: $(du -sh _site | cut -f1), $(find _site -type f | wc -l) files"

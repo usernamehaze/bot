@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
 import path from 'node:path';
 
 export async function startFakeServer(port = 4630) {
-  const worker = (await import(pathToFileURL(path.resolve(import.meta.dirname, '../server/worker.js')).href)).default;
+  const worker = (await import(pathToFileURL(path.resolve(import.meta.dirname, '../../server/worker.js')).href)).default;
   const sq = new DatabaseSync(':memory:');
   const stmt = (q, args = []) => ({
     q, args,

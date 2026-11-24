@@ -17,7 +17,7 @@ jobs:
       SUITE: ${{ (github.event_name == 'push' || github.event_name == 'pull_request') && 'fast' || '' }}
     defaults:
       run:
-        working-directory: tests
+        working-directory: scripts/tests
     steps:
       - uses: actions/checkout@v4
       - name: No file over 25 MB (Cloudflare Pages refuses them and the website stops updating)

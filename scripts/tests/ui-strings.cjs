@@ -88,17 +88,17 @@ function htmlStrings(src) {
 
 // Every file whose words people see (the app, the labs and 3D views, the landing page, the
 // extension, the server's replies). Libraries made by others (three.js and friends) are left out.
-const ROOT = path.resolve(__dirname, '..');
+const ROOT = path.resolve(__dirname, '..', '..'); // (the repo: web/ is the website)
 const UI_FILES = () => {
   const list = [];
   const add = (dir, re) => { for (const f of fs.readdirSync(path.join(ROOT, dir))) if (re.test(f)) list.push(path.join(dir, f)); };
-  add('.', /^(app|native|sketch|board|cards|cite|voice|memory|export|config|cassie-bot|listen|study-room|bot-page|start|gradient|sw)\.js$|\.html$/);
-  add('labs', /\.js$/);
-  add('explore', /^(body-facts|cells|cell3d|body3d|tissue)\.js$/);
-  add('landing', /\.js$/);
+  add('web', /^(app|native|sketch|board|cards|cite|voice|memory|export|config|cassie-bot|listen|study-room|bot-page|start|gradient|sw)\.js$|\.html$/);
+  add('web/labs', /\.js$/);
+  add('web/explore', /^(body-facts|cells|cell3d|body3d|tissue)\.js$/);
+  add('web/landing', /\.js$/);
   add('extension', /\.(js|html)$/);
   add('server', /^(worker\.src\.js|dashboard\.html)$/);
-  list.push('manifest.json', 'extension/manifest.json'); // the app's name on the home screen and in Chrome
+  list.push('web/manifest.json', 'extension/manifest.json'); // the app's name on the home screen and in Chrome
   return list.filter((f) => fs.existsSync(path.join(ROOT, f)));
 };
 function uiStrings(file) {

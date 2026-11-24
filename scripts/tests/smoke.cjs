@@ -10,7 +10,11 @@ const fs = require('fs');
 const path = require('path');
 const { chromium, devices } = require('playwright');
 
-const ROOT = path.resolve(__dirname, '..');
+const ROOT = path.resolve(__dirname, '..', '..');
+// (the repo: web/ is the website, then the top, scripts/ (these tests: tests/...) and docs/ (promo/, STORES.md):
+// a file is found by its short name, app.js or tests/fixtures/..., wherever it sits)
+const WEB = path.join(ROOT, 'web');
+const at = (...p) => { const rel = path.join(...p.map(String)); for (const base of [WEB, ROOT, path.join(ROOT, 'scripts'), path.join(ROOT, 'docs')]) { const f = path.join(base, rel); if (fs.existsSync(f)) return f; } return path.join(ROOT, rel); };
 const APP_PORT = 4640, SERVER_PORT = 4641;
 const APP = `http://localhost:${APP_PORT}/app.html`;
 const SERVER = `http://localhost:${SERVER_PORT}`;
@@ -21,7 +25,7 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
 // the page may talk to the fake Cassie server (instead of the real one) and stays on plain http.
 const SITE_HEADERS = (() => {
   const out = {};
-  for (const line of fs.readFileSync(path.join(ROOT, '_headers'), 'utf8').split('\n')) {
+  for (const line of fs.readFileSync(at('_headers'), 'utf8').split('\n')) {
     const m = line.match(/^\s+([\w-]+):\s*(.+)$/);
     if (m) out[m[1].toLowerCase()] = m[2].trim();
   }
@@ -39,7 +43,7 @@ function watchCsp(ctx) {
 }
 function staticServer() {
   return http.createServer((req, res) => {
-    let p = path.join(ROOT, decodeURIComponent(req.url.split('?')[0]));
+    let p = at(decodeURIComponent(req.url.split('?')[0]));
     if (fs.existsSync(p) && fs.statSync(p).isDirectory()) p = path.join(p, 'index.html');
     if (!p.startsWith(ROOT) || !fs.existsSync(p)) { res.writeHead(404); return res.end(); }
     // the same headers as the real site (_headers): cross-origin isolated + the security policy
@@ -49,7 +53,7 @@ function staticServer() {
 }
 
 /* ---------- helpers ---------- */
-const APP_VERSION = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8').match(/APP_VERSION = '([^']+)'/)[1];
+const APP_VERSION = fs.readFileSync(at('app.js'), 'utf8').match(/APP_VERSION = '([^']+)'/)[1];
 const PROFILE = { name: 'Test', role: 'student', grade: 'Grade 10', field: '', age: 16, at: 1 };
 // Google's sign-in page, faked: it sends the student back to the app like Google does (#id_token=…&state=…),
 // with a token for the nonce it was given. ctx.google says who signs in: { sub, email, badSig }, { cancel: true }
@@ -424,7 +428,7 @@ test('the service worker: a file with its version in the address (app.js?v=…) 
   const self = { location: { origin: 'https://askcassie.study' }, addEventListener: (t, f) => { if (t === 'fetch') handlers.push(f); }, skipWaiting() {}, clients: { claim() {} }, registration: { scope: 'https://askcassie.study/' } };
   const caches = { open: async () => cacheObj, match: async (r) => store.get(r.url || r), keys: async () => [], delete: async () => true };
   const fakeFetch = async (r) => { const url = typeof r === 'string' ? r : r.url; fetched.push(url); return new Response('file ' + url, { status: 200 }); };
-  new Function('self', 'caches', 'fetch', fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8'))(self, caches, fakeFetch);
+  new Function('self', 'caches', 'fetch', fs.readFileSync(at('sw.js'), 'utf8'))(self, caches, fakeFetch);
   const get = async (url) => {
     let p = null;
     const ev = { request: new Request(url), respondWith: (x) => { p = x; } };
@@ -501,13 +505,13 @@ test('an account keeps the study streak and Labs progress: cleared from the brow
     // a longer streak already on this device is kept
     const kept = await page.evaluate((d) => { window.CassieMemory.mergeStreak({ count: 2, lastDay: d.streak.lastDay }); return window.CassieMemory.stats().streak; }, data);
     expect(kept === 6, 'the longer streak stays: ' + kept);
-    expect(/study streak/.test(fs.readFileSync(path.join(ROOT, 'privacy.html'), 'utf8')) && /Learn tries/.test(fs.readFileSync(path.join(ROOT, 'privacy.html'), 'utf8')), 'the privacy page says the streak and Labs progress go with an account');
+    expect(/study streak/.test(fs.readFileSync(at('privacy.html'), 'utf8')) && /Learn tries/.test(fs.readFileSync(at('privacy.html'), 'utf8')), 'the privacy page says the streak and Labs progress go with an account');
     expect(!errors.length, 'page errors: ' + errors.join('; '));
   } finally { await ctx.close(); }
 });
 
 test('an update reaches every device: the pages, the service worker cache and the Labs modules (the Museum too) carry one version, so a browser never keeps an old Labs', async () => {
-  const read = (f) => fs.readFileSync(require('path').join(ROOT, f), 'utf8');
+  const read = (f) => fs.readFileSync(at(f), 'utf8');
   const v = (read('sw.js').match(/cassie-v(\d+)/) || [])[1];
   const pages = ['app.html', 'start.html', 'index.html', 'bot.html', 'rescue.html', 'let.html'].map((f) => [f, [...read(f).matchAll(/\.(?:js|css)\?v=(\d+)/g)].map((m) => m[1])]);
   const off = pages.filter(([, vs]) => vs.some((x) => x !== v)).map(([f]) => f);
@@ -643,16 +647,16 @@ const authErr = (page) => page.locator('.auth-err:not([hidden])').textContent();
 // change the app's return address and this list (and the console) together.
 const GOOGLE_REDIRECT_URIS = ['https://askcassie.study/app.html'];
 test('leftover code stays out: styles for the old phone Home and the old landing sections, and two functions nothing called, aren’t back', async () => {
-  const css = fs.readFileSync(path.join(ROOT, 'style.css'), 'utf8'), landing = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  const css = fs.readFileSync(at('style.css'), 'utf8'), landing = fs.readFileSync(at('index.html'), 'utf8');
   const gone = (src, names) => names.filter((n) => new RegExp('\\.' + n + '(?![\\w-])').test(src));
   const back = gone(css, ['home-head', 'home-hi', 'home-round', 'home-avatar', 'home-tiles', 'home-today', 'today-card', 'home-sec', 'home-link', 'recent', 'recent-go', 'home-ask', 'tile', 'chat-empty', 'home-bar', 'hub-head', 'hub-bot-s', 'hub-sub']);
   expect(!back.length, 'style.css has styles nothing uses again: ' + back.join(', '));
   const back2 = gone(landing, ['steps', 'step', 'bento', 'span2', 'span3', 'span4', 'span6']).concat(/\.tile\.(v|dark)\b/.test(landing) ? ['tile.v / tile.dark'] : []);
   expect(!back2.length, 'index.html has styles for sections it no longer has: ' + back2.join(', '));
-  expect(!/function accentInk\b/.test(fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8')) && !/hasPreview/.test(fs.readFileSync(path.join(ROOT, 'labs/previews.js'), 'utf8')), 'accentInk and hasPreview are gone (nothing called them)');
+  expect(!/function accentInk\b/.test(fs.readFileSync(at('app.js'), 'utf8')) && !/hasPreview/.test(fs.readFileSync(at('labs/previews.js'), 'utf8')), 'accentInk and hasPreview are gone (nothing called them)');
   // the second sweep: a helper nothing calls, a mood map whose answer was always replaced, a style no page uses,
   // an attribute nothing reads, checks that can't fail, an option nobody passes, and a promo tool whose pictures nothing uses
-  const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
+  const read = (f) => fs.readFileSync(at(f), 'utf8');
   const app = read('app.js');
   expect(!/const ago = /.test(read('native.js')), 'native.js: ago() is gone');
   expect(!/EMOTE_TO_3D/.test(app) && !/dataset\.aud = /.test(app), 'app.js: EMOTE_TO_3D and the doodle hook are gone');
@@ -661,9 +665,9 @@ test('leftover code stays out: styles for the old phone Home and the old landing
   expect(!/\.refer\b/.test(landing), 'index.html: the .refer style is gone');
   expect(!/opts\.clock|CASSIE_FLAT/.test(read('cassie-bot.js')), 'cassie-bot.js: the unused clock option is gone');
   expect(!/older Chrome/.test(read('extension/background.js') + read('extension/popup.js')), 'the extension needs Chrome 116+: no guards for older ones');
-  expect(!fs.existsSync(path.join(ROOT, 'promo/hero/capture.cjs')) && !/capture\.cjs/.test(read('promo/README.md')), 'promo/hero/capture.cjs is gone');
+  expect(!fs.existsSync(at('promo/hero/capture.cjs')) && !/capture\.cjs/.test(read('promo/README.md')), 'promo/hero/capture.cjs is gone');
   // (a plugin switched on for every Claude session in this project, from someone else's GitHub: not without asking)
-  expect(!fs.existsSync(path.join(ROOT, '.claude/settings.json')) || !/enabledPlugins/.test(read('.claude/settings.json')), 'no third-party plugin is switched on for the project');
+  expect(!fs.existsSync(at('.claude/settings.json')) || !/enabledPlugins/.test(read('.claude/settings.json')), 'no third-party plugin is switched on for the project');
 });
 
 // The real server (server/worker.js) on a real SQLite database (Node's own, standing in for Cloudflare D1):
@@ -682,7 +686,7 @@ function fakeD1() {
 }
 async function realServer(env = {}) {
   process.removeAllListeners('warning'); // (node:sqlite says it's experimental)
-  const w = (await import(require('url').pathToFileURL(path.join(ROOT, 'server/worker.js')).href + '?fresh=' + Math.random())).default;
+  const w = (await import(require('url').pathToFileURL(at('server/worker.js')).href + '?fresh=' + Math.random())).default;
   const DB = fakeD1();
   const call = async (method, p, body, headers = {}) => {
     const pending = [];
@@ -918,7 +922,7 @@ test('signed in: the account is asked for once at start-up, and opening Labs rig
 });
 
 test('the extension asks Groq for its model list once per key (not on every picture)', async () => {
-  const ext = path.join(ROOT, 'extension');
+  const ext = at('extension');
   const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));
   const ctx = await chromium.launchPersistentContext(profile, {
     headless: true, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : { channel: 'chromium' }),
@@ -949,21 +953,21 @@ test('an old saved Gemini key (apiKey) moves to geminiKey, is removed from what�
 });
 
 test('askcassie.study is Cassie’s main address: the server lets it (and www) use Cassie but not other sites (askcassie.pages.dev and the old GitHub Pages copy neither), the extension opens it and talks to it, and what Cassie shares names it', async () => {
-  const w = (await import(require('url').pathToFileURL(path.join(ROOT, 'server/worker.js')).href)).default;
+  const w = (await import(require('url').pathToFileURL(at('server/worker.js')).href)).default;
   for (const [o, ok] of [['https://askcassie.study', true], ['https://www.askcassie.study', true], ['https://askcassie.pages.dev', false], ['https://usernamehaze.github.io', false], ['https://askcassie.study.evil.example', false], ['https://evil.example', false]]) {
     const r = await w.fetch(new Request('https://cassie.failanzahazel.workers.dev/chat', { method: 'OPTIONS', headers: { origin: o } }), {}, { waitUntil() {} });
     expect((r.headers.get('access-control-allow-origin') === o) === ok, `the server ${ok ? 'lets' : 'doesn’t let'} ${o} use it: ` + r.headers.get('access-control-allow-origin'));
   }
-  const man = JSON.parse(fs.readFileSync(path.join(ROOT, 'extension/manifest.json'), 'utf8'));
+  const man = JSON.parse(fs.readFileSync(at('extension/manifest.json'), 'utf8'));
   expect(man.homepage_url === 'https://askcassie.study/', 'the extension’s home page: ' + man.homepage_url);
   const bridge = man.content_scripts.find((c) => c.js.includes('bridge.js'));
   for (const m of ['https://askcassie.study/*', 'https://www.askcassie.study/*', 'https://askcassie.pages.dev/*']) expect(bridge.matches.includes(m), 'the extension talks to Cassie on ' + m + ': ' + bridge.matches);
-  const bg = fs.readFileSync(path.join(ROOT, 'extension/background.js'), 'utf8');
+  const bg = fs.readFileSync(at('extension/background.js'), 'utf8');
   expect(/CASSIE_APP_URL = 'https:\/\/askcassie\.study\/app\.html'/.test(bg) && /'https:\/\/askcassie\.study\/extension-version\.json'/.test(bg), 'the extension opens askcassie.study and checks it for updates');
-  const pop = fs.readFileSync(path.join(ROOT, 'extension/popup.js'), 'utf8') + fs.readFileSync(path.join(ROOT, 'extension/popup.html'), 'utf8');
+  const pop = fs.readFileSync(at('extension/popup.js'), 'utf8') + fs.readFileSync(at('extension/popup.html'), 'utf8');
   expect(!/askcassie\.pages\.dev/.test(pop), 'the extension’s download link is on askcassie.study');
   for (const f of ['app.js', 'bot.html', 'server/worker.src.js']) {
-    const src = fs.readFileSync(path.join(ROOT, f), 'utf8').replace(/DEFAULT_ORIGINS = \[[^\]]*\]/, '').replace(/\(default: [^)]*\)/g, '');
+    const src = fs.readFileSync(at(f), 'utf8').replace(/DEFAULT_ORIGINS = \[[^\]]*\]/, '').replace(/\(default: [^)]*\)/g, '');
     expect(!/askcassie\.pages\.dev/.test(src), f + ' names askcassie.study, not askcassie.pages.dev');
   }
 });
@@ -986,7 +990,7 @@ test('sign in with Google: the return address sent to Google is one registered i
       await c.route((u) => u.origin === origin, (route) => {
         let f = new URL(route.request().url()).pathname.slice(base.length) || '/';
         if (f === '/' || f === '/app') f = '/app.html';
-        const file = path.join(ROOT, decodeURIComponent(f));
+        const file = at(decodeURIComponent(f));
         if (!file.startsWith(ROOT) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) return route.fulfill({ status: 404, body: '' });
         return route.fulfill({ body: fs.readFileSync(file), contentType: types[path.extname(file)] || 'application/octet-stream' });
       });
@@ -1619,16 +1623,16 @@ test('support.html: the help page the stores link to loads with no errors, every
   const text = await page.evaluate(() => document.body.innerText);
   expect(!/[\u2013\u2014]/.test(text), 'no long dashes on the page');
   const mail = (h) => (h.match(/[\w.+-]+@[\w-]+\.[\w.]+/) || [])[0];
-  const privacyMail = mail(fs.readFileSync(path.join(ROOT, 'privacy.html'), 'utf8').split('<h2>Contact</h2>')[1] || '');
+  const privacyMail = mail(fs.readFileSync(at('privacy.html'), 'utf8').split('<h2>Contact</h2>')[1] || '');
   expect(privacyMail && (await page.locator(`a[href="mailto:${privacyMail}"]`).count()) === 1, `the contact email is privacy.html's (${privacyMail})`);
   // (Cassie's own address, the same on every page that gives one)
-  const termsMail = mail(fs.readFileSync(path.join(ROOT, 'terms.html'), 'utf8').split('<h2>Contact</h2>')[1] || '');
+  const termsMail = mail(fs.readFileSync(at('terms.html'), 'utf8').split('<h2>Contact</h2>')[1] || '');
   expect(privacyMail === 'askcassie.study@gmail.com' && termsMail === privacyMail, `privacy.html and terms.html give Cassie's own email: ${privacyMail}, ${termsMail}`);
-  expect(/Report a problem or suggest something/.test(text) && /Report a problem or suggest something/.test(fs.readFileSync(path.join(ROOT, 'app.html'), 'utf8')), 'it names the app’s own Report a problem button');
+  expect(/Report a problem or suggest something/.test(text) && /Report a problem or suggest something/.test(fs.readFileSync(at('app.html'), 'utf8')), 'it names the app’s own Report a problem button');
   // every link on the page (on this site) answers
   const links = await page.evaluate(() => [...document.querySelectorAll('a[href]')].map((a) => a.href).filter((h) => h.startsWith(location.origin)));
   // (the extension zip is made when the site is built, like the landing page's own download link)
-  for (const l of links) { if (/cassie-extension\.zip$/.test(l)) { expect(fs.existsSync(path.join(ROOT, '_site/cassie-extension.zip')), 'the built site has the extension download'); continue; } const r = await page.request.get(l); expect(r.ok(), 'a link on the help page is broken: ' + l + ' ' + r.status()); }
+  for (const l of links) { if (/cassie-extension\.zip$/.test(l)) { expect(fs.existsSync(at('_site/cassie-extension.zip')), 'the built site has the extension download'); continue; } const r = await page.request.get(l); expect(r.ok(), 'a link on the help page is broken: ' + l + ' ' + r.status()); }
   expect(links.length >= 4, 'it links home, privacy, terms and the extension in the store: ' + links.length);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'no sideways scroll on a phone');
   for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(150); const { bad } = await contrastIssues(page, 'body'); expect(!bad.length, `readable in ${scheme} mode: ` + bad.join(' | ')); }
@@ -1653,13 +1657,13 @@ test('terms.html: every paid plan is a pass that never renews by itself (Monthly
   expect(!/[—–]/.test(all), 'no dashes in the terms');
   await ctx.close();
   // and still no payment code anywhere until the payment account is ready
-  const code = ['app.js', 'server/worker.src.js', 'extension/background.js', 'landing/landing.js'].map((f) => fs.readFileSync(path.join(ROOT, f), 'utf8')).join('\n');
+  const code = ['app.js', 'server/worker.src.js', 'extension/background.js', 'landing/landing.js'].map((f) => fs.readFileSync(at(f), 'utf8')).join('\n');
   expect(!/lemonsqueezy\.com|LEMON_API_KEY/i.test(code) && !/\b(?:sk|pk)_(?:test|live)_[A-Za-z0-9]{8,}|whsk_[A-Za-z0-9]{8,}/.test(code), 'payments go through PayMongo only, and no key is ever written in the code (keys are Cloudflare Secrets)');
   expect(/Payments are made on PayMongo's secure page/.test(paid.replace(/’/g, "'")) && /Cassie never sees your card number/.test(paid) && /A US\$ price is charged in pesos/.test(paid), 'terms: how paying works');
 });
 
 test('the pricing page and the app’s Plans say exactly what the server allows: questions, smarter answers and pictures per plan, nothing unlimited but your own key, nothing that isn’t built', async (b) => {
-  const src = fs.readFileSync(path.join(ROOT, 'server/worker.src.js'), 'utf8');
+  const src = fs.readFileSync(at('server/worker.src.js'), 'utf8');
   const num = (name) => +src.match(new RegExp(`env\\.${name}, (\\d+)\\)`))[1];
   const lim = {
     free: { q: num('FREE_DAILY_QUESTIONS'), smart: num('FREE_CLAUDE_LIMIT'), gpic: num('FREE_PICTURES_WEEK') },
@@ -1683,7 +1687,7 @@ test('the pricing page and the app’s Plans say exactly what the server allows:
   expect(!/[—–]/.test(all), 'no dashes');
   await ctx.close();
   // the app's Plans page says the same
-  const app = fs.readFileSync(path.join(ROOT, 'app.html'), 'utf8');
+  const app = fs.readFileSync(at('app.html'), 'utf8');
   const plans = app.slice(app.indexOf('class="set-plans"'), app.indexOf('</section>', app.indexOf('class="set-plans"'))).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
   expect(plans.includes(`${lim.free.q} questions a day`) && plans.includes(`${lim.plus.q} questions a day`) && plans.includes(`${lim.plus.gpic} Gemini pictures a day`) && plans.includes(`${quick} quick pictures a day, plus ${lim.free.gpic} Gemini pictures a week`), 'the app’s Plans match the server: ' + plans);
   expect(!/research runs|file reviewers|Unlimited (questions|voice)|Unlimited means/i.test(plans), 'the app’s Plans promise nothing the code doesn’t do: ' + plans);
@@ -2105,7 +2109,7 @@ test('v261: My subjects is its own folder next to Lessons and Simulations in a l
 });
 
 test('v264: a guest gets a gentle, once-a-session sign-in nudge at save/retrieve points (My subjects opens, nudge over it, honest privacy promise); the nudge’s Sign in routes to the account page; a signed-in account sees no nudge', async (b) => {
-  const fs = require('fs'), app = fs.readFileSync(require('path').join(ROOT, 'app.js'), 'utf8');
+  const fs = require('fs'), app = fs.readFileSync(at('app.js'), 'utf8');
   // the sign-in screen and the nudge both state the honest privacy promise (source, so it can't silently drift)
   expect(/Your data is private\./.test(app) && /never sells it/.test(app) && /never trains AI on it/.test(app) && /Delete your account and it’s gone/.test(app), 'the honest private-data promise is in the copy');
   const goSubjects = async (page) => {
@@ -2135,7 +2139,7 @@ test('v264: a guest gets a gentle, once-a-session sign-in nudge at save/retrieve
 
 test('v267: Sparks, the daily goal and the streak flame, and school medals: a goal met counts the day (a freeze covers a miss); the flame grows and changes colour at 7, 14, 30, 60 and 100 days; a normal day is a toast, a new flame pops up first and the panel follows; mock scores, quizzes, lessons and early mornings earn medals (one at a time, drop in, flip to the back with the name); My awards shows them all; Reduce Motion keeps it still; it syncs with the account', async (b) => {
   const fs = require('fs'), path = require('path');
-  const src = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
+  const src = (f) => fs.readFileSync(at(f), 'utf8');
   // shipped: in the page, in the site build and in the offline cache; nothing people read has a dash
   expect(/rewards\.css\?v=\d+/.test(src('app.html')) && /<script src="rewards\.js\?v=\d+"><\/script>/.test(src('app.html')), 'app.html loads rewards.css and rewards.js');
   expect(/\brewards\.js\b/.test(src('scripts/build-site.sh')) && /\brewards\.css\b/.test(src('scripts/build-site.sh')) && /'rewards\.js'/.test(src('sw.js')) && /'rewards\.css'/.test(src('sw.js')), 'rewards.js and rewards.css are in the site build and the offline cache');
@@ -2256,7 +2260,7 @@ test('v267: an old memory (from before Sparks) keeps its streak: studied today m
 });
 
 test('v266: the plans screen shows monthly prices first with a Monthly / Semester (Pasado Pass) switch like the website; Free stays free, prices in the local currency, per account; skippable and once a session', async (b) => {
-  const fs = require('fs'), app = fs.readFileSync(require('path').join(ROOT, 'app.js'), 'utf8');
+  const fs = require('fs'), app = fs.readFileSync(at('app.js'), 'utf8');
   // wired into the landing, monthly first, reuses the app's own currency/pricing
   expect(/function frLand\(\)[\s\S]{0,200}frPaywall\(after\)/.test(app) && /function frPaywall\(/.test(app) && /function frPayTag\(/.test(app) && /payCur\(\)/.test(app) && /let frPayBill = 'month'/.test(app), 'the plans screen is wired into frLand, starts monthly, and reuses payCur/pricing');
   const { ctx, page, errors } = await open(b, { server: true, device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off', state: { tab: 'home', plan: null, profile: { name: 'H', role: 'student', grade: 'Grade 10', age: 15, at: 1 } } });
@@ -2341,7 +2345,7 @@ test('v302 security: a bot trap on sign-up, 30 new accounts an hour per network,
   env.DATA_KEY = 'test-data-key-0123456789abcdef';
   expect((await call('GET', '/auth/me', null, auth)).json.account.data.cards.length === 3, 'the key back: the data opens again');
   // the sign-up form: the trap is there, hidden, and never sent by a person
-  const appjs = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
+  const appjs = fs.readFileSync(at('app.js'), 'utf8');
   expect(/<div class="auth-hp" hidden aria-hidden="true">[^]*?name="website"[^]*?tabindex="-1"/.test(appjs) && /f\.website\.value \? \{ website: f\.website\.value \} : \{\}/.test(appjs), 'the sign-up form has the hidden field, and sends it only when filled in');
 });
 test('v297 free Plus trial: the plans screen leads with Start my free trial (one filled button, Free still there), 14 days of Plus from the server, once per account, Plans and You show the days left, one heads-up two days before it ends', async (b) => {
@@ -2394,7 +2398,7 @@ test('v297 free Plus trial: the plans screen leads with Start my free trial (one
 // (v298) every price by where the student is: pesos in the Philippines, US$ elsewhere, the same in the app (plans
 // screen and Settings, Plans) and on the website; the server's, the website's and the app's prices are one table
 test('v298 prices by place: one price table in the server, the website and the app; pesos in the Philippines and US$ elsewhere on the website, the plans screen and Settings, Plans', async (b) => {
-  const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
+  const read = (f) => fs.readFileSync(at(f), 'utf8');
   const num = (s) => JSON.parse(s.replace(/(\w+):/g, '"$1":'));
   const srv = read('server/worker.src.js'), land = read('landing/landing.js'), appjs = read('app.js');
   const sPhp = num(srv.match(/const PAY_PHP = (\{[^\n]+\});/)[1]), sUsd = num(srv.match(/const PAY_USD = (\{[^\n]+\});/)[1]);
@@ -2645,9 +2649,9 @@ test('podcast mode: under a long answer (and from a file in Study tools), the co
 
 test('the Exam Rescue Plan (free, from the landing page): subject, day and topics make a day by day plan at once, made on the device (nothing sent anywhere): each topic learned, then flashcards, then a quiz on a later day, at most 3 a day, a light last day, how to study each task and an exam day checklist; too few days says what gets only a quick look; Save it in Cassie keeps it as an exam plan (a new student keeps it through sign up; Free with a plan already is told); readable in light and dark', async (b) => {
   const RESCUE = APP.replace('app.html', 'rescue.html');
-  const land = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  const land = fs.readFileSync(at('index.html'), 'utf8');
   expect((land.match(/href="rescue\.html"/g) || []).length >= 2, 'the landing page links to it (the hero and the footer)');
-  expect(/rescue\.html let\.html rescue\.css rescue\.js/.test(fs.readFileSync(path.join(ROOT, 'scripts/build-site.sh'), 'utf8')), 'the site build publishes it');
+  expect(/rescue\.html let\.html rescue\.css rescue\.js/.test(fs.readFileSync(at('scripts/build-site.sh'), 'utf8')), 'the site build publishes it');
   const day = (n) => new Date(Date.now() + 8 * 3600e3 + n * 864e5).toISOString().slice(0, 10);
   for (const [device, viewport] of [['Pixel 7', null], ['Desktop Chrome', { width: 1280, height: 800 }]]) {
     const { ctx, page, errors } = await open(b, { device, viewport, state: { exams: [] } });
@@ -2786,8 +2790,8 @@ test('Share my plan: the LET and Rescue plans become a 1080x1350 picture made on
 
 test('the LET Rescue Plan (let.html, linked from the Rescue Plan and the landing page): the level fills in the LET topics (Professional Education, General Education, and the major for Secondary, which is asked for); a review of months quizzes every topic twice; the plan is called by the level and major, with the LET exam day list; the student can change the topics; made on the device; Save it in Cassie keeps it as an exam plan; readable in light and dark', async (b) => {
   const LET = APP.replace('app.html', 'let.html');
-  expect(/href="let\.html"/.test(fs.readFileSync(path.join(ROOT, 'rescue.html'), 'utf8')) && /href="let\.html"/.test(fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8')), 'linked from the Rescue Plan and the landing page');
-  expect(/ let\.html /.test(fs.readFileSync(path.join(ROOT, 'scripts/build-site.sh'), 'utf8')), 'the site build publishes it');
+  expect(/href="let\.html"/.test(fs.readFileSync(at('rescue.html'), 'utf8')) && /href="let\.html"/.test(fs.readFileSync(at('index.html'), 'utf8')), 'linked from the Rescue Plan and the landing page');
+  expect(/ let\.html /.test(fs.readFileSync(at('scripts/build-site.sh'), 'utf8')), 'the site build publishes it');
   const day = (n) => new Date(Date.now() + 8 * 3600e3 + n * 864e5).toISOString().slice(0, 10);
   for (const [device, viewport] of [['Pixel 7', null], ['Desktop Chrome', { width: 1280, height: 800 }]]) {
     const { ctx, page, errors } = await open(b, { device, viewport, state: { exams: [] } });
@@ -3163,7 +3167,7 @@ test('buying a plan: sign in first, then PayMongo’s checkout (pesos; a US$ pla
 });
 
 test('the Pasado Pass: the pricing page opens on Monthly (₱149), the semester pass one tap away, its price a day in ₱ and $, Never renews and 7 days to change your mind; every promise is in the terms; the app’s Plans and Plus sheet say the same; no “Most popular”', async (b) => {
-  const terms = fs.readFileSync(path.join(ROOT, 'terms.html'), 'utf8').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  const terms = fs.readFileSync(at('terms.html'), 'utf8').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
   const ctx = await b.newContext({ viewport: { width: 1280, height: 900 } });
   const page = await ctx.newPage();
   await page.goto(`http://localhost:${APP_PORT}/index.html`);
@@ -3207,7 +3211,7 @@ test('the Pasado Pass: the pricing page opens on Monthly (₱149), the semester 
   for (const [said, inTerms] of promises) expect(said.test(onPage) && inTerms.test(terms), `the page says ${said} and the terms say ${inTerms}`);
   expect(/Founding price\. If you buy your next pass before the one you have ends, you keep the price you started with/.test(terms), 'the founding price is in the terms');
   // nothing renews by itself: no page, no plan and no term says it does
-  const said = [fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8'), fs.readFileSync(path.join(ROOT, 'app.html'), 'utf8'), fs.readFileSync(path.join(ROOT, 'landing/landing.js'), 'utf8'), terms, onPage].join(' ');
+  const said = [fs.readFileSync(at('index.html'), 'utf8'), fs.readFileSync(at('app.html'), 'utf8'), fs.readFileSync(at('landing/landing.js'), 'utf8'), terms, onPage].join(' ');
   expect(!/renews (?:each|every|automatically)|until you cancel|cancel any ?time|billed (?:monthly|yearly)|before (?:each|every) renewal/i.test(said), 'no plan renews by itself, and nothing says one does: ' + (said.match(/.{40}(?:renews (?:each|every|automatically)|until you cancel|cancel any ?time|billed (?:monthly|yearly)|before (?:each|every) renewal).{20}/i) || [''])[0]);
   expect(!/[—–]/.test(onPage), 'no dashes on the pricing page');
   await ctx.close();
@@ -3237,14 +3241,14 @@ test('the Pasado Pass: the pricing page opens on Monthly (₱149), the semester 
   expect(!errors.length, 'page errors: ' + errors.join('; '));
   await actx.close();
   // "Most popular" is gone everywhere
-  for (const f of ['index.html', 'app.html', 'app.js', 'landing/landing.js']) expect(!/Most popular/i.test(fs.readFileSync(path.join(ROOT, f), 'utf8')), `no “Most popular” in ${f}`);
+  for (const f of ['index.html', 'app.html', 'app.js', 'landing/landing.js']) expect(!/Most popular/i.test(fs.readFileSync(at(f), 'utf8')), `no “Most popular” in ${f}`);
 });
 
 test('the FAQ tells the truth: what an account syncs is what the app syncs, chats stay on the device, and paying lists only what Lemon Squeezy offers (no GCash or Maya yet)', async () => {
-  const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  const html = fs.readFileSync(at('index.html'), 'utf8');
   const answer = (q) => { const m = html.match(new RegExp(`<summary>${q}</summary><p>([\\s\\S]*?)</p>`)); return m ? m[1].replace(/<[^>]+>/g, '') : ''; };
   const notes = answer('Where do my notes and chats go\\?'), pay = answer('How do I pay from the Philippines\\?');
-  const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
+  const app = fs.readFileSync(at('app.js'), 'utf8');
   const synced = app.match(/function accountData\(\) \{\s*return \{([^\n]+)\};/)[1].match(/(\w+):/g).map((k) => k.slice(0, -1));
   const SAYS = { letCourse: 'LET course', profile: 'profile', mistakes: 'saved quiz mistakes', cards: 'flashcards', exams: 'exam plans', calItems: 'Calendar notes', progress: 'weekly study counts', audience: 'settings', level: 'settings', accent: 'settings', citationStyle: 'settings', textSize: 'settings', easyRead: 'settings', analytics: 'settings', tour: 'settings', answerStyle: 'settings', helpWith: 'settings', streak: 'study streak', labs: 'Learn progress', subjects: 'subject folders' };
   for (const k of synced) expect(SAYS[k] && notes.includes(SAYS[k]), `the FAQ names what syncs: ${k} (“${SAYS[k]}”) in: ` + notes);
@@ -3254,7 +3258,7 @@ test('the FAQ tells the truth: what an account syncs is what the app syncs, chat
 });
 
 test('the Grand Slam offer doc has its 8 sections, names a file for what Cassie gives today, and has no dashes', async () => {
-  const doc = fs.readFileSync(path.join(ROOT, 'docs/grand-slam-offer.md'), 'utf8');
+  const doc = fs.readFileSync(at('docs/grand-slam-offer.md'), 'utf8');
   const heads = ['What Cassie gives today', 'Dream outcomes by audience', 'Value equation scores', 'Obstacles to solutions', 'The offer', 'Copy ready to paste', 'Changes ranked by impact', 'What not to do, and why'];
   const found = [...doc.matchAll(/^## (\d)\. (.+)$/gm)].map((m) => `${m[1]}. ${m[2].trim()}`);
   expect(found.join('|') === heads.map((h, i) => `${i + 1}. ${h}`).join('|'), 'the 8 sections, in order: ' + found.join(' | '));
@@ -3264,9 +3268,9 @@ test('the Grand Slam offer doc has its 8 sections, names a file for what Cassie 
 });
 
 test('privacy.html explains every table Cassie’s server keeps (a new table fails until the page says what it holds), names the reminders, the early list and the plan, has a Chrome extension section with the Limited Use promise, and the store guide links the privacy page, not the help page', async () => {
-  const src = fs.readFileSync(path.join(ROOT, 'server/worker.src.js'), 'utf8');
+  const src = fs.readFileSync(at('server/worker.src.js'), 'utf8');
   const tables = [...src.matchAll(/CREATE TABLE IF NOT EXISTS (\w+)/g)].map((m) => m[1]);
-  const page = fs.readFileSync(path.join(ROOT, 'privacy.html'), 'utf8').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  const page = fs.readFileSync(at('privacy.html'), 'utf8').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
   const SAID = { // [the table, what privacy.html must say about it]
     users: /Anonymous usage counts/, events: /Anonymous usage counts/, words: /topic words/, feedback: /Problem reports/, quota: /Counts for fair limits/,
     chats: /Counts for fair limits/, accounts: /Your account/, sessions: /your sign ins/, health: null /* (Cassie's own checks: no one's data) */,
@@ -3280,18 +3284,18 @@ test('privacy.html explains every table Cassie’s server keeps (a new table fai
   expect(/Turning reminders off deletes it from our server/.test(page) && /notification service/.test(page), 'the reminders: what is kept, who delivers them, and how to delete');
   expect(/The Chrome extension/.test(page) && /Limited Use/.test(page) && /does not read pages on its own/.test(page) && /Ask about this file/.test(page), 'the extension: what it reads, when, and the Limited Use promise');
   expect(/Anthropic \(Claude\)\s*: writes Cassie’s smarter answers: a few a day on Free/.test(page.replace(/'/g, '’')), 'Claude answers on Free too (Free gets a few smarter answers a day)');
-  const stores = fs.readFileSync(path.join(ROOT, 'STORES.md'), 'utf8');
+  const stores = fs.readFileSync(at('STORES.md'), 'utf8');
   expect(/Privacy policy URL:\*\* `https:\/\/askcassie\.study\/privacy\.html`/.test(stores), 'the store guide says the privacy URL is privacy.html');
   expect(!/[—–]/.test(page), 'no dashes');
 });
 
 test('Google Play, October 2026: every price is the same for everyone (no student or age discount to qualify for), said the same way in the terms and on the pricing page; the app asks for no location, contacts, local network, all files or SMS access, and the Play guide says how to package it without them', async () => {
-  const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
+  const read = (f) => fs.readFileSync(at(f), 'utf8');
   const LINE = 'Each price is the same for everyone. No plan is a student, age or other discount you have to qualify for, so there is nothing to check: no school email, ID or proof of age.';
   for (const f of ['terms.html', 'index.html']) expect(read(f).includes(LINE), f + ' says every price is the same for everyone, with nothing to check');
   expect(!/[–—]/.test(LINE), 'no dashes in it');
   // no restricted permission anywhere in Cassie's own code (the Play app is this web app in Chrome)
-  const own = require('child_process').execSync('git ls-files "*.js" "*.html" "*.json"', { cwd: ROOT }).toString().split('\n').filter((f) => f && !/^(tests|vendor|_site)\//.test(f) && !/three\.module/.test(f));
+  const own = require('child_process').execSync('git ls-files "*.js" "*.html" "*.json"', { cwd: ROOT }).toString().split('\n').filter((f) => f && !/^(scripts\/tests|web\/vendor|_site)\//.test(f) && !/three\.module/.test(f));
   const RESTRICTED = /navigator\.geolocation|navigator\.contacts|ContactsManager|showDirectoryPicker|requestFileSystem|OTPCredential|navigator\.(serial|usb|bluetooth|hid)\b/;
   const hits = own.filter((f) => RESTRICTED.test(read(f)));
   expect(!hits.length, 'no location, contacts, local network, all files or SMS access in the code: ' + hits.join(', '));
@@ -3602,9 +3606,9 @@ test('v280: what the screen recording showed: “draw it” draws what the chat 
     const m = await liveDrawLoad();
     const val = m.check(m.clean(v)), sw = new URL('livedraw.js', location.href);
     return { val, src: await (await fetch(sw)).text() };
-  }, [JSON.parse(fs.readFileSync(path.join(ROOT, 'tests/fixtures/live/valentine.json'), 'utf8')), null]);
+  }, [JSON.parse(fs.readFileSync(at('tests/fixtures/live/valentine.json'), 'utf8')), null]);
   expect(r.val.some((x) => /drawn as a valentine heart symbol, not a real heart/.test(x) && /apex/.test(x)), 'a valentine heart is sent back with how a real heart looks');
-  const good = await page.evaluate(async (h) => { const m = await liveDrawLoad(); return m.check(m.clean(h)).filter((x) => /valentine/.test(x)).length; }, JSON.parse(fs.readFileSync(path.join(ROOT, 'tests/fixtures/live/heart.json'), 'utf8')));
+  const good = await page.evaluate(async (h) => { const m = await liveDrawLoad(); return m.check(m.clean(h)).filter((x) => /valentine/.test(x)).length; }, JSON.parse(fs.readFileSync(at('tests/fixtures/live/heart.json'), 'utf8')));
   expect(good === 0, 'a real heart passes');
   expect(/sp\.rotation\[sp\.userData\.axle\] \+= dt \* 3/.test(r.src) && !/g\.rotation\[spec\.axis\] \+= dt \* 3/.test(r.src), 'a spinning piece turns about its own axle, in place');
   // the bicycle from the recording: built, its wheels upright (taller than they are deep from the front view)
@@ -3615,10 +3619,10 @@ test('v280: what the screen recording showed: “draw it” draws what the chat 
     for (let i = 0; i < made.spec.parts.length; i++) made.view.show(i, true);
     await new Promise((res) => setTimeout(res, 1600));
     const tags = [...st.querySelectorAll('.ld-tag')].filter((t) => !t.hidden).map((t) => t.textContent); made.view.stop(); st.remove(); return tags;
-  }, JSON.parse(fs.readFileSync(path.join(ROOT, 'tests/fixtures/live/bicycle3d.json'), 'utf8')));
+  }, JSON.parse(fs.readFileSync(at('tests/fixtures/live/bicycle3d.json'), 'utf8')));
   expect(built === null || built.length >= 5, 'the bicycle builds, every part named: ' + JSON.stringify(built));
   // her server’s backup brain: the drawing is marked simpler, in words that fit
-  const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
+  const app = fs.readFileSync(at('app.js'), 'utf8');
   expect(/serverSource = res\.headers\.get\('x-cassie-source'\)/.test(app) && (app.match(/simple: !!serverSource && serverSource !== 'claude'/g) || []).length === 2 && /wasn’t free for this one \(busy, or today’s share is used up\)/.test(app), 'a drawing from the backup brain is marked simpler');
   expect(!errors.length, 'no script errors: ' + errors.join(' | '));
   await ctx.close();
@@ -3655,7 +3659,7 @@ test('v279: the app draws like the extension: a photo sent with “draw this” 
   const g = await page.evaluate(async () => { const o = await askBoard('data:image/png;base64,', 'draw the graph of y = x^2', { strokes: [] }); return { pic: !!o.picture, draw: !!o.draw }; });
   expect(!g.pic, 'a graph stays the math board’s: ' + JSON.stringify(g));
   // a model in the chat: real finishes and a floor that catches its shadow, names beside it
-  const src = fs.readFileSync(path.join(ROOT, 'livedraw.js'), 'utf8');
+  const src = fs.readFileSync(at('livedraw.js'), 'utf8');
   expect(/draw3d\(stage, spec, \{ animate, setSay, hint, real: true, callout: true \}\)/.test(src), 'the app’s own 3D view is the realistic one');
   expect(!errors.length, 'no script errors: ' + errors.join(' | '));
   await ctx.close();
@@ -4019,7 +4023,7 @@ test('v247: the 8 button rules: labels say what happens, one filled button per s
   // 1. labels: no bare Submit, OK, Next, Save, Check... anywhere scanned; and the ones that were vague now say what happens
   const lab = Object.entries(scans).filter(([, v]) => v.labels.length).map(([k, v]) => k + ': ' + v.labels.join(', '));
   expect(!lab.length, '1. every label says what happens: ' + lab.join(' | '));
-  const src = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
+  const src = (f) => fs.readFileSync(at(f), 'utf8');
   expect(/bp-savenote">Save note</.test(src('boardprep.js')) && /'Next question' : 'Finish and see my score'/.test(src('boardprep.js')) && /pod-next" hidden>Use these notes</.test(src('app.js')) && /data-t="next">Next step</.test(src('tour.js')) && /pomo-toggle" class="pomo-btn primary">Start timer</.test(src('app.html')) && /'Check my order'/.test(src('labs/games2.js')), '1. the vague labels were renamed (Save note, Next question, Use these notes, Next step, Start timer, Check my order)');
   // 2. one filled button per sheet
   const many = Object.entries(scans).filter(([, v]) => v.many.length).map(([k, v]) => k + ': ' + v.many.join(', '));
@@ -4179,7 +4183,7 @@ test('v244: the ask box gives the answers room (one row at rest in a started cha
   expect(!errors.length, 'page errors: ' + errors.join('; '));
   await ctx.close();
   // the audit is written down
-  const doc = fs.readFileSync(path.join(ROOT, 'docs/design-audit-v244.md'), 'utf8');
+  const doc = fs.readFileSync(at('docs/design-audit-v244.md'), 'utf8');
   expect(/## Needs your decision/.test(doc) && /Hierarchy/.test(doc) && (doc.match(/\| Done \|/g) || []).length >= 15, 'docs/design-audit-v244.md lists the findings, what was done and what needs a decision');
 });
 
@@ -4247,9 +4251,9 @@ test('v241: Learn has College and Board and Licensure exams as separate levels; 
   // and nothing anyone sees has emoji, the owner’s server dashboard too
   const EMO = /[\u{1F000}-\u{1FAFF}☀-⛿✨❄❤✏⏩-⏺▶◀]/u;
   const files = ['server/dashboard.html', 'app.html', 'index.html', 'terms.html', 'privacy.html', 'support.html', 'let.html', 'rescue.html', 'start.html', 'bot.html', 'boardprep.js', 'cards.js', 'study-room.js', 'sketch.js', 'listen.js', 'bot-page.js', 'rescue.js', 'extension/sketch.js',
-    ...fs.readdirSync(path.join(ROOT, 'labs')).filter((f) => f.endsWith('.js')).map((f) => 'labs/' + f)];
-  const bad = files.filter((f) => EMO.test(fs.readFileSync(path.join(ROOT, f), 'utf8')));
-  const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8').split('\n').filter((l) => EMO.test(l) && !/\|✅\|🎉\/i\.test\(reply\)/.test(l));
+    ...fs.readdirSync(at('labs')).filter((f) => f.endsWith('.js')).map((f) => 'labs/' + f)];
+  const bad = files.filter((f) => EMO.test(fs.readFileSync(at(f), 'utf8')));
+  const app = fs.readFileSync(at('app.js'), 'utf8').split('\n').filter((l) => EMO.test(l) && !/\|✅\|🎉\/i\.test\(reply\)/.test(l));
   expect(!bad.length && !app.length, 'no emoji: ' + bad.join(', ') + ' ' + app.map((l) => l.trim().slice(0, 80)).join(' | '));
 });
 
@@ -4359,7 +4363,7 @@ test('exam courses v239: TOEFL iBT (the 2026 tasks), SAT (its eight content area
   expect(/short reviewer lesson on \\"JLPT: kanji readings and writing\\" for the Japanese-Language Proficiency Test \(JLPT\), N3/.test(JSON.stringify(groqCalls.at(-1).messages)), 'the lesson is for N3');
   expect(!errors.length, 'page errors: ' + errors.join('; '));
   await ctx.close();
-  const terms = fs.readFileSync(path.join(ROOT, 'terms.html'), 'utf8');
+  const terms = fs.readFileSync(at('terms.html'), 'utf8');
   expect(/TOEFL® and TOEFL iBT® are registered trademarks of ETS/.test(terms) && /SAT® is a registered trademark of the College/.test(terms) && /Japan Foundation/.test(terms) && /HRD Korea/.test(terms), 'the terms name the new owners');
 });
 
@@ -4394,11 +4398,11 @@ test('exam courses v237: Nursing follows the PRC’s 2025 tables; NCLEX-RN, IELT
   expect(!errors.length, 'page errors: ' + errors.join('; '));
   await ctx.close();
   // the terms and the website
-  const terms = fs.readFileSync(path.join(ROOT, 'terms.html'), 'utf8'), home = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8'), plans = fs.readFileSync(path.join(ROOT, 'app.html'), 'utf8');
+  const terms = fs.readFileSync(at('terms.html'), 'utf8'), home = fs.readFileSync(at('index.html'), 'utf8'), plans = fs.readFileSync(at('app.html'), 'utf8');
   expect(/id="exams"/.test(terms) && /leaked, "recalled" or stolen exam questions/.test(terms) && /registered trademarks of the National Council of State Boards of/.test(terms) && /Rights holders/.test(terms) && /no course promises that you'll pass/.test(terms), 'the terms: the reviewer rule, the owners, a takedown address, no pass promise');
   expect(/class="foot-legal">Not affiliated with the PRC, the Civil Service Commission or any exam’s owner/.test(home) && /terms\.html#exams/.test(home), 'the website says it in the footer');
   expect(/plus NCLEX-RN, IELTS, OET Nursing/.test(plans) && /plus NCLEX-RN, IELTS, OET Nursing/.test(home), 'Pro names the new courses');
-  for (const f of ['terms.html', 'index.html', 'rescue.js']) expect(!/[–—]/.test(fs.readFileSync(path.join(ROOT, f), 'utf8').replace(/<script[\s\S]*?<\/script>/g, '').replace(/replace\(\/\[–—\]\/g/g, '')), f + ': no long dashes');
+  for (const f of ['terms.html', 'index.html', 'rescue.js']) expect(!/[–—]/.test(fs.readFileSync(at(f), 'utf8').replace(/<script[\s\S]*?<\/script>/g, '').replace(/replace\(\/\[–—\]\/g/g, '')), f + ': no long dashes');
 });
 
 test('board exam courses v235: the course asks the exam first (LET, CPALE, Civil Service, Criminology, Nursing, Civil Engineering, Psychometrician), each with its official areas; CPALE and the Civil Service Exam (Professional or Subprofessional) by taps; lessons and practice are taught for that exam; once paid plans are on, Free and Plus open the first 3 lessons and Pro (₱349) opens every one', async (b) => {
@@ -4612,10 +4616,10 @@ test('privacy.html names every outside service the code calls (a new one fails u
     [/\.workers\.dev$/, 'Cloudflare'], // Cassie's own server runs on Cloudflare
   ];
   const libs = /three\.module|GLTFLoader|OrbitControls|BufferGeometryUtils|RoomEnvironment|RoundedBoxGeometry|meshopt/;
-  const files = [...fs.readdirSync(ROOT).filter((f) => f.endsWith('.js')),
-    ...['labs', 'explore', 'extension'].flatMap((d) => fs.readdirSync(path.join(ROOT, d)).filter((f) => f.endsWith('.js')).map((f) => d + '/' + f)),
+  const files = [...fs.readdirSync(WEB).filter((f) => f.endsWith('.js')),
+    ...['labs', 'explore', 'extension'].flatMap((d) => fs.readdirSync(at(d)).filter((f) => f.endsWith('.js')).map((f) => d + '/' + f)),
     'server/worker.src.js'].filter((f) => !libs.test(f));
-  const code = files.map((f) => fs.readFileSync(path.join(ROOT, f), 'utf8')).join('\n');
+  const code = files.map((f) => fs.readFileSync(at(f), 'utf8')).join('\n');
   const hosts = [...new Set([...code.matchAll(/https?:\/\/([a-z0-9.-]+\.[a-z]{2,})/gi)].map((m) => m[1].toLowerCase()))];
   const needed = new Set(), unknown = [];
   for (const h of hosts) {
@@ -4625,10 +4629,10 @@ test('privacy.html names every outside service the code calls (a new one fails u
   }
   // services reached without a web address in our code
   if (/env\.AI\.run\(/.test(code)) needed.add('Cloudflare'); // Workers AI
-  if (/voice-worker/.test(fs.readFileSync(path.join(ROOT, 'voice.js'), 'utf8'))) needed.add('Hugging Face'); // (only if the on-device voice model were used again)
+  if (/voice-worker/.test(fs.readFileSync(at('voice.js'), 'utf8'))) needed.add('Hugging Face'); // (only if the on-device voice model were used again)
   if (/SpeechRecognition/.test(code)) { needed.add('Google'); needed.add('Apple'); } // the browser's own speech-to-text
   expect(!unknown.length, 'Cassie calls a service privacy.html doesn’t know about: ' + unknown.join(', ') + '. Name it on the page (what it gets and why) and add it to this test.');
-  const page = fs.readFileSync(path.join(ROOT, 'privacy.html'), 'utf8').replace(/<[^>]+>/g, ' ');
+  const page = fs.readFileSync(at('privacy.html'), 'utf8').replace(/<[^>]+>/g, ' ');
   const missing = [...needed].filter((n) => !page.includes(n));
   expect(!missing.length, 'privacy.html doesn’t name: ' + missing.join(', '));
   expect(needed.size >= 11, 'the scan found the services (sanity): ' + [...needed].join(', '));
@@ -4782,8 +4786,8 @@ test('care everywhere: Talk with Cassie says it gently with the lines on screen,
 });
 
 test('care in the Chrome extension: a typed question gets care and the lines before any AI, the AI’s own judgement adds them, and its copy of care.js is the app’s', async () => {
-  expect(fs.readFileSync(path.join(ROOT, 'extension/care.js'), 'utf8') === fs.readFileSync(path.join(ROOT, 'care.js'), 'utf8'), 'extension/care.js differs from care.js: copy it over');
-  const ext = path.join(ROOT, 'extension');
+  expect(fs.readFileSync(at('extension/care.js'), 'utf8') === fs.readFileSync(at('care.js'), 'utf8'), 'extension/care.js differs from care.js: copy it over');
+  const ext = at('extension');
   const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));
   const ctx = await chromium.launchPersistentContext(profile, {
     headless: true, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : { channel: 'chromium' }),
@@ -4820,11 +4824,11 @@ test('care in the Chrome extension: a typed question gets care and the lines bef
 });
 
 test('Teach me and Ask Cassie in the extension: she speaks, points at the right part and draws on the page; voice off never speaks and Next moves on; a canvas page is taught from a picture; a snip is taught inside the snip; a page she can’t draw on is taught in the panel with the reason; Escape leaves no trace; Ask answers in the panel and points', async () => {
-  for (const f of ['errors.js', 'sketch.js']) expect(fs.readFileSync(path.join(ROOT, 'extension', f), 'utf8') === fs.readFileSync(path.join(ROOT, f), 'utf8'), `extension/${f} differs from ${f}: copy it over`);
-  const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'extension/manifest.json'), 'utf8'));
+  for (const f of ['errors.js', 'sketch.js']) expect(fs.readFileSync(at('extension', f), 'utf8') === fs.readFileSync(at(f), 'utf8'), `extension/${f} differs from ${f}: copy it over`);
+  const manifest = JSON.parse(fs.readFileSync(at('extension/manifest.json'), 'utf8'));
   expect(manifest.content_scripts[0].js.join() === 'sketch.js,board.js,care.js,mic.js,content.js,errors.js,teach.js,live.js', 'teach.js runs after the board on every page, then live.js: ' + manifest.content_scripts[0].js.join());
   expect(manifest.permissions.slice().sort().join() === 'activeTab,contextMenus,scripting,sidePanel,storage', 'no new permissions: ' + manifest.permissions.join());
-  const ext = path.join(ROOT, 'extension');
+  const ext = at('extension');
   const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));
   const ctx = await chromium.launchPersistentContext(profile, {
     headless: true, viewport: { width: 1200, height: 800 }, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : { channel: 'chromium' }),
@@ -5076,7 +5080,7 @@ test('Teach me and Ask Cassie in the extension: she speaks, points at the right 
 });
 
 test('Cursor Cassie on the page (like Clicky): her cursor follows the mouse when on and is gone when off; Teach me this page from the floating menu points and draws one step at a time, earlier steps stay in grey, × or Escape leaves nothing; the card says where lessons are kept; the lesson is saved in Your lessons with its steps and picture, opens in the Cassie app and can be deleted; voice off never speaks; nothing is read before she is asked', async () => {
-  const ext = path.join(ROOT, 'extension');
+  const ext = at('extension');
   const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));
   const ctx = await chromium.launchPersistentContext(profile, {
     headless: true, viewport: { width: 1200, height: 800 }, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : { channel: 'chromium' }),
@@ -5328,16 +5332,16 @@ test('the landing page’s moving background: it doesn’t measure the page ever
 });
 
 test('the Chrome extension: its button sits beside Open Cassie on computers (none on phones), every download link carries the extension’s version, the built zip is that version, and an old copy is told a new one is ready', async (b) => {
-  const extver = JSON.parse(fs.readFileSync(path.join(ROOT, 'extension/manifest.json'), 'utf8')).version;
+  const extver = JSON.parse(fs.readFileSync(at('extension/manifest.json'), 'utf8')).version;
   // the build: the zip on the site is the extension as it is now, and extension-version.json says so
-  const built = path.join(ROOT, '_site');
+  const built = at('_site');
   expect(fs.existsSync(path.join(built, 'cassie-extension.zip')), 'run bash scripts/build-site.sh first');
   const zipped = JSON.parse(require('child_process').execFileSync('unzip', ['-p', path.join(built, 'cassie-extension.zip'), 'cassie-extension/manifest.json'], { encoding: 'utf8' })).version;
   expect(zipped === extver, `the built zip is version ${zipped}, the extension is ${extver}`);
   expect(JSON.parse(fs.readFileSync(path.join(built, 'extension-version.json'), 'utf8')).version === extver, 'extension-version.json has the extension’s version');
   const site = fs.readFileSync(path.join(built, 'index.html'), 'utf8');
   // (the Version under Add to Chrome is the Chrome Web Store's: that button installs the store's copy)
-  const storever = JSON.parse(fs.readFileSync(path.join(ROOT, 'store-version.json'), 'utf8')).chrome;
+  const storever = JSON.parse(fs.readFileSync(at('store-version.json'), 'utf8')).chrome;
   expect(/^\d+\.\d+\.\d+$/.test(storever), 'store-version.json has the store version: ' + storever);
   expect(site.includes('Version ' + storever + '</small>'), 'the built page shows the store’s Version ' + storever);
   // a computer: the button is in the header, just before Open Cassie, on one line at 1024, 1280 and 1440
@@ -5383,7 +5387,7 @@ test('the Chrome extension: its button sits beside Open Cassie on computers (non
   expect(await pp.locator('.nav a[href="start.html"]').isVisible(), '390x844: Open Cassie is still there');
   await phone.close();
   // the extension: a newer version on the site shows the note in the popup; the same version doesn't
-  const ext = path.join(ROOT, 'extension');
+  const ext = at('extension');
   const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));
   const ectx = await chromium.launchPersistentContext(profile, {
     headless: true, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : { channel: 'chromium' }),
@@ -5430,7 +5434,7 @@ test('the Chrome extension: its button sits beside Open Cassie on computers (non
 test('the extension comes from the browser store in one click (no download): every link goes to the store, Edge, Opera and Brave are named, Firefox is told it is coming, and a store copy never asks to download an update', async (b) => {
   const STORE = 'https://chromewebstore.google.com/detail/hnafgijhojdheggkcjliffbgpdhikbpj';
   // no page links to the zip any more
-  for (const f of ['index.html', 'app.html', 'support.html', 'tour.js']) expect(!/href="cassie-extension\.zip/.test(fs.readFileSync(path.join(ROOT, f), 'utf8')), f + ' still links to the zip download');
+  for (const f of ['index.html', 'app.html', 'support.html', 'tour.js']) expect(!/href="cassie-extension\.zip/.test(fs.readFileSync(at(f), 'utf8')), f + ' still links to the zip download');
   const UA = {
     chrome: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
     edge: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0',
@@ -5456,7 +5460,7 @@ test('the extension comes from the browser store in one click (no download): eve
   await ctx.close();
   // a copy from a store (its manifest has an update_url): a newer version on the site shows no Download note
   const tmp = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-store-'));
-  fs.cpSync(path.join(ROOT, 'extension'), tmp, { recursive: true });
+  fs.cpSync(at('extension'), tmp, { recursive: true });
   const man = JSON.parse(fs.readFileSync(path.join(tmp, 'manifest.json'), 'utf8')); man.update_url = 'https://clients2.google.com/service/update2/crx';
   fs.writeFileSync(path.join(tmp, 'manifest.json'), JSON.stringify(man));
   const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));
@@ -7455,13 +7459,13 @@ test('one Cassie from the first paint: with 3D, no flat Cassie or old drawing is
     await ctx.close();
   }
   // 3. the replaced files are gone, nothing names them, and the site doesn't ship them
-  for (const gone of ['voice', 'tests/fixtures/kokoro']) expect(!fs.existsSync(path.join(ROOT, gone)), gone + ' is deleted');
-  const walk = (d) => fs.readdirSync(path.join(ROOT, d), { withFileTypes: true }).flatMap((e) => (['.git', 'node_modules', '_site', 'promo'].includes(e.name) ? [] : e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]));
+  for (const gone of ['voice', 'tests/fixtures/kokoro']) expect(!fs.existsSync(at(gone)), gone + ' is deleted');
+  const walk = (d) => fs.readdirSync(at(d), { withFileTypes: true }).flatMap((e) => (['.git', 'node_modules', '_site', 'promo'].includes(e.name) ? [] : e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]));
   const named = walk('.').filter((f) => /\.(js|mjs|html|css|sh|json|md)$|_headers$/.test(f) && !/smoke\.cjs$/.test(f))
-    .filter((f) => /voice\/(voice-worker|kokoro|ort-wasm|README|KOKORO)|fixtures\/kokoro|mascot-fallback|huggingface\.co\b(?!\$)/i.test(fs.readFileSync(path.join(ROOT, f), 'utf8')));
+    .filter((f) => /voice\/(voice-worker|kokoro|ort-wasm|README|KOKORO)|fixtures\/kokoro|mascot-fallback|huggingface\.co\b(?!\$)/i.test(fs.readFileSync(at(f), 'utf8')));
   expect(!named.length, 'still names a deleted file or the old voice host: ' + named.join(', '));
-  expect(!/\bvoice\b/.test(fs.readFileSync(path.join(ROOT, 'scripts/build-site.sh'), 'utf8').replace(/voice\.js/g, '')), 'the build no longer copies voice/');
-  if (fs.existsSync(path.join(ROOT, '_site'))) expect(!fs.existsSync(path.join(ROOT, '_site/voice')), 'the built site has no voice/ folder (run the build again)');
+  expect(!/\bvoice\b/.test(fs.readFileSync(at('scripts/build-site.sh'), 'utf8').replace(/voice\.js/g, '')), 'the build no longer copies voice/');
+  if (fs.existsSync(at('_site'))) expect(!fs.existsSync(at('_site/voice')), 'the built site has no voice/ folder (run the build again)');
 });
 
 test('Cursor Cassie: the default Cassie, she reacts to the app', async (b) => {
@@ -7548,7 +7552,7 @@ test('v308: "make a 3d bicycle" and "can you make a bicycle" are drawn live (a m
   await page.waitForTimeout(600);
   expect(await page.evaluate(() => !document.querySelector('.ld-pop') && !!document.querySelector('#chat-log .bubble-user') && /make a 3d bicycle/.test(document.querySelector('#chat-log .bubble-user').textContent) && !/Here.s your picture/.test(document.getElementById('chat-log').innerText)), '"make a 3d bicycle" goes straight to a 3D model, not a picture');
   // the picture service at its limit: a busy status with a picture of the words
-  const PNG = fs.readFileSync(path.join(ROOT, 'icons/icon-192.png'));
+  const PNG = fs.readFileSync(at('icons/icon-192.png'));
   await ctx.route(/pollinations\.ai/, (route) => route.fulfill({ status: 429, body: PNG, contentType: 'image/png', headers: { 'access-control-allow-origin': '*' } }));
   const busy = await page.evaluate(async () => { try { const g = await generateImage('a red bicycle'); return 'shown:' + g.src.slice(0, 40); } catch (e) { return 'refused'; } });
   expect(busy === 'refused', 'the "at its limit" picture is never shown as the student’s picture: ' + busy);
@@ -7560,7 +7564,7 @@ test('v308: "make a 3d bicycle" and "can you make a bicycle" are drawn live (a m
   await ctx.close();
 });
 test('v307 continuous learning in 3D: "how does a jet work?" builds the whole engine; "how does the compressor work?" is answered on the same model (the parts there stay, the camera moves in on the compressor, the rest fades, the case is seen through), and "Ask next" offers what to ask next, one tap each, answered on the same model', async (b) => {
-  const fx = (n) => JSON.parse(fs.readFileSync(path.join(ROOT, 'tests/fixtures/live', n + '.json'), 'utf8'));
+  const fx = (n) => JSON.parse(fs.readFileSync(at('tests/fixtures/live', n + '.json'), 'utf8'));
   const jet = { ...fx('jet3d'), next: ['How does the compressor work?', 'What does the turbine do?'] }, follow = fx('jet3d-follow');
   const asks = [];
   const { page, ctx, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 860 }, server: false, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: (body) => {
@@ -7593,7 +7597,7 @@ test('v307 continuous learning in 3D: "how does a jet work?" builds the whole en
   await ctx.close();
 });
 test('v306 follow-up questions on a drawing, and low data: a question about the drawing on screen is answered ON it (what is there stays and shows at once, only the parts the answer needs are drawn, the part it is about is picked out), through the same checks; a question about something else, a thank you or a quiz is an ordinary message; on low data no reference picture is fetched; older browsers without color-mix get plain colours', async (b) => {
-  const fx = (n) => JSON.parse(fs.readFileSync(path.join(ROOT, 'tests/fixtures/live', n + '.json'), 'utf8'));
+  const fx = (n) => JSON.parse(fs.readFileSync(at('tests/fixtures/live', n + '.json'), 'utf8'));
   const heart = fx('heart'), follow = fx('heart-follow');
   const asks = [];
   const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: (body) => {
@@ -7643,14 +7647,14 @@ test('v306 follow-up questions on a drawing, and low data: a question about the 
   await ctx.route(/commons\.wikimedia\.org|openverse\.org/, (route) => { fetched++; route.abort(); });
   const low = await page.evaluate(async () => { const m = await liveDrawLoad(); document.documentElement.classList.add('lite'); const t0 = Date.now(); const r = await m.findReference('draw how a volcano erupts'); document.documentElement.classList.remove('lite'); return { r, ms: Date.now() - t0 }; });
   expect(low.r === null && low.ms < 50 && fetched === 0, 'in Lite mode (low data) no reference picture is fetched: ' + JSON.stringify(low) + ' ' + fetched);
-  const css = fs.readFileSync(path.join(ROOT, 'style.css'), 'utf8');
+  const css = fs.readFileSync(at('style.css'), 'utf8');
   expect(/@supports not \(color: color-mix\(in srgb, red 50%, blue\)\)/.test(css), 'an older browser without color-mix gets plain colours');
   expect(!errors.length, 'page errors: ' + errors.join(' | '));
   await ctx.close();
 });
 test('v305 drawings, more realistic: every way the AI writes a shape is read (a fan no longer vanishes); spokes stay inside the wheel; planets never sit inside each other; a creature is one body (no floating head), its legs have thickness, and no two parts share a name; dark colours show on dark paper; a dragon in 3D is drawn flat; a real thing is drawn from a free reference picture (an English diagram from Wikimedia Commons), credited on the card; none for living or imaginary things', async (b) => {
   const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' } });
-  const fx = (n) => JSON.parse(fs.readFileSync(path.join(ROOT, 'tests/fixtures/live', n + '.json'), 'utf8'));
+  const fx = (n) => JSON.parse(fs.readFileSync(at('tests/fixtures/live', n + '.json'), 'utf8'));
   const r = await page.evaluate(async (F) => {
     const m = await liveDrawLoad();
     const kinds = (sp) => sp.parts.map((p) => p.shapes.map((s) => s.t).join('+'));
@@ -7676,7 +7680,7 @@ test('v305 drawings, more realistic: every way the AI writes a shape is read (a 
   expect(r.darkLum >= .3, 'a near-black part is brightened on dark paper: ' + r.darkLum);
   expect(r.soft && r.refWords, 'a dragon asked for in 3D is drawn flat; a reference comes with its own words');
   // the reference: Commons first, an English (or wordless) diagram, never one labelled in another language; credited
-  const api = []; const PNG = fs.readFileSync(path.join(ROOT, 'icons/icon-192.png'));
+  const api = []; const PNG = fs.readFileSync(at('icons/icon-192.png'));
   await ctx.route(/commons\.wikimedia\.org\/w\/api\.php/, (route) => {
     const u = route.request().url(); api.push(u);
     const body = /list=search/.test(u) ? { query: { search: [{ title: 'File:Volcano diagram-hi.svg' }, { title: 'File:Volcano scheme.svg' }] } }
@@ -7691,7 +7695,7 @@ test('v305 drawings, more realistic: every way the AI writes a shape is read (a 
   // the card credits it, with a link
   const card = await page.evaluate(async () => { const m = await liveDrawLoad(); const host = document.createElement('div'); document.body.appendChild(host); await m.render(host, { title: 'How a volcano erupts', mode: '2d', ref: { text: 'Volcano scheme.svg, Wikimedia Commons', url: 'https://commons.wikimedia.org/wiki/File:Volcano_scheme.svg' }, parts: [{ label: 'Cone', say: 'a', anchor: [200, 150], shapes: [{ t: 'path', d: 'M100 240 L200 60 L300 240 Z' }, { t: 'line', x1: 200, y1: 60, x2: 200, y2: 240 }] }, { label: 'Ground', say: 'b', anchor: [200, 245], shapes: [{ t: 'line', x1: 0, y1: 240, x2: 400, y2: 240 }, { t: 'line', x1: 0, y1: 250, x2: 400, y2: 250 }] }] }, { animate: false }); const r2 = host.querySelector('.ld-ref'); return r2 ? { text: r2.textContent, href: r2.querySelector('a').href, rel: r2.querySelector('a').rel } : null; });
   expect(card && card.text === 'Drawn from a reference: Volcano scheme.svg, Wikimedia Commons' && /Volcano_scheme/.test(card.href) && card.rel === 'noopener', 'the card says where the reference came from, with a link: ' + JSON.stringify(card));
-  const headers = fs.readFileSync(path.join(ROOT, '_headers'), 'utf8');
+  const headers = fs.readFileSync(at('_headers'), 'utf8');
   expect(/https:\/\/commons\.wikimedia\.org https:\/\/upload\.wikimedia\.org https:\/\/api\.openverse\.org/.test(headers), 'the security policy lets Cassie reach the two picture libraries');
   expect(!errors.length, 'page errors: ' + errors.join(' | '));
   await ctx.close();
@@ -7763,7 +7767,7 @@ test('8-point grid v233: every padding, margin and gap in the stylesheets is on 
   const files = ['style.css', 'labs/labs.css', 'rescue.css', 'landing/home.css', 'bot.html', 'start.html', 'index.html', 'app.html', 'let.html', 'rescue.html'];
   const off = [];
   for (const f of files) {
-    let t = fs.readFileSync(path.join(ROOT, f), 'utf8');
+    let t = fs.readFileSync(at(f), 'utf8');
     if (f.endsWith('.html')) t = [...t.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map((m) => m[1]).join('\n');
     for (const m of t.matchAll(PROPS)) {
       if (/\/\* grid/.test(t.slice(m.index + m[0].length, m.index + m[0].length + 60))) continue;
@@ -7771,8 +7775,8 @@ test('8-point grid v233: every padding, margin and gap in the stylesheets is on 
     }
   }
   expect(!off.length, `${off.length} off-grid spacing values in the stylesheets: ` + off.slice(0, 12).join(' | '));
-  for (const f of ['style.css', 'labs/labs.css', 'rescue.css', 'landing/home.css']) { const t = fs.readFileSync(path.join(ROOT, f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, ''); let d = 0, low = 0; for (const c of t) { if (c === '{') d++; if (c === '}') d--; low = Math.min(low, d); } expect(d === 0 && low === 0, `${f}: every { has its } (a missing one drops every rule after it): ${d}`); }
-  const css = fs.readFileSync(path.join(ROOT, 'style.css'), 'utf8');
+  for (const f of ['style.css', 'labs/labs.css', 'rescue.css', 'landing/home.css']) { const t = fs.readFileSync(at(f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, ''); let d = 0, low = 0; for (const c of t) { if (c === '{') d++; if (c === '}') d--; low = Math.min(low, d); } expect(d === 0 && low === 0, `${f}: every { has its } (a missing one drops every rule after it): ${d}`); }
+  const css = fs.readFileSync(at('style.css'), 'utf8');
   expect(/--sp-7: 40px; --sp-8: 48px; --sp-9: 56px; --sp-10: 64px;/.test(css) && /--tap: 48px;/.test(css), 'the spacing tokens go to 64px and the touch target is 48px');
   // 2. on screen: styled elements' padding and gaps, and the sizes of what you tap
   for (const phone of [false, true]) {
@@ -8060,8 +8064,8 @@ test('Island drop: highlighted words and a photo dropped on Cassie, with Ask abo
 test('the web app has no pop-out (it lives in the Chrome extension)', async (b) => {
   const { ctx, page } = await open(b, { device: 'Desktop Chrome' });
   expect(await page.locator('#popout-btn').count() === 0, 'no pop-out button in the web app');
-  const ext = require('fs').readFileSync(require('path').join(ROOT, 'extension/panel.js'), 'utf8');
-  expect(/documentPictureInPicture/.test(ext) && /id="t-pop"/.test(require('fs').readFileSync(require('path').join(ROOT, 'extension/panel.html'), 'utf8')), 'the extension side panel has the pop-out');
+  const ext = require('fs').readFileSync(at('extension/panel.js'), 'utf8');
+  expect(/documentPictureInPicture/.test(ext) && /id="t-pop"/.test(require('fs').readFileSync(at('extension/panel.html'), 'utf8')), 'the extension side panel has the pop-out');
   await ctx.close();
 });
 
@@ -8184,9 +8188,9 @@ const FAKE_VOICE = (opts) => {
 // when what's left of the month covers all of it; otherwise she types from the start and says so once.
 // If Jessica fails partway, the rest is typed with the same line. No other voice, no Keep going, ever.
 test('every stylesheet is whole: its braces balance and no rule is cut off (a broken one silently drops the rules after it)', async () => {
-  const sheets = ['style.css', 'labs/labs.css', 'landing/landing.css'].filter((f) => fs.existsSync(path.join(ROOT, f)));
+  const sheets = ['style.css', 'labs/labs.css', 'landing/landing.css'].filter((f) => fs.existsSync(at(f)));
   for (const f of sheets) {
-    const css = fs.readFileSync(path.join(ROOT, f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, '""');
+    const css = fs.readFileSync(at(f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, '""');
     let depth = 0, low = 0;
     for (const c of css) { if (c === '{') depth++; else if (c === '}') { depth--; low = Math.min(low, depth); } }
     expect(depth === 0 && low === 0, `${f}: braces don’t balance (end ${depth}, lowest ${low})`);
@@ -8312,14 +8316,14 @@ test.slow('Jessica only: a 7-step lesson and a long Listen in Jessica’s voice 
   await ctx.close();
 
   // nowhere in the app or the extension: "Keep going", or the device's voice for Cassie's words
-  const files = [...fs.readdirSync(ROOT).filter((f) => /\.(js|html)$/.test(f)), ...['labs', 'explore', 'extension', 'landing'].flatMap((d) => fs.readdirSync(path.join(ROOT, d)).filter((f) => /\.(js|html)$/.test(f)).map((f) => d + '/' + f))];
-  const keep = files.filter((f) => /keep going/i.test(fs.readFileSync(path.join(ROOT, f), 'utf8')));
+  const files = [...fs.readdirSync(WEB).filter((f) => /\.(js|html)$/.test(f)), ...['labs', 'explore', 'extension', 'landing'].flatMap((d) => fs.readdirSync(at(d)).filter((f) => /\.(js|html)$/.test(f)).map((f) => d + '/' + f))];
+  const keep = files.filter((f) => /keep going/i.test(fs.readFileSync(at(f), 'utf8')));
   expect(!keep.length, '"Keep going" is still in: ' + keep.join(', '));
   // (v285: the little ones' labs and the games too: every word is in her studio voice)
-  const synth = files.filter((f) => /speechSynthesis|SpeechSynthesisUtterance/.test(fs.readFileSync(path.join(ROOT, f), 'utf8')));
+  const synth = files.filter((f) => /speechSynthesis|SpeechSynthesisUtterance/.test(fs.readFileSync(at(f), 'utf8')));
   expect(!synth.length, 'the device voice is still used in: ' + synth.join(', '));
   // the owner's voice guide: the numbers, what to raise in Cloudflare, no key, no dashes
-  const guide = fs.readFileSync(path.join(ROOT, 'docs/voice-setup.md'), 'utf8');
+  const guide = fs.readFileSync(at('docs/voice-setup.md'), 'utf8');
   expect(/SPEAK_MONTHLY_CHARS/.test(guide) && /7-step/.test(guide) && /flashcard/i.test(guide) && /Checked on \d+ \w+ 20\d\d/.test(guide) && /elevenlabs\.io\/pricing/.test(guide), 'docs/voice-setup.md has the numbers, the date, the source and the variable');
   expect(!/[–—]/.test(guide) && !/sk_[a-z0-9]{20,}|xi-api-key:\s*\w{20,}/i.test(guide), 'no dashes and no key in docs/voice-setup.md');
 });
@@ -8481,10 +8485,10 @@ async function finishTour(page) {
 test('after the tour, on a computer: a video of how the Chrome extension works, once (the video plays, Get the extension and Close, Escape); again from Settings, Help; never on a phone; 44px, no dashes, on screen', async (b) => {
   // the video is real, in two forms, and goes out with the site
   for (const f of ['extension-how.webm', 'extension-how.mp4', 'extension-how.jpg']) {
-    expect(fs.existsSync(path.join(ROOT, 'landing', f)) && fs.statSync(path.join(ROOT, 'landing', f)).size > 20000, 'landing/' + f + ' is there');
-    if (fs.existsSync(path.join(ROOT, '_site'))) expect(fs.existsSync(path.join(ROOT, '_site/landing', f)), '_site/landing/' + f + ' is published');
+    expect(fs.existsSync(at('landing', f)) && fs.statSync(at('landing', f)).size > 20000, 'landing/' + f + ' is there');
+    if (fs.existsSync(at('_site'))) expect(fs.existsSync(at('_site/landing', f)), '_site/landing/' + f + ' is published');
   }
-  expect(/landing/.test(fs.readFileSync(path.join(ROOT, 'scripts/build-site.sh'), 'utf8')), 'the build copies landing/');
+  expect(/landing/.test(fs.readFileSync(at('scripts/build-site.sh'), 'utf8')), 'the build copies landing/');
   // 1. a computer: Done, then the video
   let { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, state: { groqKey: 'gsk_test', tour: 'done', tourVoice: 'off' } });
   await page.evaluate(() => window.CassieTour.start());
@@ -8737,18 +8741,18 @@ test.slow('a mic on every box where a student writes to Cassie (app, Labs, the b
   expect(!errors.length, 'page errors: ' + errors.join('; '));
   await ctx.close();
   // one mic helper for the app and Labs, the same one in the extension; the board stays the same in both
-  expect(fs.readFileSync(path.join(ROOT, 'mic.js'), 'utf8') === fs.readFileSync(path.join(ROOT, 'extension/mic.js'), 'utf8'), 'extension/mic.js is mic.js');
-  expect(fs.readFileSync(path.join(ROOT, 'sketch.js'), 'utf8') === fs.readFileSync(path.join(ROOT, 'extension/sketch.js'), 'utf8'), 'extension/sketch.js is sketch.js');
-  const mic = fs.readFileSync(path.join(ROOT, 'mic.js'), 'utf8');
+  expect(fs.readFileSync(at('mic.js'), 'utf8') === fs.readFileSync(at('extension/mic.js'), 'utf8'), 'extension/mic.js is mic.js');
+  expect(fs.readFileSync(at('sketch.js'), 'utf8') === fs.readFileSync(at('extension/sketch.js'), 'utf8'), 'extension/sketch.js is sketch.js');
+  const mic = fs.readFileSync(at('mic.js'), 'utf8');
   expect(!/localStorage|indexedDB|console\.|track\(|fetch\(/.test(mic), 'the mic keeps and logs nothing');
 });
 
 test('a mic on every box where a student writes to Cassie in the extension (the side panel’s Ask Cassie and Ask a follow-up, the board, the on-page Island, the popup): the words fill the box and the question is sent; not allowed: one plain line; 44px, monochrome, no new permission', async () => {
-  const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'extension/manifest.json'), 'utf8'));
+  const manifest = JSON.parse(fs.readFileSync(at('extension/manifest.json'), 'utf8'));
   expect(manifest.permissions.slice().sort().join() === 'activeTab,contextMenus,scripting,sidePanel,storage' && !manifest.optional_permissions, 'no new permission for the mic: ' + manifest.permissions.join());
   expect(manifest.content_scripts[0].js.includes('mic.js'), 'the mic is on every page');
-  for (const f of ['panel.html', 'popup.html']) expect(/<script src="mic\.js"><\/script>/.test(fs.readFileSync(path.join(ROOT, 'extension', f), 'utf8')), `${f} loads the mic`);
-  const ext = path.join(ROOT, 'extension');
+  for (const f of ['panel.html', 'popup.html']) expect(/<script src="mic\.js"><\/script>/.test(fs.readFileSync(at('extension', f), 'utf8')), `${f} loads the mic`);
+  const ext = at('extension');
   const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));
   const ctx = await chromium.launchPersistentContext(profile, {
     headless: true, viewport: { width: 1200, height: 800 }, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : { channel: 'chromium' }),
@@ -8871,7 +8875,7 @@ test('Apple design: the loading page is a launch screen (the app’s own backgro
     if (look) await ctx.addInitScript((a) => localStorage.setItem('cassie.v2', JSON.stringify({ accent: a })), look);
     // the app is slow to arrive: here it never comes (start.js without its hop into the app; that the hop
     // happens in under a second is checked in the first run test), so the launch screen stays
-    const startJs = fs.readFileSync(path.join(ROOT, 'start.js'), 'utf8');
+    const startJs = fs.readFileSync(at('start.js'), 'utf8');
     expect(/setTimeout\(go, 400\);/.test(startJs), 'start.js goes into the app after 0.4 seconds');
     await ctx.route(/\/start\.js/, (r) => r.fulfill({ contentType: 'text/javascript', body: startJs.replace('setTimeout(go, 400);', '') }));
     const page = await ctx.newPage();
@@ -8883,11 +8887,11 @@ test('Apple design: the loading page is a launch screen (the app’s own backgro
     await ctx.close();
   }
   // 2. the landing page: one typeface (the system's), Apple's greys, nothing under 11px that a person reads
-  const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  const html = fs.readFileSync(at('index.html'), 'utf8');
   // the deleted web fonts and doodle wallpaper: nothing still asks for them
-  const shipped = ['index.html', 'app.html', 'bot.html', 'start.html', 'style.css', 'sw.js', 'scripts/build-site.sh', 'landing/home.css'].map((f) => fs.readFileSync(path.join(ROOT, f), 'utf8')).join('\n');
+  const shipped = ['index.html', 'app.html', 'bot.html', 'start.html', 'style.css', 'sw.js', 'scripts/build-site.sh', 'landing/home.css'].map((f) => fs.readFileSync(at(f), 'utf8')).join('\n');
   expect(!/landing\/fonts|patterns\/|"Inter|'Inter|Instrument Serif/.test(shipped), 'no page or build step refers to the deleted fonts or wallpaper');
-  expect(!/landing\/fonts\.css|Instrument Serif|Inter Tight/.test(html + fs.readFileSync(path.join(ROOT, 'landing/home.css'), 'utf8')), 'the landing page loads no web fonts');
+  expect(!/landing\/fonts\.css|Instrument Serif|Inter Tight/.test(html + fs.readFileSync(at('landing/home.css'), 'utf8')), 'the landing page loads no web fonts');
   for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 800 }]) {
     const ctx = await b.newContext({ viewport });
     await ctx.route(/workers\.dev|groq|fonts\.g/, (r) => r.abort());
@@ -8965,7 +8969,7 @@ async function boardMoves(page, openBoard, label) {
 }
 
 test('extension: side buttons hidden with Hide here come back with a double Ctrl tap or Show side buttons in the pop-up, and hiding says how (once per site)', async () => {
-  const ext = path.join(ROOT, 'extension');
+  const ext = at('extension');
   const ctx = await chromium.launchPersistentContext(fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-')), {
     headless: true, viewport: { width: 1280, height: 800 }, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : { channel: 'chromium' }),
     args: ['--headless=new', `--disable-extensions-except=${ext}`, `--load-extension=${ext}`],
@@ -9009,7 +9013,7 @@ test('extension: side buttons hidden with Hide here come back with a double Ctrl
 });
 
 test('extension: the pop-up is for highlights (a code screenshot opens it too, and Explain reads the picture: What I read, indents kept), closing it keeps it closed on every tab until Ctrl is tapped twice, and it moves by its header and resizes from its edges, remembered after a reload', async () => {
-  const ext = path.join(ROOT, 'extension');
+  const ext = at('extension');
   const ctx = await chromium.launchPersistentContext(fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-')), {
     headless: true, viewport: { width: 1280, height: 800 }, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : { channel: 'chromium' }),
     args: ['--headless=new', `--disable-extensions-except=${ext}`, `--load-extension=${ext}`],
@@ -9106,17 +9110,17 @@ test('the app: the board moves by its title bar and resizes from its edges, and 
 });
 
 test('Cursor Cassie lessons: only the lesson is numbered (not Drive’s toolbar, thumbnails or the list under it), loops hug their part, nothing is drawn on blank space or the top bar, drawings follow the page or offer Look again; the card drags, resizes, minimizes, is remembered and moves off what she points at; follow-up questions typed or said (care first), saved in Your lessons; a cut-off reply keeps its whole steps and an unusable one is asked for once more', async () => {
-  const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'extension/manifest.json'), 'utf8'));
+  const manifest = JSON.parse(fs.readFileSync(at('extension/manifest.json'), 'utf8'));
   expect(manifest.permissions.slice().sort().join() === 'activeTab,contextMenus,scripting,sidePanel,storage', 'no new permission: ' + manifest.permissions.join());
-  for (const f of ['errors.js', 'sketch.js', 'mic.js']) expect(fs.readFileSync(path.join(ROOT, 'extension', f), 'utf8') === fs.readFileSync(path.join(ROOT, f), 'utf8'), `extension/${f} is the app’s ${f}`);
-  const ext = path.join(ROOT, 'extension');
+  for (const f of ['errors.js', 'sketch.js', 'mic.js']) expect(fs.readFileSync(at('extension', f), 'utf8') === fs.readFileSync(at(f), 'utf8'), `extension/${f} is the app’s ${f}`);
+  const ext = at('extension');
   const ctx = await chromium.launchPersistentContext(fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-')), {
     headless: true, viewport: { width: 1280, height: 800 }, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : { channel: 'chromium' }),
     args: ['--headless=new', `--disable-extensions-except=${ext}`, `--load-extension=${ext}`],
   });
   try {
     // the viewer page, at a Drive address and at an ordinary one
-    const viewer = fs.readFileSync(path.join(ROOT, 'tests/fixtures/teach/viewer.html'), 'utf8');
+    const viewer = fs.readFileSync(at('tests/fixtures/teach/viewer.html'), 'utf8');
     await ctx.route(/drive\.google\.com|example\.com/, (r) => r.fulfill({ contentType: 'text/html', body: viewer }));
     await ctx.route(/api\.groq\.com|workers\.dev|fonts\.(googleapis|gstatic)\.com|askcassie\.pages\.dev/, (r) => r.abort());
     let sw = null;
@@ -9332,7 +9336,7 @@ test('Cursor Cassie lessons: only the lesson is numbered (not Drive’s toolbar,
 // Cassie's live drawing in the extension: what its tests share (the real extension in a real browser; the AI,
 // her voice and the picture counter are faked or watched in the background)
 async function liveExt({ viewport = { width: 1280, height: 800 } } = {}) {
-  const ext = path.join(ROOT, 'extension');
+  const ext = at('extension');
   const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));
   const ctx = await chromium.launchPersistentContext(profile, {
     headless: true, viewport, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : { channel: 'chromium' }),
@@ -9406,19 +9410,19 @@ async function liveExt({ viewport = { width: 1280, height: 800 } } = {}) {
   const ask = async (q) => { await summon(); await page.fill('.page-input', q); await page.press('.page-input', 'Enter'); };
   const toEnd = async () => { for (let i = 0; i < 12 && (await card()).status !== 'done'; i++) { await tap('.lv-next'); await page.waitForTimeout(120); } };
   const gone = async () => { await page.keyboard.press('Escape'); await page.waitForTimeout(150); await page.keyboard.press('Escape'); await page.waitForTimeout(250); };
-  const fixture = (name) => fs.readFileSync(path.join(ROOT, 'tests/fixtures/live', name + '.json'), 'utf8');
+  const fixture = (name) => fs.readFileSync(at('tests/fixtures/live', name + '.json'), 'utf8');
   const close = async () => { await ctx.close(); fs.rmSync(profile, { recursive: true, force: true }); };
   return { ctx, sw, page, errors, replies, prompts, images, bests, shots, open, world, on, card, tap, until, summon, ask, toEnd, gone, fixture, close, LIVE, LESSON, EXT };
 }
 
 test('Cassie’s live drawing in the extension (3.67): Ctrl twice opens “Ask Cassie about your screen” with a mic; she looks once, when asked, and draws beat by beat on her card beside the page, from her own knowledge when the page lacks it (never “I can’t draw that from this page”); Pause, Play, Back, Next, Replay; Clear and Escape remove everything she drew; the card docks off what the question is about; Reduce Motion draws whole; a highlight still gets its choices and an empty question the page lesson; the parser keeps only what makes sense; no new permission', async () => {
-  const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'extension/manifest.json'), 'utf8'));
+  const manifest = JSON.parse(fs.readFileSync(at('extension/manifest.json'), 'utf8'));
   expect(manifest.permissions.slice().sort().join() === 'activeTab,contextMenus,scripting,sidePanel,storage' && manifest.host_permissions.join() === 'https://api.groq.com/*,<all_urls>' && !manifest.optional_permissions && !manifest.optional_host_permissions, 'no new permission: ' + JSON.stringify([manifest.permissions, manifest.host_permissions]));
   expect(manifest.content_scripts[0].js.join() === 'sketch.js,board.js,care.js,mic.js,content.js,errors.js,teach.js,live.js', 'live.js runs after teach.js on every page: ' + manifest.content_scripts[0].js.join());
-  expect(/<script src="teach\.js"><\/script>\s*<script src="live\.js"><\/script>/.test(fs.readFileSync(path.join(ROOT, 'extension/panel.html'), 'utf8')), 'the side panel loads live.js after teach.js');
-  for (const f of ['errors.js', 'sketch.js', 'mic.js', 'board.js', 'care.js']) expect(fs.readFileSync(path.join(ROOT, 'extension', f), 'utf8') === fs.readFileSync(path.join(ROOT, f), 'utf8'), `extension/${f} is the app’s ${f}`);
-  expect(/It does not read pages on its own/.test(fs.readFileSync(path.join(ROOT, 'privacy.html'), 'utf8')), 'the privacy page still says she does not read pages on her own');
-  const readme = fs.readFileSync(path.join(ROOT, 'extension/README.md'), 'utf8');
+  expect(/<script src="teach\.js"><\/script>\s*<script src="live\.js"><\/script>/.test(fs.readFileSync(at('extension/panel.html'), 'utf8')), 'the side panel loads live.js after teach.js');
+  for (const f of ['errors.js', 'sketch.js', 'mic.js', 'board.js', 'care.js']) expect(fs.readFileSync(at('extension', f), 'utf8') === fs.readFileSync(at(f), 'utf8'), `extension/${f} is the app’s ${f}`);
+  expect(/It does not read pages on its own/.test(fs.readFileSync(at('privacy.html'), 'utf8')), 'the privacy page still says she does not read pages on her own');
+  const readme = fs.readFileSync(at('extension/README.md'), 'utf8');
   expect(/Ctrl/.test(readme) && /draws/.test(readme) && /only when you ask/i.test(readme) && /not for use during a test or\s+quiz/.test(readme), 'the README tells of the live drawing, and keeps its line about tests and quizzes');
   const X = await liveExt();
   const { page, sw, replies, prompts, shots, card, tap, until, summon, ask, toEnd, gone, fixture, LIVE, LESSON, EXT } = X;
@@ -9879,7 +9883,7 @@ test('Cassie’s live drawing, the rest: a follow-up adds to the drawing or star
 });
 
 test('Cassie’s live drawing, real outlines (3.68): a drawing comes in the Cassie app’s own form with its three examples, is drawn by the app’s drawer part by part, each part named as it is drawn, names never on top of each other; her best model (her server) is asked first; a soft or living thing asked for in 3D is drawn flat and she says so; Clear removes it', async () => {
-  const appSrc = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8'), liveSrc = fs.readFileSync(path.join(ROOT, 'extension/live.js'), 'utf8'), bgSrc = fs.readFileSync(path.join(ROOT, 'extension/background.js'), 'utf8');
+  const appSrc = fs.readFileSync(at('app.js'), 'utf8'), liveSrc = fs.readFileSync(at('extension/live.js'), 'utf8'), bgSrc = fs.readFileSync(at('extension/background.js'), 'utf8');
   for (const k of ['PHOTO', 'HOUSE', 'WATER']) { const m = appSrc.match(new RegExp('^const LD_EXAMPLE_' + k + ' = (\\{.*\\});$', 'm')); expect(m && liveSrc.includes(m[1]), 'the ' + k + ' example in the extension is the app’s, word for word'); }
   expect(/if \(msg\.best\) \{\s*try \{ return await viaServer\(/.test(bgSrc) && bgSrc.indexOf('if (msg.best)') < bgSrc.indexOf('try { return await visionViaGemini'), 'a drawing asks Cassie’s server first, the student’s own keys after');
   const X = await liveExt();
@@ -9971,7 +9975,7 @@ test('Cassie’s live drawing, follow-ups (3.74): a question about her flat draw
 });
 
 test('Cassie’s live drawing, accurate (3.69): she is told to draw the very thing in the picture of the screen, in its real colours, and to describe it; the first drawing shows at once, then her own look at a picture of it (Plus and Pro, when her best model drew it) swaps in a corrected one with a line that says so, unless the student has moved on; a 3D model has real finishes, a soft shadow and names beside it; a smaller model is asked again without the examples', async () => {
-  const bgSrc = fs.readFileSync(path.join(ROOT, 'extension/background.js'), 'utf8'), ldSrc = fs.readFileSync(path.join(ROOT, 'livedraw.js'), 'utf8');
+  const bgSrc = fs.readFileSync(at('extension/background.js'), 'utf8'), ldSrc = fs.readFileSync(at('livedraw.js'), 'utf8');
   expect(/if \(msg\.look && !\(lastServer\.source === 'claude' && \/\^\(plus\|pro\)\$\/\.test\(lastServer\.plan\)\)\) return '';/.test(bgSrc), 'her look at her own drawing is for Plus and Pro, when her best model drew it');
   expect(/finish: \['metal', 'plastic', 'rubber', 'wood'\]/.test(ldSrc) && /ShadowMaterial/.test(ldSrc) && /PMREMGenerator/.test(ldSrc), 'a model has real finishes, a studio light and a soft shadow');
   const X = await liveExt();
@@ -10167,14 +10171,14 @@ test('Cassie’s live drawing in the side panel: Ask Cassie draws on the page wh
 });
 
 test('Cassie’s live drawing in 3D: asked for 3D, or to be shown how parts go together, she builds a model part by part over the page on a soft backing of its own, each part named as it is built; Close the case, Pull apart, a tapped part, a sticky note; Clear and Escape remove it; the model builder and three.js are the app’s own copies and load only then; where 3D can’t show (no WebGL, Reduce Motion) the same answer is a flat drawing; in the side panel the model sits in her card; no new permission', async () => {
-  const same = (a, c) => fs.readFileSync(path.join(ROOT, a)).equals(fs.readFileSync(path.join(ROOT, c)));
+  const same = (a, c) => fs.readFileSync(at(a)).equals(fs.readFileSync(at(c)));
   expect(same('livedraw.js', 'extension/livedraw.js'), 'extension/livedraw.js is the app’s livedraw.js: copy it over');
   expect(same('explore/three.module.min.js', 'extension/vendor/three.module.min.js') && same('explore/OrbitControls.js', 'extension/vendor/OrbitControls.js') && same('explore/THREE-LICENSE.txt', 'extension/vendor/THREE-LICENSE.txt'), 'the extension’s three.js, its controls and its licence are the repo’s own');
-  const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'extension/manifest.json'), 'utf8'));
+  const manifest = JSON.parse(fs.readFileSync(at('extension/manifest.json'), 'utf8'));
   expect(manifest.permissions.slice().sort().join() === 'activeTab,contextMenus,scripting,sidePanel,storage' && manifest.host_permissions.join() === 'https://api.groq.com/*,<all_urls>', 'no new permission: ' + JSON.stringify([manifest.permissions, manifest.host_permissions]));
   expect(JSON.stringify(manifest.web_accessible_resources) === JSON.stringify([{ resources: ['livedraw.js', 'vendor/three.module.min.js', 'vendor/OrbitControls.js'], matches: ['<all_urls>'] }]), 'only the model builder and three.js can be loaded by her page script: ' + JSON.stringify(manifest.web_accessible_resources));
   // the plan-first 3D guide is the app's own: its lines are the same in both
-  const appSrc = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8'), liveSrc = fs.readFileSync(path.join(ROOT, 'extension/live.js'), 'utf8');
+  const appSrc = fs.readFileSync(at('app.js'), 'utf8'), liveSrc = fs.readFileSync(at('extension/live.js'), 'utf8');
   for (const line of ['every part touches or sits inside the part it connects to; nothing floats in the air', 'parts that are inside a case are placed inside it, and the case is "shell": true so the student can open it', 'real proportions: a part that is small in the real object is small here; a part inside another is smaller than it', 'Shapes: cylinder {r,r2,len,axis,pos,open,cut}, disc {r,thick,axis,pos}, cone {r,len,axis,pos,dir}, sphere {r,pos,cut}, box {size:[w,h,d],pos}, torus {r,tube,axis,pos}, blades {n,len,width,hub,axis,pos}']) expect(appSrc.includes(line) && liveSrc.includes(line), 'the 3D guide in the extension keeps the app’s line: ' + line);
   const X = await liveExt();
   const { ctx, page, sw, replies, prompts, shots, card, tap, until, ask, toEnd, gone, fixture, LIVE, EXT } = X;
@@ -11470,7 +11474,7 @@ test('for the little ones (Nursery and Kindergarten): Trace letters accepts a tr
   expect(await page.locator('.lab-view:not([hidden]) .kid-btn').count() >= 2, 'big buttons to hear it again and go on');
 
   // no typing, no dashes in their words
-  const text = require('fs').readFileSync(require('path').join(ROOT, 'labs/kids.js'), 'utf8');
+  const text = require('fs').readFileSync(at('labs/kids.js'), 'utf8');
   expect(!/[–—]/.test(text), 'no dashes in kids.js');
   expect(await page.locator('.lab-view:not([hidden]) .lab-stage input, .lab-view:not([hidden]) .lab-panel input').count() === 0, 'nothing to type');
   expect(errors.length === 0, 'page errors: ' + errors.join('; '));
@@ -12489,7 +12493,7 @@ test('Learn’s level folders move like the recording on a computer (1280x800): 
 });
 
 test('Learn’s levels are where the topic is really taught (docs/learn-levels.md): no lab in more than 2 levels, every level has at least 4, the table lists every lab with its sources, and the computer’s Today’s Lab comes from the student’s level (Kindergarten, Grade 5, Grade 11, College)', async (b) => {
-  const doc = fs.readFileSync(path.join(ROOT, 'docs/learn-levels.md'), 'utf8');
+  const doc = fs.readFileSync(at('docs/learn-levels.md'), 'utf8');
   const names = { pre: 'pre', 'Kindergarten': 'pre', 'Grade 5': 'elem', 'Grade 11': 'hs', '2nd year college': 'college' };
   let first = true;
   for (const grade of ['Kindergarten', 'Grade 5', 'Grade 11', '2nd year college']) {
@@ -12876,14 +12880,14 @@ test('v283: Home’s Today shows the goal, the streak and the awards with nothin
   const btn = await page.evaluate(() => [...document.querySelectorAll('.hub .empty-state .es-go:not(.es-alt)')].filter((x) => x.getClientRects().length).map((x) => { const c = getComputedStyle(x); return [x.textContent, c.color, c.backgroundColor]; }));
   expect(btn.length && btn.every(([, c, bg]) => c !== bg), 'an empty state’s button: its words a different colour from the button: ' + JSON.stringify(btn));
   // the 3D Cassie's canvas: always the size of her box
-  const src = fs.readFileSync(path.join(ROOT, 'cassie-bot3d.js'), 'utf8');
+  const src = fs.readFileSync(at('cassie-bot3d.js'), 'utf8');
   expect(/:where\(canvas\.cassie-bot-3d\) \{ width: 100%; height: 100%;/.test(src), 'her 3D canvas fills her box, so it never grows on its own');
   const big = await page.evaluate(async () => { const h = document.createElement('div'); h.style.cssText = 'position:fixed;left:0;top:0;width:80px;height:80px'; document.body.appendChild(h); window.CassieBot.create(h, { state: 'idle' }); await new Promise((r) => setTimeout(r, 4000)); const c = h.querySelector('canvas'); const r = c ? c.getBoundingClientRect() : null; h.remove(); return r ? [Math.round(r.width), Math.round(r.height)] : 'flat'; });
   expect(big === 'flat' || (big[0] <= 80 && big[1] <= 80), 'in a box with no rule for her she stays the size of the box: ' + JSON.stringify(big));
   expect(!consoleErr.some((t) => /feFuncA|attribute slope/.test(t)), 'no glass filter errors: ' + consoleErr.filter((t) => /slope/.test(t)).slice(0, 1).join(''));
   // the 3D check: a wheel lying flat is sent back, the real bicycle is not
   const r3 = await page.evaluate(async ([bike]) => { const m = await liveDrawLoad(); const flat = JSON.parse(JSON.stringify(bike)); flat.parts.forEach((p) => p.shapes.forEach((s) => { if (/wheel/i.test(p.label) && s.axis) s.axis = 'y'; })); const prop = JSON.parse(JSON.stringify(bike)); prop.parts.push({ id: 'prop', label: 'Propeller', size: .3, inside: null, attached: ['frame'], shapes: [{ t: 'blades', n: 3, len: .6, width: .2, hub: .1, axis: 'y', pos: [2.6, -.9, 0] }] });
-    return { ok: m.check3d(m.clean(bike)).filter((x) => /wheel|blades/.test(x)).length, flat: m.check3d(m.clean(flat)).filter((x) => /lies flat/.test(x)).length, prop: m.check3d(m.clean(prop)).filter((x) => /blades face the wrong way/.test(x)).length }; }, [JSON.parse(fs.readFileSync(path.join(ROOT, 'tests/fixtures/live/bicycle3d.json'), 'utf8'))]);
+    return { ok: m.check3d(m.clean(bike)).filter((x) => /wheel|blades/.test(x)).length, flat: m.check3d(m.clean(flat)).filter((x) => /lies flat/.test(x)).length, prop: m.check3d(m.clean(prop)).filter((x) => /blades face the wrong way/.test(x)).length }; }, [JSON.parse(fs.readFileSync(at('tests/fixtures/live/bicycle3d.json'), 'utf8'))]);
   expect(r3.ok === 0 && r3.flat === 2 && r3.prop === 1, 'wheels upright, blades along the airflow: ' + JSON.stringify(r3));
   expect(!errors.length, 'no script errors: ' + errors.join(' | '));
   await ctx.close();
@@ -12926,12 +12930,12 @@ test('v283: with no internet a question waits on the phone (with Cancel, kept af
 });
 
 test('v283: Settings: Save for offline saves Learn’s files for no internet (the list is the repo’s own, every versioned address in it); Cassie’s outfit: 7 choices with her wearing each, a pick is worn at once, Auto keeps the season and wears her scarf on plain days, a holiday still dresses her up', async (b) => {
-  const list = JSON.parse(fs.readFileSync(path.join(ROOT, 'offline-files.json'), 'utf8'));
+  const list = JSON.parse(fs.readFileSync(at('offline-files.json'), 'utf8'));
   const { execFileSync } = require('child_process');
-  execFileSync('node', [path.join(ROOT, 'scripts/offline-files.cjs')]);
-  const fresh = JSON.parse(fs.readFileSync(path.join(ROOT, 'offline-files.json'), 'utf8'));
+  execFileSync('node', [at('scripts/offline-files.cjs')]);
+  const fresh = JSON.parse(fs.readFileSync(at('offline-files.json'), 'utf8'));
   expect(JSON.stringify(list.files) === JSON.stringify(fresh.files), 'offline-files.json is current (run scripts/offline-files.cjs after adding a file to labs/ or explore/)');
-  const code = ['app.js', 'labs/labs.js'].map((f) => fs.readFileSync(path.join(ROOT, f), 'utf8')).join('\n');
+  const code = ['app.js', 'labs/labs.js'].map((f) => fs.readFileSync(at(f), 'utf8')).join('\n');
   const vers = [...code.matchAll(/['"`](?:\.\/)?((?:labs\/|explore\/)?[\w-]+\.(?:js|css))\?v=(\d+)/g)].map((m) => m[1].replace(/^(museum|level-lessons|previews|labs)\.(js|css)$/, 'labs/$1.$2'));
   const covered = (f) => list.versioned.includes(f) || list.fixed.some((x) => x.startsWith(f + '?')) || /^(rescue|boardprep)\.js$/.test(f);
   expect(vers.every(covered), 'every file loaded with a version is saved with it: ' + vers.filter((f) => !covered(f)).join());
@@ -12981,7 +12985,7 @@ test('v283: Listen on an answer shows on Home’s Now playing (Cassie is reading
   await page.click('#talk-btn').catch(async () => { await page.evaluate(() => document.getElementById('talk-btn') && document.getElementById('talk-btn').click()); });
   const loved = await page.waitForFunction(() => { const e = document.querySelector('#cassie-2d-root [data-state]'); return e && e.dataset.state === 'love'; }, null, { timeout: 3000 }).then(() => true, () => false);
   expect(loved, 'Talk mode starts with her caring face');
-  const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
+  const app = fs.readFileSync(at('app.js'), 'utf8');
   expect(/realPhoto\(spec, asked, true\)/.test(app) && /if \(!again\) \{ state\.messages\.push\(\{ role: 'user', content: label \}\)/.test(app), 'Try again on a real photo doesn’t ask a second time');
   expect(/body\.replaceChildren\(cassieEmpty\(e, 'notes'\)\)/.test(app) && /notes: \['talking', 'headphones', ''\]/.test(app), 'the podcast with no notes: Cassie in her headphones');
   expect(!errors.length, 'no script errors: ' + errors.join(' | '));
@@ -13124,7 +13128,7 @@ test('v281 Home widget Now playing: added from Edit Home; hidden on Home while n
   s = await xwShow(page, 'player');
   expect(s && !s.shown && (await page.evaluate(() => window.__np.calls.includes('stop') && nowPlaying.cur === null)), 'Stop ends it, and the widget leaves Home');
   // the podcast player hands its own audio to Now playing, and closing its window while it plays keeps it going
-  const src = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
+  const src = fs.readFileSync(at('app.js'), 'utf8');
   expect(/audio\.addEventListener\('play', \(\) => \{ if \(nowPlaying\.cur !== np && !stopped\) nowPlaying\.set\(np\); \}\);/.test(src) && /if \(player && !player\.playing\(\)\) player\.stop\(\); w\.remove\(\);/.test(src) && /nowPlaying\.clear\(np\); return; \}/.test(src), 'the podcast registers its own audio, keeps playing when its window closes, and leaves at its end');
   expect(!errors.length, 'no script errors: ' + errors.join(' | '));
   await ctx.close();
@@ -13147,7 +13151,7 @@ test('v281 Home widget Streak tier: on Home by default; the flame tier and the d
     expect(s && want.test(s.text), `a streak of ${n}: ` + (s && s.text));
     await ctx.close();
   }
-  const tiers = fs.readFileSync(path.join(ROOT, 'rewards.js'), 'utf8').match(/\{ at: \d+, name: '\w+'/g).length;
+  const tiers = fs.readFileSync(at('rewards.js'), 'utf8').match(/\{ at: \d+, name: '\w+'/g).length;
   expect(tiers === 6, 'the flame’s own six tiers, none added');
 });
 
@@ -13177,7 +13181,7 @@ test('v281 Home widget Jump back in: added from Edit Home; the last 3 Labs and b
   await rows.nth(0).click(); await rows.nth(1).click();
   expect((await page.evaluate(() => window.__go.join())) === 'board:data:image/jpeg,lab:lab5', 'a board reopens its picture, a lab reopens that lab: ' + await page.evaluate(() => window.__go.join()));
   // and the real hooks: Labs tells the app which lab opened, a closed board with a drawing is kept
-  const src = fs.readFileSync(path.join(ROOT, 'labs/labs.js'), 'utf8'), app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
+  const src = fs.readFileSync(at('labs/labs.js'), 'utf8'), app = fs.readFileSync(at('app.js'), 'utf8');
   expect(/if \(opts\.onOpenLab\) \{ try \{ opts\.onOpenLab\(lab\.id, lab\.name\); \}/.test(src) && /onOpenLab: \(id, name\) => recentWork\(\{ kind: 'lab', id, title: name \}\)/.test(app) && /onClose: \(\) => \{ document\.documentElement\.classList\.remove\('board-open'\); boardLeft\(sess, opts\); \}/.test(app), 'Labs and the board record what was opened');
   expect(!errors.length, 'no script errors: ' + errors.join(' | '));
   await ctx.close();
@@ -13671,7 +13675,7 @@ test('Solar System 3D: every orbit in the real order and AU proportion (one squa
     expect(o.zoom > o.neptuneFar * 1.05, `${mode}: the zoom (${o.zoom}) reaches past Neptune (${o.neptuneFar.toFixed(1)})`);
   }
   // the facts the lab shows are the real distances
-  const src = fs.readFileSync(path.join(ROOT, 'labs/space3d.js'), 'utf8');
+  const src = fs.readFileSync(at('labs/space3d.js'), 'utf8');
   expect(/'Distance from Earth', 'about 384,400 km/.test(src) && /'Distance from the Sun now', `\$\{num\(now\.r, 3\)\} AU = \$\{big\(now\.r \* AU_KM\)\} km`/.test(src), 'the distance facts are the real ones (AU from the orbit, not the drawing)');
   // and the lab opens with them, on today's date, with no errors
   await page.evaluate(() => openLabs('space3d'));
@@ -14353,7 +14357,7 @@ test('phone app: Home and the floating tab bar (Home, Chat, Labs, Games, You)', 
 
 test('the landing page is calm, like linear.app: one message and one button in the hero (no "AI" in it), 5 or fewer things in the menu, 7 or fewer sections, every link people need, one live demo and one moving background, a sentence that lights up as you read, for every student, a true privacy line; readable in light and dark at 390 and 1280; no dashes', async (b) => {
   const { contrastIssues } = require('./ui-checks.cjs');
-  const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
+  const sw = fs.readFileSync(at('sw.js'), 'utf8');
   expect(/'landing\/home\.css'/.test(sw) && /'landing\/try\.js'/.test(sw) && !/landing\/(story|desk|play)\./.test(sw), 'the offline copy has the new page’s files, not the old ones');
   for (const [w, h, maxH] of [[390, 844, 16500], [1280, 800, 11000]]) {
     for (const scheme of ['light', 'dark']) {
@@ -14735,11 +14739,11 @@ test('Gemini pictures on the server: “a photo of the answer” redraws the stu
 });
 
 test('one copy of the truth: the extension’s board is the app’s, and the server file you paste matches its source', async () => {
-  for (const f of ['board.js', 'sketch.js', 'care.js']) expect(fs.readFileSync(path.join(ROOT, f), 'utf8') === fs.readFileSync(path.join(ROOT, 'extension', f), 'utf8'), `extension/${f} differs from ${f}: copy it over`);
-  const html = fs.readFileSync(path.join(ROOT, 'server/dashboard.html'), 'utf8').replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
-  const care = fs.readFileSync(path.join(ROOT, 'care.js'), 'utf8'); // (the server's care response is the app's own file)
-  const built = fs.readFileSync(path.join(ROOT, 'server/worker.src.js'), 'utf8').replace('/*__CARE_JS__*/', () => care).replace('__DASHBOARD_HTML__', () => html);
-  expect(built === fs.readFileSync(path.join(ROOT, 'server/worker.js'), 'utf8'), 'server/worker.js is out of date: run  cd server && python3 build.py');
+  for (const f of ['board.js', 'sketch.js', 'care.js']) expect(fs.readFileSync(at(f), 'utf8') === fs.readFileSync(at('extension', f), 'utf8'), `extension/${f} differs from ${f}: copy it over`);
+  const html = fs.readFileSync(at('server/dashboard.html'), 'utf8').replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
+  const care = fs.readFileSync(at('care.js'), 'utf8'); // (the server's care response is the app's own file)
+  const built = fs.readFileSync(at('server/worker.src.js'), 'utf8').replace('/*__CARE_JS__*/', () => care).replace('__DASHBOARD_HTML__', () => html);
+  expect(built === fs.readFileSync(at('server/worker.js'), 'utf8'), 'server/worker.js is out of date: run  cd server && python3 build.py');
 });
 
 test('Claude on the server: the main chat and photos use Claude, Groq covers when it fails', async (b) => {
@@ -16090,7 +16094,7 @@ test('Liquid Glass on a phone: every tap target is at least 44px, and every word
 test('Cassie’s colours: Blush & Sage, picked in Appearance (sage leads for a boy, blush for a girl or unsaid), every word, button, chip, bubble and tab at AA in light and dark at 390x844 and 1280x800, and every colour in style.css comes from a token', async (b) => {
   const { contrastIssues } = require('./ui-checks.cjs');
   // every colour outside the :root token blocks is a token (a hard-coded one is listed)
-  const css = fs.readFileSync(path.join(ROOT, 'style.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, (c) => ' '.repeat(c.length));
+  const css = fs.readFileSync(at('style.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, (c) => ' '.repeat(c.length));
   const left = [], stack = [];
   let seg = 0;
   for (let i = 0; i < css.length; i++) {
@@ -16449,10 +16453,10 @@ test('Liquid Glass turns solid in Lite mode and with Reduce Transparency; Reduce
 });
 
 test('forms check each field as you type: the reason shows under the field in plain words, from one map of messages', async (b) => {
-  const src = fs.readFileSync(path.join(ROOT, 'errors.js'), 'utf8');
+  const src = fs.readFileSync(at('errors.js'), 'utf8');
   expect(/window\.CassieErrors = \{ STRINGS, say, explain, form, empty \}/.test(src), 'one map of messages and one helper (errors.js)');
   // the app shows no raw error text: messages go through the helper
-  const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
+  const app = fs.readFileSync(at('app.js'), 'utf8');
   const raw = app.split('\n').map((l, i) => [i + 1, l]).filter(([, l]) => /(showErr|alert|textContent\s*=)\s*\(?\s*e\d?\.message|err\.textContent = e\.message/.test(l));
   expect(!raw.length, 'raw error text shown at app.js:' + raw.map(([n]) => n).join(', '));
   const taken = `taken${Date.now()}@example.com`;
@@ -16520,7 +16524,7 @@ test('chat: when something fails Cassie says what happened, why and what to do, 
   expect(plain && !/upstream|overloaded|node 7|502|500|error:/i.test(said), 'a failed answer is in plain words from the map: ' + said);
   expect(await page.locator('#chat-log .bubble.error .retry-btn').count() === 1, 'a failed answer offers Try again');
   // every way the chat words an error goes through the one helper
-  const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
+  const app = fs.readFileSync(at('app.js'), 'utf8');
   expect(/function errorText\(err, fallback = 'unknown'\) \{ return CassieErrors\.explain\(err, fallback\); \}/.test(app), 'chat errors go through CassieErrors.explain');
   expect(!/detail\.slice\(0, 140\)|\$\{CV\.error\(\)|data\.error\.message\) \|\||\(\$\{m\.slice\(0, 120\)\}\)/.test(app), 'no raw service text is shown (Groq, Gemini, the voice download, the picture makers)');
   // empty lists: the side menu with no chats, the memory panel, nothing to review
@@ -16542,8 +16546,8 @@ test('Labs in Liquid Glass: 44px tap targets and AA words on a phone (the Labs t
   const { tapTargetIssues, contrastIssues } = require('./ui-checks.cjs');
   // no lab shows a raw error, and every lab error comes from the map
   const raw = [];
-  for (const f of fs.readdirSync(path.join(ROOT, 'labs')).filter((x) => x.endsWith('.js'))) {
-    fs.readFileSync(path.join(ROOT, 'labs', f), 'utf8').split('\n').forEach((l, i) => { if (/(textContent|innerHTML)\s*=.*\b(e|err)\.message|\$\{res\.error\}|: ' \+ e\.message/.test(l)) raw.push(`${f}:${i + 1}`); });
+  for (const f of fs.readdirSync(at('labs')).filter((x) => x.endsWith('.js'))) {
+    fs.readFileSync(at('labs', f), 'utf8').split('\n').forEach((l, i) => { if (/(textContent|innerHTML)\s*=.*\b(e|err)\.message|\$\{res\.error\}|: ' \+ e\.message/.test(l)) raw.push(`${f}:${i + 1}`); });
   }
   expect(!raw.length, 'labs show raw error text at ' + raw.join(', '));
   const { ctx, page } = await open(b, { device: 'iPhone 13', lite: 'off', server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: 'Osmosis is water moving across a membrane.' }) });
@@ -16631,7 +16635,7 @@ test('works offline after the first visit (app opens)', async (b) => {
 });
 
 test('extension: highlights, snips and pastes show up as chats in the Cassie app', async () => {
-  const ext = path.join(ROOT, 'extension');
+  const ext = at('extension');
   const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));
   const ctx = await chromium.launchPersistentContext(profile, {
     headless: true, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : { channel: 'chromium' }),
@@ -16676,7 +16680,7 @@ test('extension: highlights, snips and pastes show up as chats in the Cassie app
 });
 
 test('extension: a refused Gemini model tries the next one, then Cassie’s server (no keys needed)', async () => {
-  const ext = path.join(ROOT, 'extension');
+  const ext = at('extension');
   const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));
   const ctx = await chromium.launchPersistentContext(profile, {
     headless: true, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : { channel: 'chromium' }),
@@ -16718,7 +16722,7 @@ test('extension: a refused Gemini model tries the next one, then Cassie’s serv
 });
 
 test('extension: a Gemini key alone answers (and streams), and covers for a busy Groq', async () => {
-  const ext = path.join(ROOT, 'extension');
+  const ext = at('extension');
   const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));
   const ctx = await chromium.launchPersistentContext(profile, {
     // extensions need full Chromium (not the slim headless shell Playwright uses by default)
@@ -16762,7 +16766,7 @@ test('extension: a Gemini key alone answers (and streams), and covers for a busy
 });
 
 test('extension: highlight help ON or OFF (the switch next to Snip) — off, highlighting is just highlighting', async () => {
-  const ext = path.join(ROOT, 'extension');
+  const ext = at('extension');
   const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));
   const ctx = await chromium.launchPersistentContext(profile, {
     headless: true, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : { channel: 'chromium' }),
@@ -16848,7 +16852,7 @@ test('extension: highlight help ON or OFF (the switch next to Snip) — off, hig
 // Copy code (only the code) and Copy for Colab; Python that runs as it is (checked, fixed once by
 // Cassie); and each student's own names (a theme from their install id, which is never sent).
 test('extension Code: Simple or Complete first, a code box with Copy code and Copy for Colab, a quick check with one fix, and each student’s own names', async () => {
-  const ext = path.join(ROOT, 'extension');
+  const ext = at('extension');
   const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));
   const ctx = await chromium.launchPersistentContext(profile, {
     headless: true, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : { channel: 'chromium' }),
@@ -16963,7 +16967,7 @@ test('extension Code: Simple or Complete first, a code box with Copy code and Co
 });
 
 test('extension: drop a PDF, words or a photo on Cassie’s Island on any page', async () => {
-  const ext = path.join(ROOT, 'extension');
+  const ext = at('extension');
   const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));
   const ctx = await chromium.launchPersistentContext(profile, {
     headless: true, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : { channel: 'chromium' }),

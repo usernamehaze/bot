@@ -2,8 +2,8 @@
 // Draws every app / extension icon from one shape:  node promo/brand/mark.cjs
 const fs = require('fs');
 const path = require('path');
-const { chromium } = require(path.join(__dirname, '../../tests/node_modules/playwright'));
-const ROOT = path.join(__dirname, '../..');
+const { chromium } = require(path.join(__dirname, '../../../scripts/tests/node_modules/playwright'));
+const ROOT = path.join(__dirname, '../../../web'); // (the website: its icons)
 const INK = '#121117', WHITE = '#ffffff';
 // the pointer (same as the cursor everywhere in Cassie), softened by a round stroke
 const P = 'M108 90 L395 259 L275 281 L342 399 L287 422 L225 300 L108 382 Z';
