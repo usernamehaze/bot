@@ -9154,6 +9154,7 @@ test('extension: the pop-up is for highlights (a code screenshot opens it too, a
     // closing keeps it closed: highlights open nothing, on a reload too, with a one-time note
     await page.evaluate((r) => eval(r).querySelector('.popover .header button').click(), R);
     u = await ui();
+    for (let k = 0; k < 20 && !(!u.open && /Double-tap Ctrl to bring Cassie back/.test(u.note)); k++) { await page.waitForTimeout(150); u = await ui(); } // (the note shows a moment later on a slow machine)
     expect(!u.open && /Double-tap Ctrl to bring Cassie back/.test(u.note), 'closed, with the note: ' + JSON.stringify(u));
     await highlight('#plain');
     expect(!(await ui()).open, 'closed: a highlight opens nothing');
@@ -10411,6 +10412,7 @@ test('Cassie’s live drawing in 3D: asked for 3D, or to be shown how parts go t
     const ink1 = (await model()).ink;
     await tap('.lv-next'); await until({ beat: '2' }); await page.waitForTimeout(900);
     m = await model();
+    for (let k = 0; k < 20 && !(m.ink > ink1 && m.tags.join() === '2 Fan'); k++) { await page.waitForTimeout(200); m = await model(); } // (a slow machine builds the part a moment later)
     expect(ink1 > 20 && m.ink > ink1 && m.tags.join() === '2 Fan' && m.corner === 0, 'each beat builds its part, named as it is built, on a see-through stage: ' + JSON.stringify([ink1, m.ink, m.tags, m.corner]));
     if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/live-3d-half.png' });
     await toEnd(); await page.waitForTimeout(900);
@@ -16687,6 +16689,7 @@ test('forms check each field as you type: the reason shows under the field in pl
   await page.click('.auth-switch [data-to=signin]');
   await page.fill('.auth-form [name=email]', ''); await page.fill('.auth-form [name=password]', '');
   await page.click('.auth-go');
+  for (let k = 0; k < 20 && !(/Type your email/.test(await shown('email')) && /Type your password/.test(await shown('password'))); k++) await page.waitForTimeout(150); // (a slow machine shows them a moment later)
   expect(/Type your email/.test(await shown('email')) && /Type your password/.test(await shown('password')), 'empty sign-in says what to type');
   expect(await page.evaluate(() => document.activeElement && document.activeElement.name) === 'email', 'the first box to fix gets the focus');
   await ctx.close();

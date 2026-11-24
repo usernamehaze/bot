@@ -651,7 +651,7 @@ function draw2d(stage, spec, { animate, setSay, hint }) {
     const a = anchorOf(i); if (!a) return null;
     if (!obstacles) obstacles = obstaclesNow();
     const txt = `${i + 1} ${p.label}`;
-    const own = idsIn({ x: a[0] - 4, y: a[1] - 4, w: 8, h: 8 }); // (the shape the anchor sits on: its leader may touch it)
+    const own = new Set([...idsIn({ x: a[0] - 4, y: a[1] - 4, w: 8, h: 8 })].filter((id) => !obstacles.list[id].word)); // (the shape the anchor sits on: its leader may touch it; never a word, even its own: v311)
     let best = null, fs = LABEL_FONT;
     for (const size of [LABEL_FONT, LABEL_FONT - 2]) {
       const w = textW(txt, size) + LABEL_PAD * 2, h = size + LABEL_PAD * 2;
