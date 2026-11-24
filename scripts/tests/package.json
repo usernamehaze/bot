@@ -7,6 +7,6 @@
     "test:fast": "SUITE=fast node smoke.cjs"
   },
   "devDependencies": {
-    "playwright": "1.56.1"
+    "playwright": "1.65.1"
   }
 }
