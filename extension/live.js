@@ -379,7 +379,7 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
   const DRAW_IT = '\n  IMPORTANT: the student asked for a drawing and your last reply had none. Reply in the drawing form, and give every beat at least one part to draw.';
   // One reply from Cassie, read: send(prompt, maxTokens) → her reply. A reply that can't be used (or has no
   // drawing when one was asked for) is asked for once more, more strictly. → { kind, answer, scene, steps, noDraw }
-  // (v306) a follow-up on a flat drawing: she answers ON it (livedraw.js followPrompt and mergeFollow): what is there
+  // (v306, v307 also a 3D model) a follow-up on a drawing in the app's form: she answers ON it (livedraw.js followPrompt and mergeFollow): what is there
   // stays, she draws only what the answer needs. Its checks hold only what she adds; re-asked once with what is wrong.
   // → { scene, from } (from: the beat her answer starts at; 0 for a whole new drawing), or null
   async function followOn({ send, spec, q, maxTokens = 3600 }) {
@@ -401,7 +401,8 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
     const at = beats.length;
     beats.push({ say: r.answer || sp.summary, parts: [] });
     sp.parts.forEach((x, i) => { if (fresh.has(x.id)) beats.push({ say: x.say || x.label, parts: [], part: i }); });
-    return { scene: { dim: 'flat', spec: sp, title: words(sp.title, 60) || 'How it works', caption: r.answer, view: '', about: [], keep: false, beats }, from: at };
+    const d3 = sp.mode === '3d';
+    return { scene: { dim: d3 ? '3d' : 'flat', spec: sp, title: words(sp.title, 60) || 'How it works', caption: r.answer, view: d3 ? '3D model' : '', about: [], keep: false, beats }, from: at, focus: sp.parts.findIndex((x) => x.id === sp.focus) };
   }
   async function from({ send, ask, count = 0, draw = false, maxTokens = 3600 } = {}) {
     let last = null, nudge = '';
@@ -851,7 +852,7 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
     const isFlat = () => cur.dim === 'flat'; // (a flat drawing in the Cassie app's form, drawn by its own drawer)
     const lightPaper = () => !(window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
     const cardStage = $('.lv-stage-card'), floatEl = $('.lv-float'), floatStage = $('.lv-stage-float');
-    let model = null, floating = false, picked = -1, built = 0, lastPic = '';
+    let model = null, floating = false, picked = -1, built = 0, lastPic = '', focusLater = -1; // (focusLater: the part a follow-up is about, picked out once it is all drawn)
     let views = [], cursor = null;
     let at = -1, playing = false, alive = true, cleared = false, done = false;
     let run = 0, raf = 0, gap = 0, mid = null, nextUp = 0, voiceOn = true, asking = 0;
@@ -1224,7 +1225,7 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
       if (i < beats.length - 1) { nextUp = i + 1; gap = setTimeout(() => { if (my === run && alive && playing) startBeat(i + 1); }, 320 * pace); }
       else finish();
     }
-    function finish() { playing = false; done = true; mid = null; setStatus('done'); paintNav(); shownParts(); }
+    function finish() { playing = false; done = true; mid = null; setStatus('done'); paintNav(); shownParts(); if (focusLater >= 0 && isFlat() && model && model.view.focus) model.view.focus(focusLater); focusLater = -1; }
     // a beat shown whole, with nothing moving (paused, and Back or Next)
     function showStill(i) {
       run++; cancelAnimationFrame(raf); clearTimeout(gap); hush();
@@ -1407,7 +1408,7 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
         const q = askIn.value.trim();
         if (!q) { askIn.focus(); return; }
         askIn.value = '';
-        const my = ++asking;
+        const my = ++asking; focusLater = -1;
         // more beats on the drawing that is there (on a 3D model they are words only), or a new scene in its place
         const addBeats = async (list) => {
           if (cleared) { cleared = false; if (!(await build())) await flatInstead(); }
@@ -1430,7 +1431,7 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
         if (playing) pause();
         setStatus('looking');
         // (v306) on a flat drawing she answers ON it: what is there stays, and only what the answer needs is drawn
-        if (isFlat() && !wants3d(q) && !cleared) {
+        if ((isFlat() && !wants3d(q) || is3d()) && !cleared) {
           let on = null;
           try { on = await followOn({ send: opts.send, spec: cur.spec, q }); } catch (err) { on = null; } // (then the usual way, below)
           if (my !== asking || !alive) return;
@@ -1443,6 +1444,8 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
             if (voiceOn && studio) await decideVoice(first);
             if (my !== asking || !alive) return;
             startBeat(first);
+            // (v307) the camera moves in on the part her answer is about (3D); on a drawing it is picked out at the end
+            if (on.from && on.focus >= 0 && model && model.view && model.view.focus) { if (is3d()) model.view.focus(on.focus); else focusLater = on.focus; }
             return;
           }
         }

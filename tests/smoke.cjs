@@ -7540,6 +7540,39 @@ test('v294 tap targets: every button, link, switch and field on a computer’s H
 });
 
 // (v295) Cassie's grammar and vocabulary fit the student: by age or grade, then by how they write in the chat
+test('v307 continuous learning in 3D: "how does a jet work?" builds the whole engine; "how does the compressor work?" is answered on the same model (the parts there stay, the camera moves in on the compressor, the rest fades, the case is seen through), and "Ask next" offers what to ask next, one tap each, answered on the same model', async (b) => {
+  const fx = (n) => JSON.parse(fs.readFileSync(path.join(ROOT, 'tests/fixtures/live', n + '.json'), 'utf8'));
+  const jet = { ...fx('jet3d'), next: ['How does the compressor work?', 'What does the turbine do?'] }, follow = fx('jet3d-follow');
+  const asks = [];
+  const { page, ctx, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 860 }, server: false, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: (body) => {
+    const all = JSON.stringify(body.messages || []); asks.push(all);
+    if (/You check drawings/.test(all)) return { text: JSON.stringify({ missing: [], labels: [], shapes: [], facts: [] }) };
+    if (/asks a follow-up question about it/.test(all)) return { text: JSON.stringify(follow) };
+    return { text: 'A plain answer in words.' };
+  } });
+  const u = await page.evaluate(async ([J, F]) => { const m = await liveDrawLoad(); const r = m.mergeFollow(J, F); return { pr: /New 3D parts use the same units/.test(m.followPrompt(J)) && /"next": \[2 short questions/.test(m.followPrompt(J)), ids: r.spec.parts.map((p) => p.id).join(), focus: r.spec.focus, next: m.clean(r.spec).next, firstNext: m.clean(J).next, schema: /"next":\[2 short questions/.test(liveDrawPrompt(true)) && /"next":\[2 short questions/.test(liveDrawPrompt(false)) }; }, [jet, follow]);
+  expect(u.pr && u.schema, 'a first drawing and a follow-up both ask for what to ask next; a 3D follow-up is told the model’s units');
+  expect(u.ids === 'case,fan,comp,comb,turb,noz,gas,air' && u.focus === 'comp' && u.next.length === 2 && u.firstNext.length === 2, 'the engine stays, the airflow is added, the compressor is the focus: ' + JSON.stringify(u));
+  // the first drawing: the whole engine, with "Ask next"
+  await page.evaluate((J) => { liveDrawFresh = true; state.messages.push({ role: 'user', content: 'how does a jet work? show it in 3D' }); state.messages.push({ role: 'assistant', content: '[I drew a live 3D model: How a jet engine works.]', display: '```cassie-draw\n' + JSON.stringify({ ...J, q: 'how does a jet work' }) + '\n```' }); save(); renderMessage('user', 'how does a jet work? show it in 3D'); renderMessage('assistant', '```cassie-draw\n' + JSON.stringify({ ...J, q: 'how does a jet work' }) + '\n```'); }, jet);
+  await page.waitForSelector('#chat-log .ld .ld-next .ld-next-q', { timeout: 30000 });
+  const chips = await page.evaluate(() => [...document.querySelectorAll('#chat-log .ld-next-q')].map((b) => { const r = b.getBoundingClientRect(), h = getComputedStyle(b, '::before'); return { t: b.textContent, h: Math.round(r.height - parseFloat(h.top) - parseFloat(h.bottom)) }; }));
+  expect(chips.length === 2 && chips[0].t === 'How does the compressor work?' && chips.every((c) => c.h >= 44), '"Ask next" shows her two questions, each a 44px tap: ' + JSON.stringify(chips));
+  // one tap: answered on the same model
+  await page.click('#chat-log .ld-next-q');
+  await page.waitForFunction(() => document.querySelectorAll('#chat-log .ld').length === 2, null, { timeout: 15000 });
+  expect(await page.evaluate(() => document.querySelectorAll('#chat-log .ld-next').length === 0 || [...document.querySelectorAll('#chat-log .ld')][0].querySelector('.ld-next') === null), 'the first drawing’s "Ask next" goes once it is asked');
+  await page.waitForFunction(() => [...document.querySelectorAll('#chat-log .ld')].pop().querySelector('.ld-live.off'), null, { timeout: 30000 });
+  await page.waitForTimeout(1500);
+  const end = await page.evaluate(() => { const ld = [...document.querySelectorAll('#chat-log .ld')].pop(); return { tags: [...ld.querySelectorAll('.ld-tag')].filter((t) => !t.hidden).map((t) => t.textContent), say: ld.querySelector('.ld-say').textContent, next: [...ld.querySelectorAll('.ld-next-q')].map((b) => b.textContent), last: state.messages[state.messages.length - 1].content }; });
+  const followAsk = asks.find((a) => /asks a follow-up question about it/.test(a));
+  expect(followAsk && /How does the compressor work\?/.test(followAsk) && /\\"id\\":\\"comp\\"/.test(followAsk), 'the tap asked her about the compressor, with the engine that is there');
+  expect(end.tags.some((t) => /^8 Squeezed air/.test(t)) && end.tags.some((t) => /^3 Compressor/.test(t)) && /squeeze the air/.test(end.say), 'the same engine, with the squeezed air added and her answer: ' + JSON.stringify(end));
+  expect(end.next.join('|') === 'How does the combustor burn the fuel?|What turns the compressor?' && /^\[I answered on my drawing of How a jet engine works/.test(end.last), 'and what to ask next, again: ' + JSON.stringify(end.next));
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/v307-jet-follow.png' });
+  expect(!errors.length, 'page errors: ' + errors.join(' | '));
+  await ctx.close();
+});
 test('v306 follow-up questions on a drawing, and low data: a question about the drawing on screen is answered ON it (what is there stays and shows at once, only the parts the answer needs are drawn, the part it is about is picked out), through the same checks; a question about something else, a thank you or a quiz is an ordinary message; on low data no reference picture is fetched; older browsers without color-mix get plain colours', async (b) => {
   const fx = (n) => JSON.parse(fs.readFileSync(path.join(ROOT, 'tests/fixtures/live', n + '.json'), 'utf8'));
   const heart = fx('heart'), follow = fx('heart-follow');
@@ -9902,6 +9935,18 @@ test('Cassie’s live drawing, follow-ups (3.74): a question about her flat draw
     await tap('.lv-next'); await page.waitForTimeout(300);
     f = await flat();
     expect(f.shown.every(Boolean) && f.names.some((t) => /^8 To the body/.test(t)), 'then the new part is drawn and named: ' + JSON.stringify(f.names));
+    await X.gone();
+    // (v307) a 3D model: "how does the compressor work?" is answered on the same engine, the camera moves in on it
+    await replies([fixture('jet3d')]);
+    await ask('Draw the full jet engine for me in 3D and explain how it works');
+    await until({ dim: '3d', beat: '0' }, 30000);
+    await replies([fixture('jet3d-follow')]);
+    await page.evaluate(([h, q]) => { const r = document.querySelector(h).shadowRoot; r.querySelector('.lv-ask input').value = q; r.querySelector('.lv-ask').requestSubmit(); }, [LIVE, 'how does the compressor work?']);
+    await until({ dim: '3d', beat: '7' }, 20000);
+    c = await card();
+    const P3 = await prompts();
+    expect(P3.length === 1 && /asks a follow-up question about it/.test(P3[0]) && /New 3D parts use the same units/.test(P3[0]) && /"id":"comp"/.test(P3[0]), 'the model that is there went with the question');
+    expect(c.title === 'How a jet engine works' && /squeeze the air/.test(c.now), 'the same engine, with her answer: ' + c.title + ' / ' + c.now);
     expect(!X.errors.length, 'no script errors: ' + X.errors.join(' | '));
   } finally { await X.close(); }
 });
@@ -10223,12 +10268,12 @@ test('Cassie’s live drawing in 3D: asked for 3D, or to be shown how parts go t
     expect(m.note === 'Power off and unplug first' && m.tags.join() === '1 Board,2 Camera port,3 Ribbon cable,4 Camera,5 Press the latch' && !m.open && m.apart, 'the note and every part: ' + JSON.stringify([m.note, m.tags]));
     expect(await inWorld(`import(chrome.runtime.getURL('livedraw.js')).then((L) => { const s = L.clean(${JSON.stringify(fixture('camera3d'))}); return JSON.stringify([s.parts[2].from, s.parts[2].view, L.check3d(s)]); })`) === '[[0,1.7,0],"front",[]]', 'the cable starts away from its port and slides in, and the model passes the app’s own checks');
     if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/live-3d-fit.png' });
-    // a follow-up on a model: her words are added, the model stays
+    // a follow-up on a model: her words are added, the model stays (v307: she is shown the model that is there)
     await replies([{ answer: 'The blue tab is the latch.', steps: [] }]);
     await page.evaluate(([h, q]) => { const r = document.querySelector(h).shadowRoot; r.querySelector('.lv-ask input').value = q; r.querySelector('.lv-ask').requestSubmit(); }, [LIVE, 'which part is the latch?']);
     await page.waitForFunction((h) => /The blue tab is the latch/.test(document.querySelector(h).shadowRoot.querySelector('.lv-words').textContent), LIVE, { timeout: 10000 });
     P = await prompts(); m = await model();
-    expect(P.length === 1 && /You \(Cassie\) said so far/.test(P[0]) && m.canvas && m.tags.length === 5 && /You asked: which part is the latch\?/.test((await card()).text), 'a follow-up adds her words and keeps the model: ' + JSON.stringify([P.length, m.tags.length]));
+    expect(P.length === 1 && /asks a follow-up question about it/.test(P[0]) && /"id":/.test(P[0]) && m.canvas && m.tags.length === 5 && /You asked: which part is the latch\?/.test((await card()).text), 'a follow-up adds her words and keeps the model: ' + JSON.stringify([P.length, m.tags.length]));
     await gone();
 
     // 5. where 3D can't show, the same answer is a flat drawing
