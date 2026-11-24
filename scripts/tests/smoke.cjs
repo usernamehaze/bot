@@ -5338,6 +5338,7 @@ test('the Chrome extension: its button sits beside Open Cassie on computers (non
   const extver = JSON.parse(fs.readFileSync(fileAt('extension/manifest.json'), 'utf8')).version;
   // the build: the zip on the site is the extension as it is now, and extension-version.json says so
   const built = fileAt('_site');
+  if (!fs.existsSync(path.join(built, 'cassie-extension.zip'))) require('child_process').execFileSync('bash', ['scripts/build-site.sh'], { cwd: ROOT, stdio: 'ignore' }); // (GitHub's test run has no _site yet: build it)
   expect(fs.existsSync(path.join(built, 'cassie-extension.zip')), 'run bash scripts/build-site.sh first');
   const zipped = JSON.parse(require('child_process').execFileSync('unzip', ['-p', path.join(built, 'cassie-extension.zip'), 'cassie-extension/manifest.json'], { encoding: 'utf8' })).version;
   expect(zipped === extver, `the built zip is version ${zipped}, the extension is ${extver}`);
