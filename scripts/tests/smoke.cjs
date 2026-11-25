@@ -3857,7 +3857,7 @@ test('v251: live drawing: "draw me how a jet engine works" builds a 3D model par
   await page.waitForFunction(() => /Cassie built it in 3D/.test((document.querySelector('#chat-log .ld-state') || {}).textContent || ''), null, { timeout: 30000 });
   const j = await page.evaluate(() => ({ tags: [...document.querySelectorAll('#chat-log .ld-tag')].filter((t) => !t.hidden).map((t) => t.textContent), title: document.querySelector('#chat-log .ld-title').textContent, acts: [...document.querySelectorAll('#chat-log .ld-btn')].filter((x) => !x.hidden).map((x) => x.textContent), caseOpen: document.querySelector('#chat-log .ld-btn[aria-pressed]').getAttribute('aria-pressed') }));
   expect(n === 1 && !pics.length && j.title === 'How a jet engine works', '3D: one drawing call, no picture maker: ' + JSON.stringify([n, pics.length, j.title]));
-  expect(['2 Fan', '3 Compressor', '4 Combustor', '5 Turbine', '6 Nozzle'].every((x) => j.tags.includes(x)) && j.caseOpen === 'true' && j.acts.join() === 'Listen,Close the case,Pull apart,Draw again,Quiz me,Show another way', '3D: every part named, the case open to see inside, and the actions: ' + JSON.stringify(j));
+  expect(['2 Fan', '3 Compressor', '4 Combustor', '5 Turbine', '6 Nozzle'].every((x) => j.tags.includes(x)) && j.caseOpen === 'true' && j.acts.join() === 'Pause,Listen,Close the case,Pull apart,Draw again,Quiz me,Show another way,See it flat', '3D: every part named, the case open to see inside, and the actions: ' + JSON.stringify(j));
   await page.click('#chat-log .ld-btn:has(span:text-is("Pull apart"))', { timeout: 8000 }); await page.waitForTimeout(600);
   expect(await page.getAttribute('.ld-btn:has(span:text-is("Put it back"))', 'aria-pressed') === 'true', '3D: Pull apart pulls it apart, and the button says Put it back');
   await page.click('#chat-log .ld-tag:text-is("4 Combustor")', { timeout: 8000 }); await page.waitForTimeout(300);
@@ -7549,6 +7549,74 @@ test('v294 tap targets: every button, link, switch and field on a computer’s H
 });
 
 // (v295) Cassie's grammar and vocabulary fit the student: by age or grade, then by how they write in the chat
+test('v314 moving drawings: blood flows round the heart, lungs and body (blue to red in the lungs, the heart beating); Pause stops it, Next step picks out each part with its own flow, Reduce Motion waits for Play; machines move too (wheels turn, refrigerant goes round, air goes through the jet engine); "how does a bicycle work" is drawn at once, and a machine can be seen flat and in 3D', async (b) => {
+  const sys = [];
+  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 860 }, server: false, book: true, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: (body) => { sys.push(JSON.stringify(body.messages || []).slice(0, 12000)); return { text: 'Words answer.' }; } });
+  // the book: the student's own words find the moving blood flow; the heart alone is still the heart
+  const u = await page.evaluate(async () => {
+    const bk = await liveBookLoad(), m = await liveDrawLoad();
+    const keys = ['make illustrations of how the blood flow from the heart to the body', 'how does blood flow through the heart', 'draw the circulatory system', 'show me the human heart'].map((q) => { const x = bk.fromBook(q); return x ? x.book : '-'; }).join(' ');
+    const c = m.clean(bk.fromBook('draw the circulatory system'));
+    const motion = ['draw a bicycle|0', 'draw a bicycle|1', 'how does a fridge work|0', 'the water cycle|0', 'how does a jet engine work|1', 'how does a washing machine work|1', 'the heart|0'].map((k) => { const [q, d] = k.split('|'); const x = m.clean(bk.fromBook(q, d === '1')); return `${bk.fromBook(q, d === '1').book}:${(x.flows || []).length}:${x.parts.filter((p) => p.spin).length}:${x.parts.filter((p) => p.beat).length}`; });
+    const how = ['how does a washing machine work', 'how do airplanes fly', 'how the blood flows from the heart to the body', 'how does a jet engine work?', 'how does the economy work', 'how does it work', 'How do plants make food?', 'How do I solve 2x + 3 = 7?', 'how does chatgpt work'].map((q) => liveHowRequest(q));
+    return { keys, flows: c.flows.length, red: c.flows.filter((f) => f.to).length, beat: c.parts.filter((p) => p.beat).map((p) => p.id).join(','), issues: m.check(c, 'draw the circulatory system'), motion, how };
+  });
+  expect(u.keys === 'circulation circulation circulation heart', 'the student’s words find the moving blood flow: ' + u.keys);
+  expect(u.flows === 11 && u.red === 3 && /heart/.test(u.beat) && /lungs/.test(u.beat) && !u.issues.length, 'blood flows in 11 paths, changing colour in the lungs and the body, the heart beating, and it passes every check: ' + JSON.stringify(u));
+  expect(u.motion.join(' ') === 'bicycle:0:5:0 bicycle:0:5:0 fridge:7:0:0 water:8:0:0 jet:5:3:0 washer:3:2:0 heart:5:0:5', 'machines and cycles in the book move: ' + u.motion.join(' '));
+  expect(JSON.stringify(u.how) === '[true,true,true,true,false,false,false,false,false]', '"how does it work" about a thing is drawn; an idea, a pronoun or a sum is not: ' + JSON.stringify(u.how));
+  // it moves once it is drawn: dots travel, Pause holds them, Next step picks out a part with its own flow
+  await page.evaluate(async () => { chatLog.innerHTML = ''; const bk = await liveBookLoad(); renderMessage('assistant', '```cassie-draw\n' + JSON.stringify(bk.fromBook('draw the circulatory system')) + '\n```'); });
+  await page.waitForSelector('#chat-log .ld .ld-dot', { state: 'attached', timeout: 15000 });
+  await page.evaluate(() => document.querySelector('#chat-log .ld-stage').scrollIntoView({ block: 'center' }));
+  const at = () => page.evaluate(() => [...document.querySelectorAll('#chat-log .ld-dot')].slice(0, 6).map((d) => d.getAttribute('cx') + ',' + d.getAttribute('cy')).join(' '));
+  const a1 = await at(); await page.waitForTimeout(500); const a2 = await at();
+  const beat = await page.evaluate(() => !!document.querySelector('#chat-log .ld-part[transform]'));
+  expect(a1 !== a2 && beat, 'the blood moves and the heart beats: ' + a1 + ' / ' + a2);
+  await page.click('#chat-log .ld-motion');
+  const p1 = await at(); await page.waitForTimeout(400); const p2 = await at();
+  expect(p1 === p2 && /Play/.test(await page.textContent('#chat-log .ld-motion')), 'Pause holds it still, and the button says Play');
+  await page.click('#chat-log .ld-step'); await page.click('#chat-log .ld-step'); await page.click('#chat-log .ld-step');
+  const step = await page.evaluate(() => { const l = document.querySelector('#chat-log .ld'); return { hint: l.querySelector('.ld-hint').textContent, say: l.querySelector('.ld-say').textContent, lit: [...l.querySelectorAll('.ld-dot')].filter((d) => d.getAttribute('opacity') === '1').length, dim: [...l.querySelectorAll('.ld-dot')].filter((d) => d.getAttribute('opacity') === '.15').length }; });
+  expect(step.hint === 'Showing: Right atrium' && /right atrium/i.test(step.say) && step.lit >= 2 && step.dim > 20, 'Next step picks out the right atrium, with only its own flow lit: ' + JSON.stringify(step));
+  // the AI is told how to make its drawings move
+  expect(await page.evaluate(() => /"flows"/.test(liveDrawPrompt(false)) && /"beat":true/.test(liveDrawPrompt(false)) && /"pts":\[\[x,y,z\]/.test(liveDrawPrompt(true))), 'the AI is asked for flows, beats and turning parts, flat and in 3D');
+  // "how does a bicycle work": drawn at once (no "How should I show it?"), wheels turning; See it in 3D builds it from the book, with no AI
+  await page.evaluate(() => { chatLog.innerHTML = ''; state.messages = []; });
+  sys.length = 0;
+  await page.fill('#prompt-input', 'how does a bicycle work'); await page.click('#send-btn');
+  await page.waitForSelector('#chat-log .ld .ld-motion', { timeout: 40000 }); // (once it has drawn itself)
+  expect(!(await page.$('.ld-pop')) && (await page.textContent('#chat-log .ld-other')).trim() === 'See it in 3D' && !!(await page.$('#chat-log .ld-motion')), 'drawn at once, moving, with See it in 3D');
+  await page.click('#chat-log .ld-other');
+  await page.waitForFunction(() => document.querySelectorAll('#chat-log .ld').length === 2 && [...document.querySelectorAll('#chat-log .ld')].pop().querySelector('.ld-other'), null, { timeout: 30000 });
+  const two = await page.evaluate(() => { const l = [...document.querySelectorAll('#chat-log .ld')].pop(); return { cube: !!l.querySelector('canvas') || /3D/.test(l.querySelector('.ld-state').textContent), other: l.querySelector('.ld-other').textContent.trim(), asked: [...document.querySelectorAll('#chat-log .bubble-user')].map((x) => x.textContent.trim()) }; });
+  expect(two.cube && two.other === 'See it flat' && two.asked.join('|') === 'how does a bicycle work|Show it in 3D' && !sys.some((x) => /explains by DRAWING/.test(x)), 'See it in 3D: the 3D bicycle, from the book (no AI), with See it flat: ' + JSON.stringify(two));
+  // something soft or living stays flat: no 3D button on the blood flow
+  await page.evaluate(async () => { chatLog.innerHTML = ''; const bk = await liveBookLoad(); const s = bk.fromBook('draw the circulatory system'); s.q = 'draw the circulatory system'; liveDrawFresh = false; renderMessage('assistant', '```cassie-draw\n' + JSON.stringify(s) + '\n```'); });
+  await page.waitForSelector('#chat-log .ld .ld-acts button', { timeout: 15000 });
+  expect(!(await page.$('#chat-log .ld-other')), 'the blood flow (soft and living) is not offered in 3D');
+  expect(!errors.length, 'page errors: ' + errors.join(' | '));
+  await ctx.close();
+});
+test('v314 moving drawings with Reduce Motion: nothing moves until Play is tapped, then it does; a 3D model moves too', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 860 }, server: false, book: true, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' } });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.evaluate(async () => { chatLog.innerHTML = ''; const bk = await liveBookLoad(); renderMessage('assistant', '```cassie-draw\n' + JSON.stringify(bk.fromBook('how does a fridge work')) + '\n```'); });
+  await page.waitForSelector('#chat-log .ld .ld-motion', { timeout: 15000 });
+  await page.evaluate(() => document.querySelector('#chat-log .ld-stage').scrollIntoView({ block: 'center' }));
+  const at = () => page.evaluate(() => [...document.querySelectorAll('#chat-log .ld-dot')].slice(0, 5).map((d) => d.getAttribute('cx') + ',' + d.getAttribute('cy')).join(' '));
+  const s1 = await at(); await page.waitForTimeout(400); const s2 = await at();
+  expect(s1 && s1 === s2 && (await page.textContent('#chat-log .ld-motion')).trim() === 'Play', 'with Reduce Motion the refrigerant is shown on its path, still, and the button says Play: ' + s1);
+  await page.click('#chat-log .ld-motion');
+  const m1 = await at(); await page.waitForTimeout(400); const m2 = await at();
+  expect(m1 !== m2, 'Play makes it move');
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.evaluate(async () => { chatLog.innerHTML = ''; const bk = await liveBookLoad(); renderMessage('assistant', '```cassie-draw\n' + JSON.stringify(bk.fromBook('how does a washing machine work', true)) + '\n```'); });
+  await page.waitForSelector('#chat-log .ld .ld-motion', { timeout: 20000 });
+  expect((await page.textContent('#chat-log .ld-motion')).trim() === 'Pause' && !!(await page.$('#chat-log .ld-other')), 'the 3D washing machine moves (Pause), and can be seen flat');
+  expect(!errors.length, 'page errors: ' + errors.join(' | '));
+  await ctx.close();
+});
 test('v312 drawings never sit for minutes: past the time limit she stops and offers Try again or Just explain; "make illustrations of how..." is a drawing; the free picture service\'s yellow "limit reached" card is not shown as a picture; the book has a 3D camera and a 3D washing machine', async (b) => {
   const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 860 }, server: false, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: async (body) => { const all = JSON.stringify(body.messages || []); if (/cassie-draw|"parts"|mode/.test(all)) await new Promise((r) => setTimeout(r, 9000)); return { text: 'Words answer.' }; } });
   const u = await page.evaluate(async () => {
@@ -7617,7 +7685,7 @@ test('v310 drawings, accurate, fast and reliable: her drawing book shows a check
   const hits = await page.evaluate(async () => { const bk = await liveBookLoad(); return ['draw a bicycle', 'make a 3d bicycle', 'how do a bicycle’s gears shift', 'draw a motorbike', 'show me the human heart', 'draw a heart emoji', 'explain the water cycle', 'how does photosynthesis work', 'draw how a volcano erupts', 'how does a jet engine work', 'draw the solar system', 'build an atom in 3D', 'draw a bicycle for my science project', 'paano gumagana ang bisikleta'].map((q) => { const x = bk.fromBook(q, /3d/i.test(q)); return x ? x.book + ':' + x.mode : '-'; }).join(' '); });
   expect(hits === 'bicycle:2d bicycle:3d - - heart:2d - water:2d photosynthesis:2d volcano:2d jet:3d solar:3d atom:3d - bicycle:2d', 'the book answers the subject, the AI answers a narrow question: ' + hits);
   // every book drawing is whole, named and passes the app's own checks for a real figure
-  const book = await page.evaluate(async () => { const bk = await liveBookLoad(), m = await liveDrawLoad(); return bk.bookKeys().map((k) => { const raw = bk.fromBook({ bicycle: 'draw a bicycle', solar: 'the solar system', atom: 'an atom', heart: 'the heart', water: 'the water cycle', photosynthesis: 'photosynthesis', volcano: 'a volcano', jet: 'a jet engine', brain: 'the human brain', fridge: 'how does a fridge work', dragon: 'draw a dragon', earth: 'layers of the earth', animalcell: 'an animal cell', airplane: 'an airplane', camera: 'build a camera', washer: 'how does a washing machine work' }[k], false), sp = m.clean(raw); return [k, sp && sp.parts.length, sp && sp.parts.every((p) => p.label && p.say), sp ? (sp.mode === '2d' ? m.check(sp, sp.title).filter((x) => /leaves (it|them) out|used for more than one/.test(x)) : []) : ['none']]; }); });
+  const book = await page.evaluate(async () => { const bk = await liveBookLoad(), m = await liveDrawLoad(); return bk.bookKeys().map((k) => { const raw = bk.fromBook({ bicycle: 'draw a bicycle', solar: 'the solar system', atom: 'an atom', heart: 'the heart', water: 'the water cycle', photosynthesis: 'photosynthesis', volcano: 'a volcano', jet: 'a jet engine', brain: 'the human brain', fridge: 'how does a fridge work', dragon: 'draw a dragon', earth: 'layers of the earth', animalcell: 'an animal cell', airplane: 'an airplane', camera: 'build a camera', washer: 'how does a washing machine work', circulation: 'draw the circulatory system' }[k], false), sp = m.clean(raw); return [k, sp && sp.parts.length, sp && sp.parts.every((p) => p.label && p.say), sp ? (sp.mode === '2d' ? m.check(sp, sp.title).filter((x) => /leaves (it|them) out|used for more than one/.test(x)) : []) : ['none']]; }); });
   expect(book.every(([, n, named, bad]) => n >= 4 && named && !bad.length), 'every book drawing is whole and named, with every textbook part: ' + JSON.stringify(book));
   const b3 = await page.evaluate(async () => { const bk = await liveBookLoad(), m = await liveDrawLoad(); const sp = m.clean(bk.fromBook('make a 3d bicycle', true)); return { n: sp.parts.length, labels: sp.parts.map((p) => p.label).join(','), issues: m.check3d(sp) }; });
   expect(b3.n === 11 && /Brakes/.test(b3.labels) && !b3.issues.length, 'the 3D bicycle keeps all 11 parts (brakes too) and passes the model checks: ' + JSON.stringify(b3));

@@ -101,6 +101,7 @@ export function clean(raw) {
     box: mode === '2d' ? box4(p && p.box) : null,
     anchor: mode === '2d' && Array.isArray(p && p.anchor) && p.anchor.length === 2 && Number.isFinite(+p.anchor[0]) && Number.isFinite(+p.anchor[1]) ? [num(p.anchor[0], 0, 400), num(p.anchor[1], 0, 260)] : null,
     glow: !!(p && p.glow), spin: !!(p && p.spin), shell: !!(p && p.shell),
+    beat: p && p.beat === 'breathe' ? 'breathe' : p && p.beat ? 'beat' : null, // (v314) a part that pumps (a heart) or breathes (lungs)
     finish: ['metal', 'plastic', 'rubber', 'wood'].includes(p && p.finish) ? p.finish : null, // (3d) what it is really made of
     // (3d) her plan for the part: what it sits inside, its real size against the whole, what it touches
     inside: mode === '3d' ? words(p && p.inside, 40) || null : null,
@@ -119,7 +120,18 @@ export function clean(raw) {
   const focus = ids.has(words(s.focus, 40)) ? words(s.focus, 40) : null;
   // (v307) the questions a student could ask next about it, for one tap each: the lesson goes on, on the same drawing
   const next = (Array.isArray(s.next) ? s.next : []).slice(0, 3).map((x) => words(x, 90).replace(/^[-*\d.\s]+/, '')).filter((x) => x.length > 8);
-  return { ...(next.length ? { next } : {}), title: words(s.title, 90) || 'How it works', mode, intro: words(s.intro, 300), summary: words(s.summary, 300), photo: words(s.photo, 300), simple: !!s.simple, axis: ['x', 'y', 'z'].includes(s.axis) ? s.axis : 'x', parts, ref, ...(fresh ? { fresh } : {}), ...(focus ? { focus } : {}) };
+  // (v314) what moves along the drawing: blood, water, air, food, electricity; dots that travel its path, in order,
+  // changing colour from "color" to "to" on the way (blood picking up oxygen); "part" is the step it belongs to
+  const hex = (c) => (typeof c === 'string' && /^#[0-9a-f]{3,8}$/i.test(c.trim()) ? color(c, 0) : null);
+  const flows = (Array.isArray(s.flows) ? s.flows : []).slice(0, 12).map((f) => {
+    if (!f || typeof f !== 'object') return null;
+    const of = (Array.isArray(f.part) ? f.part : [f.part]).slice(0, 4).map((x) => words(x, 40)).filter((x) => ids.has(x)), part = of[0] || null;
+    const base = { part, of, color: hex(f.color) || (part ? parts.find((q) => q.id === part).color : color(null, 0)), to: hex(f.to), dots: Math.round(num(f.dots, 2, 14, 6)), speed: num(f.speed, 0.3, 3, 1) };
+    if (mode === '2d') return typeof f.d === 'string' && f.d.length < 600 && PATH_OK.test(f.d) && /^\s*M/i.test(f.d) ? { ...base, d: f.d } : null;
+    const pts = (Array.isArray(f.pts) ? f.pts : []).slice(0, 16).filter((q) => Array.isArray(q) && q.length === 3 && q.every((v) => Number.isFinite(+v))).map((q) => q.map((v) => num(v, -20, 20)));
+    return pts.length >= 2 ? { ...base, pts } : null;
+  }).filter(Boolean);
+  return { ...(next.length ? { next } : {}), ...(flows.length ? { flows } : {}), title: words(s.title, 90) || 'How it works', mode, intro: words(s.intro, 300), summary: words(s.summary, 300), photo: words(s.photo, 300), simple: !!s.simple, axis: ['x', 'y', 'z'].includes(s.axis) ? s.axis : 'x', parts, ref, ...(fresh ? { fresh } : {}), ...(focus ? { focus } : {}) };
 }
 
 // ---------- is it a good drawing? (2d) the points every shape reaches, and what is wrong ----------
@@ -544,18 +556,20 @@ export async function render(host, rawSpec, opts = {}) {
     say.textContent = `${spec.intro ? spec.intro + ' ' : ''}${spec.parts.map((p, i) => `${i + 1}. ${p.label}: ${p.say}`).join(' ')}`;
   }
   // (v253) a compact row: a small icon and a short word each, muted; the tap area stays 48px
-  const ICON = { redo: '<path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4"/>', quiz: '<path d="M9 9a3 3 0 1 1 4 2.8c-.7.3-1 .8-1 1.5V14M12 17.5h.01"/><circle cx="12" cy="12" r="9"/>', photo: '<path d="M4 7.5h3l1.6-2.5h6.8L17 7.5h3a1 1 0 0 1 1 1V18a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8.5a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/>', ask: '<path d="M4 5h16v11H9l-5 4z"/>', change: '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>', open: '<path d="M4 12h16M12 4v16"/>', apart: '<path d="M4 12h5M15 12h5M7 9l-3 3 3 3M17 9l3 3-3 3"/>' };
+  const ICON = { cube: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/>', flat: '<path d="M4 20l4-1 11-11-3-3L5 16z"/>', pause: '<path d="M8 5v14M16 5v14"/>', play: '<path d="M7 5l12 7-12 7z"/>', next: '<path d="M5 12h12M13 7l5 5-5 5"/>', redo: '<path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4"/>', quiz: '<path d="M9 9a3 3 0 1 1 4 2.8c-.7.3-1 .8-1 1.5V14M12 17.5h.01"/><circle cx="12" cy="12" r="9"/>', photo: '<path d="M4 7.5h3l1.6-2.5h6.8L17 7.5h3a1 1 0 0 1 1 1V18a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8.5a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/>', ask: '<path d="M4 5h16v11H9l-5 4z"/>', change: '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>', open: '<path d="M4 12h16M12 4v16"/>', apart: '<path d="M4 12h5M15 12h5M7 9l-3 3 3 3M17 9l3 3-3 3"/>' };
   const btn = (label, fn, cls = '', icon = '') => { const b = el('button', 'ld-btn ' + cls); b.type = 'button'; if (icon && ICON[icon]) b.insertAdjacentHTML('afterbegin', `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON[icon]}</svg>`); b.appendChild(el('span', '', label)); b.addEventListener('click', fn); acts.appendChild(b); return b; };
   const setLabel = (b, t) => { b.querySelector('span').textContent = t; };
   const done = () => { dot.classList.add('off'); state.textContent = spec.mode === '3d' ? 'Cassie built it in 3D' : 'Cassie drew it'; setSay(spec.summary || spec.intro || ''); host.dispatchEvent(new CustomEvent('ld-done')); };
   if (view) {
     if (view.open) { const ob = btn('Open it up', () => { const on = view.open(); setLabel(ob, on ? 'Close the case' : 'Open it up'); ob.setAttribute('aria-pressed', String(on)); }, 'ld-open', 'open'); ob.setAttribute('aria-pressed', 'false'); }
     if (view.explode) { const pb = btn('Pull apart', () => { const on = view.explode(); setLabel(pb, on ? 'Put it back' : 'Pull apart'); pb.setAttribute('aria-pressed', String(on)); }, '', 'apart'); pb.setAttribute('aria-pressed', 'false'); }
-    btn('Draw again', async () => { await view.play(true); done(); }, '', 'redo');
+    btn('Draw again', async () => { await view.play(true); done(); if (view.move) view.move(); }, '', 'redo');
   }
   if (opts.onQuiz) btn('Quiz me', () => opts.onQuiz(spec), '', 'quiz');
   if (opts.onRealistic && (!opts.canRealistic || opts.canRealistic())) btn('Real photo', () => opts.onRealistic(spec), 'ld-photo', 'photo');
   if (opts.onChange) btn('Show another way', () => opts.onChange(spec), 'ld-change', 'change');
+  // (v314) a machine or a thing, both ways: the flat drawing and the 3D model
+  if (opts.onOther && (!opts.canOther || opts.canOther(spec))) btn(spec.mode === '3d' ? 'See it flat' : 'See it in 3D', () => opts.onOther(spec), 'ld-other', spec.mode === '3d' ? 'flat' : 'cube');
   // (v307) what to ask next: one tap asks it, and she answers on this same drawing
   let nextRow = null;
   if (spec.next && spec.next.length && opts.onNext) {
@@ -575,6 +589,13 @@ export async function render(host, rawSpec, opts = {}) {
     const allBtn = btn('Show all', () => { if (view.unpick) view.unpick(); allBtn.hidden = true; }, 'ld-showall', 'open'); allBtn.hidden = true;
     if (spec.mode === '3d' && view.setOpen && view.open) { view.setOpen(true); const ob = acts.querySelector('.ld-open'); if (ob) { setLabel(ob, 'Close the case'); ob.setAttribute('aria-pressed', 'true'); } }
     await view.play(); done();
+    // (v314) once it is drawn, it moves: Pause and Play, and Next step for a drawing with something flowing through it
+    if (view.motion) {
+      const on = view.move();
+      const mb = btn(on ? 'Pause' : 'Play', () => { if (view.moving) view.pause(); else view.move(true); setLabel(mb, view.moving ? 'Pause' : 'Play'); const sv = mb.querySelector('svg'); if (sv) sv.innerHTML = ICON[view.moving ? 'pause' : 'play']; }, 'ld-motion', on ? 'pause' : 'play');
+      acts.prepend(mb); // (its words say what a tap does: Pause or Play)
+      if (spec.flows && view.stepNext) { const nb = btn('Next step', () => { view.stepNext(); allBtn.hidden = false; }, 'ld-step', 'next'); acts.insertBefore(nb, mb.nextSibling); }
+    }
     // (v306) a follow-up's answer: the part it is about is picked out (the others dim), and her answer stays in view
     const fi = spec.focus ? spec.parts.findIndex((p) => p.id === spec.focus) : -1;
     if (fi >= 0 && view.focus) { view.focus(fi); const allBtn = acts.querySelector('.ld-showall'); if (allBtn) allBtn.hidden = false; hint.textContent = `Showing: ${spec.parts[fi].label}`; }
@@ -599,6 +620,16 @@ function draw2d(stage, spec, { animate, setSay, hint }) {
     for (const s of p.shapes) { const n = shape2d(s, p); if (!n) continue; if (n.getAttribute('marker-end')) n.setAttribute('marker-end', `url(#${headId}${i})`); g.appendChild(n); }
     svg.appendChild(g);
     return g;
+  });
+  // (v314) the tracks things move along, under the names; shown once the drawing is drawn
+  const flowG = document.createElementNS(NS, 'g'); flowG.setAttribute('class', 'ld-flows'); flowG.style.display = 'none'; svg.appendChild(flowG);
+  const flowEls = (spec.flows || []).map((f, k) => {
+    defs.insertAdjacentHTML('beforeend', `<marker id="${headId}f${k}" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="${f.to || f.color}"/></marker>`);
+    const track = document.createElementNS(NS, 'path');
+    track.setAttribute('d', f.d); track.setAttribute('fill', 'none'); track.setAttribute('stroke', f.color); track.setAttribute('stroke-opacity', '.4'); track.setAttribute('stroke-width', '1.5'); track.setAttribute('stroke-dasharray', '2 5'); track.setAttribute('stroke-linecap', 'round'); track.setAttribute('marker-end', `url(#${headId}f${k})`); track.setAttribute('class', 'ld-track');
+    flowG.appendChild(track);
+    const dots = Array.from({ length: f.dots }, () => { const c = document.createElementNS(NS, 'ellipse'); c.setAttribute('rx', 4.4); c.setAttribute('ry', 3.4); c.setAttribute('stroke', lightPage() ? '#ffffff' : '#0e0e12'); c.setAttribute('stroke-width', '1.4'); c.setAttribute('class', 'ld-dot'); flowG.appendChild(c); return { c, at: 0 }; });
+    return { f, track, dots, L: 0 };
   });
   const labels = document.createElementNS(NS, 'g'); labels.setAttribute('class', 'ld-labels'); svg.appendChild(labels);
   const legend = el('p', 'ld-legend'); legend.hidden = true; stage.after(legend);
@@ -699,6 +730,7 @@ function draw2d(stage, spec, { animate, setSay, hint }) {
   const pick = (i) => {
     picked = picked === i ? -1 : i;
     groups.forEach((g, k) => g.classList.toggle('dim', picked >= 0 && k !== picked));
+    if (!moving && flowG.style.display !== 'none') lay();
     view.onPick && view.onPick(picked >= 0 ? spec.parts[picked] : null);
   };
   groups.forEach((g, i) => { g.addEventListener('click', (e) => { e.stopPropagation(); pick(i); }); });
@@ -708,8 +740,62 @@ function draw2d(stage, spec, { animate, setSay, hint }) {
   const placeAll = () => { clearLabels(); labelEls = groups.map((_, i) => placeLabel(i)); labelEls.forEach((l) => { if (l) l.t.textContent = l.txt; }); return labelEls.some(Boolean) || !spec.parts.some((p) => p.label); };
   const turns = groups.map(() => 0); // (each show or hide of a part ends the one before it)
   const dropLabel = (i) => { const l = labelEls[i]; if (!l) return; l.g.remove(); const k = taken.indexOf(l.box); if (k >= 0) taken.splice(k, 1); labelEls[i] = null; };
+  // (v314) what moves: a part that beats or breathes, a part that turns (each round piece about its own middle), and the
+  // dots on every track. It runs while the drawing is on screen, stops for good once it is gone, and waits for a tap
+  // to Play when the phone asks for less motion (Reduce Motion, Lite mode).
+  const rgb = (h) => { let x = h.slice(1); if (x.length < 6) x = x.slice(0, 3).split('').map((c) => c + c).join(''); return [0, 2, 4].map((k) => parseInt(x.slice(k, k + 2), 16)); };
+  const mixHex = (a, b, k) => { const A = rgb(a), B = rgb(b); return `rgb(${A.map((v, i) => Math.round(v + (B[i] - v) * k)).join(',')})`; };
+  const middle = (n) => { try { const b = n.getBBox(); return [b.x + b.width / 2, b.y + b.height / 2, Math.max(b.width, b.height) / 2]; } catch (e) { return null; } };
+  const beaters = [], turners = [];
+  const motionSetup = () => {
+    if (beaters.length || turners.length) return;
+    groups.forEach((g, i) => {
+      const p = spec.parts[i];
+      if (p.beat) { const c = middle(g); if (c) beaters.push({ g, kind: p.beat, c }); }
+      if (p.spin) { // each piece turns about the round piece it sits in (a spoke in its wheel), or the part's middle
+        const kids = [...g.children], rounds = kids.filter((n) => /^(circle|ellipse)$/.test(n.tagName)).map(middle).filter((c) => c && c[2] > 6);
+        const all = middle(g);
+        kids.forEach((n) => { const c = middle(n); if (!c) return; const host = rounds.filter((r) => Math.hypot(c[0] - r[0], c[1] - r[1]) <= r[2] + 2).sort((a, b) => a[2] - b[2])[0] || (rounds.length ? null : all); if (host) turners.push({ n, c: host }); });
+      }
+    });
+  };
+  let moving = false, raf2 = 0, lastT = 0, angle = 0, onScreen = true;
+  const io2 = 'IntersectionObserver' in window ? new IntersectionObserver((en) => { onScreen = en.some((x) => x.isIntersecting); if (onScreen && moving && !raf2) raf2 = requestAnimationFrame(frame); }) : null;
+  const put = (x, d) => {
+    let q; try { q = x.track.getPointAtLength(d.at); } catch (e) { return; }
+    d.c.setAttribute('cx', q.x.toFixed(1)); d.c.setAttribute('cy', q.y.toFixed(1));
+    d.c.setAttribute('fill', x.f.to ? mixHex(x.f.color, x.f.to, d.at / x.L) : x.f.color);
+    d.c.setAttribute('opacity', picked >= 0 && x.f.of.length && !x.f.of.includes(spec.parts[picked].id) ? '.15' : '1');
+  };
+  const lay = () => flowEls.forEach((x) => { if (!x.L) { try { x.L = x.track.getTotalLength(); } catch (e) { x.L = 0; } x.dots.forEach((d, k) => { d.at = (k / x.dots.length) * x.L; }); } if (x.L > 4) x.dots.forEach((d) => put(x, d)); });
+  function frame(now) {
+    raf2 = 0;
+    if (!svg.isConnected) { moving = false; if (io2) io2.disconnect(); return; } // (the drawing is gone: the motion stops for good)
+    const dt = lastT ? Math.min(50, now - lastT) : 16; lastT = now;
+    const beat = (now % 860) / 860, squeeze = beat < 0.18 ? Math.sin((beat / 0.18) * Math.PI) : 0, breath = (Math.sin((now / 1700) * Math.PI) + 1) / 2;
+    beaters.forEach((b) => { const k = b.kind === 'breathe' ? 1 + breath * 0.04 : 1 - squeeze * 0.05; b.g.setAttribute('transform', `translate(${b.c[0]} ${b.c[1]}) scale(${k.toFixed(4)}) translate(${-b.c[0]} ${-b.c[1]})`); });
+    angle = (angle + dt * 0.12) % 360;
+    turners.forEach((t) => t.n.setAttribute('transform', `rotate(${angle.toFixed(1)} ${t.c[0]} ${t.c[1]})`));
+    const push = beaters.some((b) => b.kind === 'beat') ? 1 + squeeze * 1.6 : 1; // (blood surges with each beat)
+    flowEls.forEach((x) => { if (x.L > 4) x.dots.forEach((d) => { d.at = (d.at + dt * 0.05 * x.f.speed * push) % x.L; put(x, d); }); });
+    if (moving && onScreen) raf2 = requestAnimationFrame(frame);
+  }
   const view = {
     hintText,
+    // (v314) moving parts: move() starts them once the drawing is there (move(true) even with Reduce Motion); pause() stops them
+    motion: flowEls.length > 0 || spec.parts.some((p) => p.beat || p.spin),
+    get moving() { return moving; },
+    move(force) {
+      if (!view.motion) return false;
+      flowG.style.display = ''; motionSetup(); lay();
+      if (still() && !force) return false;
+      moving = true; lastT = 0; if (io2) io2.observe(svg);
+      if (!raf2) raf2 = requestAnimationFrame(frame);
+      return true;
+    },
+    pause() { moving = false; if (raf2) cancelAnimationFrame(raf2); raf2 = 0; },
+    // (v314) one step at a time: the next part is picked out, with what it does and what moves through it
+    stepNext() { const i = (picked + 1) % groups.length; picked = -1; pick(i); if (!moving) lay(); return i; },
     // (v306) the part a follow-up is about: the others dim, without changing what she says (a tap shows them all again)
     focus(i) { if (!groups[i]) return; picked = i; groups.forEach((g, k) => g.classList.toggle('dim', k !== i)); },
     unpick() { if (picked >= 0) pick(picked); },
@@ -754,6 +840,7 @@ function draw2d(stage, spec, { animate, setSay, hint }) {
         return;
       }
       clearLabels();
+      view.pause(); flowG.style.display = 'none'; beaters.forEach((b) => b.g.removeAttribute('transform')); turners.forEach((t) => t.n.removeAttribute('transform'));
       // everything hidden, then drawn: every stroke on its own, in order (0.3 to 0.6 s each, by its length)
       const all = groups.flatMap((g) => [...g.children]);
       all.forEach((n) => { n.style.visibility = 'hidden'; });
@@ -939,6 +1026,10 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
       });
       g.userData.spinners = spinners;
     }
+    if (p.beat && g.children.length) { // (v314)
+      const c = new T.Box3().setFromObject(g).getCenter(new T.Vector3()), piv = new T.Group(); piv.position.copy(c);
+      [...g.children].forEach((ch) => { ch.position.sub(c); piv.add(ch); }); g.add(piv); g.userData.beat = { piv, kind: p.beat };
+    }
     model.add(g);
     return g;
   }).filter((g) => g.children.length);
@@ -976,6 +1067,18 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
     g.traverse((m) => { if (!m.isMesh) return; const c = new T.Box3().setFromObject(m).getCenter(new T.Vector3()), d = c.distanceTo(mid); if (d < best) { best = d; at = c; } });
     g.userData.center = at; g.userData.home = g.position.clone();
   });
+  // (v314) what moves through it (water, air, blood, electricity): dots along a smooth path, changing colour on the way
+  const flowGroup = new T.Group(); flowGroup.visible = false; model.add(flowGroup);
+  const flow3 = (spec.flows || []).map((f) => {
+    const curve = new T.CatmullRomCurve3(f.pts.map((q) => new T.Vector3(q[0], q[1], q[2])));
+    const L = curve.getLength(); if (!(L > 0.01)) return null;
+    flowGroup.add(new T.Mesh(new T.TubeGeometry(curve, 64, R * 0.006, 6, false), new T.MeshBasicMaterial({ color: new T.Color(f.color), transparent: true, opacity: 0.3, depthWrite: false })));
+    const c0 = new T.Color(f.color), c1 = new T.Color(f.to || f.color), geo = new T.SphereGeometry(R * 0.016, 12, 8);
+    const dots = Array.from({ length: f.dots }, (_, k) => { const m = new T.Mesh(geo, new T.MeshBasicMaterial({ color: c0.clone(), transparent: true, opacity: 1 })); flowGroup.add(m); return { m, u: k / f.dots }; });
+    return { f, curve, L, c0, c1, dots };
+  }).filter(Boolean);
+  let moving3 = false, paused3 = false;
+  const lay3 = () => flow3.forEach((x) => x.dots.forEach((d) => { d.m.position.copy(x.curve.getPointAt(Math.min(1, Math.max(0, d.u || 0)))); d.m.material.color.lerpColors(x.c0, x.c1, d.u); d.m.material.opacity = picked && x.f.of.length && !x.f.of.includes(picked.userData.part.id) ? 0.15 : 1; }));
   const order = groups.filter((g) => !g.userData.part.shell).sort((a, b) => a.userData.center.dot(ax) - b.userData.center.dot(ax));
   const tagEls = groups.map((g, i) => { const p = g.userData.part; if (!p.label) return null; const t = el('button', 'ld-tag', `${spec.parts.indexOf(p) + 1} ${p.label}`); t.type = 'button'; t.hidden = true; t.addEventListener('click', (e) => { e.stopPropagation(); pick(g); }); tags.appendChild(t); return t; });
   let wasCompact = null;
@@ -990,6 +1093,7 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
     picked = picked === g ? null : g;
     if (!picked && focused) { focused = false; aimTo = new T.Vector3(); camTo = cam.position.clone().sub(controls.target).normalize().multiplyScalar(home.length()); if (still()) { controls.target.set(0, 0, 0); cam.position.copy(camTo); aimTo = camTo = null; } }
     groups.forEach((x) => fade(x, picked && x !== picked ? .16 : x.userData.part.shell && (opened || exploded) ? .14 : 1));
+    if (flowGroup.visible) lay3();
     view.onPick && view.onPick(picked ? picked.userData.part : null);
   };
   // a tap (not a drag) picks the part under the finger
@@ -1008,7 +1112,14 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
     raf = requestAnimationFrame(tick);
     if (!visible) return;
     const dt = Math.min(.05, (now - last) / 1000); last = now;
-    if (!still()) groups.forEach((g) => { if (g.visible && g.userData.spinners) g.userData.spinners.forEach((sp) => { sp.rotation[sp.userData.axle] += dt * 3; }); });
+    if ((!still() && !paused3) || moving3) groups.forEach((g) => { if (g.visible && g.userData.spinners) g.userData.spinners.forEach((sp) => { sp.rotation[sp.userData.axle] += dt * 3; }); });
+    if (moving3) { // (v314) a beating part, and the dots on their way
+      const beat = (now % 860) / 860, sq = beat < 0.18 ? Math.sin((beat / 0.18) * Math.PI) : 0, br = (Math.sin((now / 1700) * Math.PI) + 1) / 2;
+      groups.forEach((g) => { const b = g.userData.beat; if (b) b.piv.scale.setScalar(b.kind === 'breathe' ? 1 + br * 0.04 : 1 - sq * 0.05); });
+      const push = groups.some((g) => g.userData.beat && g.userData.beat.kind === 'beat') ? 1 + sq * 1.6 : 1;
+      flow3.forEach((x) => x.dots.forEach((d) => { d.u = (d.u + (Math.max(0, dt) * x.f.speed * push * R * 0.28) / x.L) % 1; })); // (the first frame's clock can run a hair behind)
+      lay3();
+    }
     groups.forEach((g) => { const to = g.userData.to; if (to) { g.position.lerp(to, Math.min(1, dt * 6)); if (g.position.distanceTo(to) < .002) { g.position.copy(to); g.userData.to = null; } } });
     groups.forEach((g) => { const sl = g.userData.slide; if (sl) { const k = Math.min(1, Math.max(0, (now - sl.t0 - 400) / 1100)), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2; g.position.lerpVectors(sl.from, g.userData.home, e); if (k >= 1) g.userData.slide = null; } }); // (it waits a moment, then slides home)
     if (aimTo) { controls.target.lerp(aimTo, Math.min(1, dt * 5)); if (controls.target.distanceTo(aimTo) < .005) { controls.target.copy(aimTo); aimTo = null; } }
@@ -1083,8 +1194,15 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
   gone.observe(document.body, { childList: true, subtree: true });
   const byPart = (i) => groups.find((g) => g.userData.i === i) || null;
   const SIDES = { front: [0, .14, 1], back: [0, .14, -1], left: [-1, .14, .001], right: [1, .14, .001], side: [1, .14, .001], top: [.001, 1, .04] };
+  const motion3 = flow3.length > 0 || groups.some((g) => g.userData.beat || g.userData.spinners);
   const view = {
     hintText,
+    // (v314) moving parts: move() once it is built (move(true) even with Reduce Motion); pause() stops them
+    motion: motion3,
+    get moving() { return moving3; },
+    move(force) { if (!motion3) return false; flowGroup.visible = flow3.length > 0; lay3(); if (still() && !force) return false; moving3 = true; paused3 = false; return true; },
+    pause() { moving3 = false; paused3 = true; },
+    stepNext() { const list = groups.filter((g) => !g.userData.part.shell); if (!list.length) return -1; const k = list.indexOf(picked), g = list[(k + 1) % list.length]; picked = null; pick(g); if (!moving3) lay3(); return g.userData.i; },
     // one part at a time, for a player with its own pace: show(i) brings part i in (it pops in, slides into its
     // place from "from", and the camera goes to its "view"); show(i, true) puts it there at once; hide(i) takes it away
     has: (i) => !!byPart(i),
@@ -1107,6 +1225,7 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
       // (v306) a follow-up: what was there already is there at once; only the parts it adds are built
       const old = (g) => !again && spec.fresh && !spec.fresh.includes(g.userData.part.id);
       groups.forEach((g) => { g.visible = old(g); g.scale.setScalar(old(g) ? 1 : .6); });
+      moving3 = false; flowGroup.visible = false;
       if (spec.intro) await setSay(spec.intro, true);
       for (const g of groups) {
         if (old(g)) continue;

@@ -6,7 +6,7 @@
 
 // a question is about the book's subject when it names it and asks for little else ("draw a bicycle", "how does a
 // bicycle work in 3D"); a narrow question ("how do a bicycle's gears shift") is the AI's, which can focus on that
-const ASKING = /\b(draw|sketch|show|build|make|create|model|diagram|illustrate|explain|teach|how|what|does|do|is|are|works?|working|parts?|label(?:led|ed)?|the|an?|of|me|us|please|pls|po|in|3d|2d|three[\s-]?d|picture|drawing|simple|whole|full|real|realistic|for|with|its|it|and|can|you|i|want|need|see|look|like|naman|paano|ano|ang|ng|mo|ko|gumagana|iguhit|ipakita|human|structure|detailed|basic|quick|nice|cool|cute|step|steps|by|our|this|that|again|now|then|kindly|work|function|functions|looks|inside|about|also|too|one|some|really|pretty|fly|flies|flying|fly\?|move|moves|moving|run|runs|go|goes|stay|stays|up)\b/gi;
+const ASKING = /\b(draw|sketch|show|build|make|create|model|diagram|illustrate|explain|teach|how|what|does|do|is|are|works?|working|parts?|label(?:led|ed)?|the|an?|of|me|us|please|pls|po|in|3d|2d|three[\s-]?d|picture|drawing|simple|whole|full|real|realistic|for|with|its|it|and|can|you|i|want|need|see|look|like|naman|paano|ano|ang|ng|mo|ko|gumagana|iguhit|ipakita|human|structure|detailed|basic|quick|nice|cool|cute|step|steps|by|our|this|that|again|now|then|kindly|work|function|functions|looks|inside|about|also|too|one|some|really|pretty|fly|flies|flying|fly\?|move|moves|moving|run|runs|go|goes|stay|stays|up|illustrations?|diagrams?|video|moving|animation|animated|visuals?)\b/gi;
 
 const BOOK = [
   {
@@ -158,6 +158,56 @@ const BOOK = [
           shapes: [[0.9, 0, 0], [-0.9, 0, 0], [1.7, 0, 0], [-1.7, 0, 0], [0, 0, 1.7], [0, 0, -1.7]].map((p) => ({ t: 'sphere', r: 0.06, pos: p })) },
         { id: 'nucleus', label: 'Nucleus', say: 'The nucleus is the tiny, heavy centre of the atom. Almost all its mass is here.', color: '#f0c060', size: 0.1, shell: true,
           shapes: [{ t: 'sphere', r: 0.26, pos: [0, 0, 0] }] },
+      ],
+    },
+  },
+  {
+    // (v314) a moving drawing: the blood goes round, blue (low in oxygen) to red in the lungs and back in the body; the heart beats
+    key: 'circulation', is: /\b(blood (flows?|flowing|circulation|circulates?|travels?|moves?|goes|vessels?)|circulat(ion|ory system)|(flow|path|journey) of (the )?blood|double circulation|daloy ng dugo|sirkulasyon)\b/i,
+    ok: /\b(heart|hearts|body|lungs?|from|to|through|around|whole|human|blood|flows?|goes|travels|circulates?|pumped|pumps?|into|out|back|and|then|our|your|video|moving|animation|animated|illustrations?|diagrams?)\b/gi,
+    '2d': {
+      title: 'How blood flows through the heart and body', mode: '2d',
+      layout: 'the lungs at the top, the heart in the middle (its right side on the left of the picture, as in a textbook), the body along the bottom; low oxygen blood on the left in blue, oxygen rich blood on the right in red',
+      intro: 'Blood goes round two loops: from the heart to the lungs and back, then from the heart to the body and back. Watch it move.',
+      summary: 'Body, vena cava, right atrium, right ventricle, lungs (oxygen in), left atrium, left ventricle, aorta, body. The heart beats about 70 times a minute to keep it going.',
+      photo: 'a real anatomical model of the human heart and lungs, front view, showing the aorta, the vena cava and the pulmonary vessels',
+      next: ['Why is the left ventricle wall the thickest?', 'What happens to the blood in the lungs?'],
+      parts: [
+        { id: 'heart', label: 'Heart', say: 'The heart is a muscle that beats about 70 times a minute, pumping the blood round both loops. Inside, a wall called the septum keeps its two sides apart, and valves keep the blood flowing one way.', color: '#e8a0a0', beat: true, box: [150, 96, 110, 112], anchor: [252, 168],
+          shapes: [{ t: 'path', d: 'M178 206 C158 196 148 172 150 146 C152 118 168 100 194 98 C222 96 250 104 256 128 C262 156 246 182 222 198 C206 206 190 210 178 206 Z', fill: true }, { t: 'path', d: 'M201 104 C198 140 196 172 192 204' }] },
+        { id: 'vc', label: 'Vena cava', say: 'Blood that has given its oxygen to the body comes back through the vena cava, the biggest vein.', color: '#6b9bff', box: [44, 118, 120, 124], anchor: [52, 176],
+          shapes: [{ t: 'path', d: 'M112 238 C70 238 48 212 50 174 C52 138 118 122 160 122', w: 5 }, { t: 'path', d: 'M162 114 C154 100 150 84 152 66', w: 4 }] },
+        { id: 'ra', label: 'Right atrium', say: 'It fills the right atrium, which squeezes it down through a valve into the right ventricle.', color: '#9ab8ff', beat: true, box: [156, 104, 38, 34], anchor: [174, 121],
+          shapes: [{ t: 'path', d: 'M158 124 C160 108 178 104 192 112 C194 126 182 136 168 136 C162 134 158 130 158 124 Z', fill: true }, { t: 'path', d: 'M170 136 L184 140' }] },
+        { id: 'rv', label: 'Right ventricle', say: 'The right ventricle squeezes and pumps the blood up to the lungs.', color: '#7fb0ff', beat: true, box: [156, 140, 42, 62], anchor: [176, 172],
+          shapes: [{ t: 'path', d: 'M160 144 C170 140 188 142 196 150 C196 172 194 190 192 200 C176 194 162 178 158 160 Z', fill: true }, { t: 'path', d: 'M170 158 Q178 176 176 192' }] },
+        { id: 'pa', label: 'Pulmonary arteries', say: 'The pulmonary arteries carry it to both lungs, one branch to each.', color: '#6b9bff', box: [112, 34, 98, 118], anchor: [150, 104],
+          shapes: [{ t: 'path', d: 'M182 150 C178 120 166 104 144 92 C130 86 122 80 118 72', w: 4 }, { t: 'path', d: 'M184 148 C186 112 196 82 204 66 C212 50 232 46 262 50', w: 4 }] },
+        { id: 'lungs', label: 'Lungs', say: 'In the lungs the blood gives off carbon dioxide and picks up oxygen. It turns bright red.', color: '#8fa3c4', beat: 'breathe', box: [62, 14, 276, 78], anchor: [96, 52],
+          shapes: [{ t: 'path', d: 'M76 78 C62 52 74 22 104 18 C124 16 136 30 138 50 C140 70 132 86 110 88 C94 90 82 86 76 78 Z', fill: true }, { t: 'path', d: 'M324 78 C338 52 326 22 296 18 C276 16 264 30 262 50 C260 70 268 86 290 88 C306 90 318 86 324 78 Z', fill: true }, { t: 'path', d: 'M200 8 L200 36 M200 36 Q176 40 140 46 M200 36 Q224 40 260 46' }, { t: 'path', d: 'M96 34 Q108 52 98 72 M304 34 Q292 52 302 72' }] },
+        { id: 'pv', label: 'Pulmonary veins', say: 'Oxygen rich blood comes back from both lungs through the pulmonary veins to the left atrium.', color: '#ff5a5f', box: [100, 64, 196, 52], anchor: [282, 92],
+          shapes: [{ t: 'path', d: 'M110 84 C140 100 196 98 222 108', w: 4 }, { t: 'path', d: 'M288 84 C268 96 248 100 232 108', w: 4 }] },
+        { id: 'la', label: 'Left atrium', say: 'The left atrium fills, then pushes the blood into the left ventricle.', color: '#ffa0a0', beat: true, box: [208, 102, 40, 34], anchor: [228, 118],
+          shapes: [{ t: 'path', d: 'M210 110 C222 102 240 104 246 116 C244 130 230 134 216 130 C210 124 208 116 210 110 Z', fill: true }, { t: 'path', d: 'M216 134 L232 136' }] },
+        { id: 'lv', label: 'Left ventricle', say: 'The left ventricle, the strongest chamber with the thickest wall, pumps it out to the whole body.', color: '#ff8a8a', beat: true, box: [200, 136, 50, 68], anchor: [226, 170],
+          shapes: [{ t: 'path', d: 'M204 152 C214 140 236 138 248 146 C250 168 236 190 204 202 C200 184 200 166 204 152 Z', fill: true }, { t: 'path', d: 'M212 156 Q216 176 210 194' }] },
+        { id: 'aorta', label: 'Aorta', say: 'The aorta, the biggest artery, carries oxygen rich blood out to every part of the body.', color: '#ff5a5f', box: [210, 84, 150, 158], anchor: [344, 176],
+          shapes: [{ t: 'path', d: 'M222 150 C214 112 234 92 262 100 C322 118 352 168 338 210 C328 234 308 238 290 238', w: 5 }, { t: 'path', d: 'M248 98 L244 78 M262 100 L262 80' }] },
+        { id: 'body', label: 'Body', say: 'The body’s cells take the oxygen and give back carbon dioxide; the blood turns dark again and goes back to the heart.', color: '#c9a7ff', box: [108, 224, 186, 32], anchor: [200, 246],
+          shapes: [{ t: 'rect', x: 110, y: 226, w2: 182, h: 26, r: 10 }, { t: 'path', d: 'M126 240 Q138 232 150 240 T174 240 T198 240 T222 240 T246 240 T270 240' }] },
+      ],
+      flows: [
+        { part: ['vc'], d: 'M200 246 C170 250 140 238 112 238 C70 238 48 212 50 174 C52 138 118 122 160 122', color: '#6b9bff', dots: 9 },
+        { part: ['ra', 'rv'], d: 'M172 126 C176 134 178 144 180 154', color: '#6b9bff', dots: 2 },
+        { part: ['rv', 'pa'], d: 'M182 150 C178 120 166 104 144 92 C130 86 122 80 118 72', color: '#6b9bff', dots: 4 },
+        { part: ['rv', 'pa'], d: 'M184 148 C186 112 196 82 204 66 C212 50 232 46 262 50', color: '#6b9bff', dots: 5 },
+        { part: ['lungs'], d: 'M118 72 C100 62 92 44 104 32 C116 24 128 40 124 60 C122 72 116 80 110 84', color: '#6b9bff', to: '#ff5a5f', dots: 4 },
+        { part: ['lungs'], d: 'M262 50 C282 40 298 30 306 40 C314 52 306 68 296 76 C292 80 290 82 288 84', color: '#6b9bff', to: '#ff5a5f', dots: 4 },
+        { part: ['pv', 'la'], d: 'M110 84 C140 100 196 98 222 108 C226 112 228 116 230 120', color: '#ff5a5f', dots: 5 },
+        { part: ['pv', 'la'], d: 'M288 84 C268 96 248 100 232 108 C230 112 230 116 230 120', color: '#ff5a5f', dots: 3 },
+        { part: ['la', 'lv'], d: 'M230 120 C228 130 226 140 224 150', color: '#ff5a5f', dots: 2 },
+        { part: ['lv', 'aorta'], d: 'M222 150 C214 112 234 92 262 100 C322 118 352 168 338 210 C328 234 308 238 290 238', color: '#ff5a5f', dots: 9 },
+        { part: ['body'], d: 'M290 238 C262 246 230 234 200 246', color: '#ff5a5f', to: '#6b9bff', dots: 3 },
       ],
     },
   },
@@ -419,6 +469,82 @@ const BOOK = [
   },
 ];
 
+// (v314) what moves in each book drawing: parts that turn or beat, and what flows through it (in the drawing's own
+// coordinates), kept apart from the drawings themselves so each stays easy to read
+const ring = (cx, cy, cz, r, n = 12) => Array.from({ length: n + 1 }, (_, k) => [+(cx + Math.cos((k / n) * Math.PI * 2) * r).toFixed(2), +(cy + Math.sin((k / n) * Math.PI * 2) * r).toFixed(2), cz]);
+const MOTION = {
+  'bicycle:2d': { spin: ['rearw', 'frontw', 'crank', 'ring', 'cog'] },
+  'bicycle:3d': { spin: ['frontw', 'rearw', 'crank', 'ring', 'cog'] },
+  'heart:2d': {
+    beat: ['wall', 'atria', 'rv', 'lv', 'septum'],
+    flows: [
+      { part: ['atria'], d: 'M120 70 L148 86', color: '#6b9bff', dots: 2 },
+      { part: ['atria', 'rv'], d: 'M172 88 L172 112', color: '#6b9bff', dots: 2 },
+      { part: ['rv', 'vessels'], d: 'M176 100 L178 62 L168 40 L146 22', color: '#6b9bff', dots: 4 },
+      { part: ['atria', 'lv'], d: 'M242 90 L242 112', color: '#ff5a5f', dots: 2 },
+      { part: ['lv', 'vessels'], d: 'M226 104 C214 62 222 38 248 32 L290 16', color: '#ff5a5f', dots: 4 },
+    ],
+  },
+  'water:2d': {
+    flows: [
+      { part: ['evap'], d: 'M112 204 L112 118', color: '#7fb0ff', to: '#e8e8ee', dots: 3, speed: 0.7 },
+      { part: ['evap'], d: 'M136 204 L136 118', color: '#7fb0ff', to: '#e8e8ee', dots: 3, speed: 0.7 },
+      { part: ['evap'], d: 'M160 204 L160 118', color: '#7fb0ff', to: '#e8e8ee', dots: 3, speed: 0.7 },
+      { part: ['evap', 'cloud'], d: 'M140 112 C150 96 166 84 180 78', color: '#e8e8ee', dots: 2, speed: 0.6 },
+      { part: ['rain'], d: 'M190 94 L184 128', color: '#7ee0e0', dots: 2, speed: 1.5 },
+      { part: ['rain'], d: 'M214 94 L208 128', color: '#7ee0e0', dots: 2, speed: 1.5 },
+      { part: ['rain'], d: 'M238 94 L232 128', color: '#7ee0e0', dots: 2, speed: 1.5 },
+      { part: ['runoff'], d: 'M300 152 C292 170 282 188 266 208 L240 222', color: '#7fb0ff', dots: 3 },
+    ],
+  },
+  'fridge:2d': {
+    flows: [
+      { part: ['evap'], d: 'M128 64 L40 64 L40 76 L128 76 L128 88 L40 88 L40 100 L128 100 L132 104', color: '#7fb0ff', dots: 7 },
+      { part: ['evap', 'compressor', 'flow'], d: 'M132 104 L186 206', color: '#7fb0ff', dots: 3 },
+      { part: ['compressor'], d: 'M186 206 C200 222 222 222 236 206', color: '#7fb0ff', to: '#ff8a8a', dots: 2 },
+      { part: ['compressor', 'condenser', 'flow'], d: 'M236 206 L300 168', color: '#ff8a8a', dots: 3 },
+      { part: ['condenser'], d: 'M300 170 L366 170 L366 154 L300 154 L300 138 L366 138 L366 122 L300 122 L300 106 L366 106 L366 90 L300 90 L300 74', color: '#ff8a8a', to: '#ffb067', dots: 8 },
+      { part: ['condenser', 'valve', 'flow'], d: 'M300 76 L232 46', color: '#ffb067', dots: 3 },
+      { part: ['valve', 'evap', 'flow'], d: 'M196 46 L132 64', color: '#ffb067', to: '#7fb0ff', dots: 3 },
+    ],
+  },
+  'photosynthesis:2d': {
+    flows: [
+      { part: ['sun'], d: 'M76 66 L152 104', color: '#ffd29e', dots: 3, speed: 1.6 },
+      { part: ['co2'], d: 'M22 152 L158 152', color: '#a3a3ad', dots: 3 },
+      { part: ['co2'], d: 'M22 164 L152 164', color: '#a3a3ad', dots: 3 },
+      { part: ['water'], d: 'M147 252 L147 198', color: '#7fb0ff', dots: 3 },
+      { part: ['o2'], d: 'M300 96 L352 44', color: '#c9a7ff', dots: 3 },
+      { part: ['gluc', 'chloro'], d: 'M270 128 L318 182', color: '#ffb067', dots: 2, speed: 0.7 },
+    ],
+  },
+  'volcano:2d': {
+    flows: [
+      { part: ['chamber', 'vent'], d: 'M200 210 L200 128', color: '#ff8a5b', to: '#ff6a3d', dots: 4, speed: 0.8 },
+      { part: ['lava'], d: 'M236 122 Q252 150 250 168 Q266 186 270 200 Q286 216 300 238', color: '#ff6a3d', dots: 5, speed: 0.5 },
+      { part: ['gas'], d: 'M200 104 L200 70', color: '#7fb0ff', to: '#a3a3ad', dots: 2 },
+      { part: ['gas', 'ash'], d: 'M186 104 L162 76', color: '#7fb0ff', to: '#a3a3ad', dots: 2 },
+      { part: ['gas', 'ash'], d: 'M214 104 L238 76', color: '#7fb0ff', to: '#a3a3ad', dots: 2 },
+    ],
+  },
+  'jet:3d': {
+    flows: [
+      { part: ['fan', 'comp', 'comb', 'turb'], pts: [[-3.6, 0, 0.36], [-2.3, 0, 0.36], [-1.1, 0, 0.3], [0.1, 0, 0.42], [1.3, 0, 0.3], [2.4, 0, 0.2], [4, 0, 0.15]], color: '#7fb0ff', to: '#ff6a3d', dots: 7, speed: 1.6 },
+      { part: ['fan', 'comp', 'comb', 'turb'], pts: [[-3.6, 0.32, -0.16], [-2.3, 0.32, -0.16], [-1.1, 0.27, -0.14], [0.1, 0.36, -0.2], [1.3, 0.27, -0.14], [2.4, 0.18, -0.1], [4, 0.13, -0.07]], color: '#7fb0ff', to: '#ff6a3d', dots: 7, speed: 1.6 },
+      { part: ['fan', 'comp', 'comb', 'turb'], pts: [[-3.6, -0.32, -0.16], [-2.3, -0.32, -0.16], [-1.1, -0.27, -0.14], [0.1, -0.36, -0.2], [1.3, -0.27, -0.14], [2.4, -0.18, -0.1], [4, -0.13, -0.07]], color: '#7fb0ff', to: '#ff6a3d', dots: 7, speed: 1.6 },
+      { part: ['fan', 'case'], pts: [[-3.6, 0.82, 0], [-2.3, 0.82, 0], [0, 0.85, 0], [2.6, 0.85, 0], [3.8, 0.8, 0]], color: '#a3c9ff', dots: 5, speed: 1.6 },
+      { part: ['fan', 'case'], pts: [[-3.6, -0.82, 0], [-2.3, -0.82, 0], [0, -0.85, 0], [2.6, -0.85, 0], [3.8, -0.8, 0]], color: '#a3c9ff', dots: 5, speed: 1.6 },
+    ],
+  },
+  'washer:3d': {
+    flows: [
+      { part: ['inlet'], pts: [[-0.8, 1.45, -1.2], [-0.8, 1.0, -0.6], [-0.4, 0.6, -0.4], [-0.2, 0.3, 0]], color: '#7ee0e0', dots: 4 },
+      { part: ['drum'], pts: ring(0, -0.1, 0.45, 0.62), color: '#7fb0ff', dots: 9, speed: 1.4 },
+      { part: ['pump'], pts: [[0, -0.95, 0.3], [0.5, -1.2, 0.5], [0.8, -1.3, 0.4], [0.9, -1.3, -0.2]], color: '#8a9a7a', dots: 3 },
+    ],
+  },
+};
+
 const words = (q) => String(q || '').toLowerCase().replace(/[^a-z0-9\s-]/g, ' ').replace(ASKING, ' ').split(/\s+/).filter(Boolean);
 
 // the book's drawing for a question, or null. want3d: the student asked for 3D (a 3D model when the book has one,
@@ -428,10 +554,17 @@ export function fromBook(question, want3d = false) {
   if (q.length > 160) return null;
   for (const e of BOOK) {
     if (!e.is.test(q) || (e.not && e.not.test(q))) continue;
-    const left = words(q.replace(new RegExp(e.is.source, 'gi'), ' ')).filter((w) => w.length > 2);
+    const left = words(q.replace(new RegExp(e.is.source, 'gi'), ' ').replace(e.ok || /$^/, ' ')).filter((w) => w.length > 2); // (e.ok: more words that still ask for this very subject)
     if (left.length) return null; // (a narrow question, about one part or for a project: the AI's, which can focus on it)
     const spec = (want3d && e['3d']) || e['2d'] || e['3d'];
-    return spec ? JSON.parse(JSON.stringify({ ...spec, book: e.key })) : null;
+    if (!spec) return null;
+    const out = JSON.parse(JSON.stringify({ ...spec, book: e.key }));
+    const mo = MOTION[e.key + ':' + out.mode]; // (v314) and what moves in it
+    if (mo) {
+      if (mo.flows && !out.flows) out.flows = JSON.parse(JSON.stringify(mo.flows));
+      out.parts.forEach((p) => { if (mo.spin && mo.spin.includes(p.id)) p.spin = true; if (mo.beat && mo.beat.includes(p.id)) p.beat = true; });
+    }
+    return out;
   }
   return null;
 }
