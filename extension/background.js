@@ -871,13 +871,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return true;
 });
 chrome.runtime.onStartup.addListener(() => { checkForUpdate().catch(() => {}); });
-const pendingImports = new Map(); // tabId -> { name, mime, base64, prompt, groqKey }
+const pendingImports = new Map(); // tabId -> { name, mime, base64, prompt }
 
 async function openInApp(file, index) {
-  const { groqKey } = await getKeys();
   const tab = await chrome.tabs.create({ url: CASSIE_APP_URL, index });
-  pendingImports.set(tab.id, { ...file, groqKey: groqKey || '' });
+  pendingImports.set(tab.id, { ...file }); // (v3.82: no key goes with it)
   setTimeout(() => pendingImports.delete(tab.id), 120000);
+  // the app can open (from its cache) before this was kept: tell the page it is ready to be asked for
+  const nudge = () => chrome.tabs.sendMessage(tab.id, { type: 'CASSIE_NUDGE' }).catch(() => {});
+  nudge(); setTimeout(nudge, 1500); setTimeout(nudge, 4000);
 }
 
 function bufToBase64(buf) {
@@ -909,6 +911,27 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return false;
   }
   if (msg?.type === 'CASSIE_BRIDGE_TAKEN') { if (sender.tab) pendingImports.delete(sender.tab.id); return false; }
+  return false;
+});
+
+// (v3.82) The Cassie app asks for a file to make a reviewer of, and for what was asked here, through
+// Chrome's own extension messaging (externally_connectable). Chrome tells us which site is asking, so
+// only Cassie's own sites get an answer, and no other script on the page can fake or read it.
+// The file is handed over without any key.
+const CASSIE_APP_ORIGINS = ['https://askcassie.study', 'https://www.askcassie.study', 'https://askcassie.pages.dev', 'https://usernamehaze.github.io'];
+chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
+  if (!CASSIE_APP_ORIGINS.includes(sender.origin)) return false;
+  const tab = sender.tab && sender.tab.id;
+  if (msg?.type === 'CASSIE_PULL') {
+    (async () => {
+      const p = tab != null ? pendingImports.get(tab) : null;
+      let history = [];
+      try { const { cassieHistory } = await chrome.storage.local.get('cassieHistory'); if (Array.isArray(cassieHistory)) history = cassieHistory.slice(-100); } catch (e) { /* none */ }
+      sendResponse({ file: p && p.base64 ? { name: p.name, mime: p.mime, base64: p.base64, prompt: p.prompt } : null, history });
+    })();
+    return true;
+  }
+  if (msg?.type === 'CASSIE_TAKEN') { if (tab != null) pendingImports.delete(tab); return false; }
   return false;
 });
 

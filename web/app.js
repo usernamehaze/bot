@@ -2815,7 +2815,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=315'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=316'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2837,7 +2837,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=315'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=316'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -3113,7 +3113,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=315').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=316').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -7541,11 +7541,11 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=315')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=316')));
 // (v310) Cassie's drawing book: a checked drawing of a common subject (a bicycle, the heart, the solar system...) shows
 // at once, right every time, with no AI and no question used (offline too). Anything else is drawn by the AI.
 let liveBookLib = null;
-const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=315').catch(() => null)));
+const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=316').catch(() => null)));
 async function liveDrawBook(subject, want3d) {
   if (window.CASSIE_NO_BOOK) return null; // (tests of the AI's own drawing turn the book off)
   const bk = await liveBookLoad(), m = await liveDrawLoad();
@@ -8150,25 +8150,30 @@ if (webBtn) {
 
 /* ---------- files handed over by the Cassie browser extension ----------
    On a PDF / Google Doc / Slides tab the extension's "Make a reviewer" button
-   opens this app and passes the file in (via its small bridge script on this
-   site). We attach it and start the reviewer straight away. */
-window.addEventListener('message', async (e) => {
-  const d = e.data;
-  if (e.source !== window || !d || d.source !== 'cassie-ext' || d.type !== 'import-file' || !d.base64) return;
-  window.postMessage({ source: 'cassie-app', type: 'import-taken' }, location.origin); // (the extension can forget it now: extension/bridge.js)
+   opens this app and passes the file in. We attach it and start the reviewer straight away.
+   (v316) The app asks the extension for it through Chrome's own extension messaging, which
+   proves the answer comes from the extension; nothing is taken from window messages, which any
+   script on the page could send. No key ever comes this way, and only a reviewable file of a
+   sane size is taken. */
+const EXT_FILE_TYPES = /^(application\/pdf|text\/plain|text\/markdown|image\/(png|jpeg|webp|gif)|application\/vnd\.openxmlformats-officedocument\.(wordprocessingml\.document|presentationml\.presentation))$/;
+async function importExtensionFile(d) {
+  if (!d || typeof d.base64 !== 'string' || !d.base64 || d.base64.length > 30e6 || !/^[A-Za-z0-9+/=\s]+$/.test(d.base64.slice(0, 2000))) return;
+  const guess = (n) => ({ png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif' })[String(n || '').toLowerCase().split('.').pop()] || 'image/png';
+  const raw = d.mime === 'image/*' ? guess(d.name) : d.mime; // (the extension says image/* when the page did not say which)
+  const mime = typeof raw === 'string' && EXT_FILE_TYPES.test(raw) ? raw : null;
+  if (!mime) { renderMessage('assistant', CassieErrors.say('tab_file')); return; }
+  const name = String(d.name || 'file').replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ').trim().slice(0, 120) || 'file';
   try {
-    // Convenience: if this app has no Groq key yet, use the one saved in the extension.
-    if (!state.groqKey && typeof d.groqKey === 'string' && /^gsk_/.test(d.groqKey)) { state.groqKey = d.groqKey; save(); }
     const bin = atob(d.base64);
     const bytes = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    const file = new File([bytes], d.name || 'file.pdf', { type: d.mime || 'application/pdf' });
+    const file = new File([bytes], name, { type: mime });
     const ok = await attachFile(file);
-    if (ok && d.prompt) handleSend(d.prompt);
+    if (ok && typeof d.prompt === 'string' && d.prompt.trim()) handleSend(d.prompt.slice(0, 2000));
   } catch (err) {
     renderMessage('assistant', CassieErrors.say('tab_file'));
   }
-});
+}
 
 /* ---------- what was asked in the Chrome extension shows up here too ----------
    The bridge script hands over the extension's history (highlights, snips, pasted
@@ -8210,12 +8215,31 @@ function importExtensionHistory(items) {
   islandShow('done', fresh.length === 1 ? '1 answer from Chrome added' : `${fresh.length} answers from Chrome added`, 3200);
   return fresh.length;
 }
-window.addEventListener('message', (e) => {
-  const d = e.data;
-  if (e.source !== window || !d || d.source !== 'cassie-ext' || d.type !== 'import-history' || !Array.isArray(d.items)) return;
-  try { importExtensionHistory(d.items.slice(0, 100)); } catch (err) { /* a bad item never breaks the app */ }
-});
+// (v316) what the extension has for this app, asked through Chrome's extension messaging: Chrome checks
+// that this is Cassie's own site, and only the extension can answer. The extension's id comes from its
+// bridge script (a copy installed from the zip has its own), else the Web Store's.
+const CASSIE_STORE_EXT = 'hnafgijhojdheggkcjliffbgpdhikbpj';
+let extPulling = false;
+function extAsk(id, msg) {
+  return new Promise((res) => { try { chrome.runtime.sendMessage(id, msg, (r) => { void chrome.runtime.lastError; res(r || null); }); } catch (e) { res(null); } });
+}
+async function extPull() {
+  if (extPulling || !(window.chrome && chrome.runtime && chrome.runtime.sendMessage)) return;
+  extPulling = true;
+  try {
+    const ids = [document.documentElement.dataset.cassieExtId, CASSIE_STORE_EXT].filter((x, i, a) => /^[a-p]{32}$/.test(x || '') && a.indexOf(x) === i);
+    for (const id of ids) {
+      const r = await extAsk(id, { type: 'CASSIE_PULL' });
+      if (!r) continue;
+      if (r.file && r.file.base64) { extAsk(id, { type: 'CASSIE_TAKEN' }); await importExtensionFile(r.file); }
+      if (Array.isArray(r.history) && r.history.length) { try { importExtensionHistory(r.history.slice(0, 100)); } catch (err) { /* a bad item never breaks the app */ } }
+      break;
+    }
+  } finally { extPulling = false; }
+}
+document.addEventListener('cassie-ext-ready', () => { extPull(); }); // (a nudge from the bridge, with no data in it)
 document.documentElement.dataset.cassieReady = '1';
+setTimeout(extPull, 0); setTimeout(extPull, 1500); setTimeout(extPull, 4000); // (the extension may still be keeping the file when the app opens)
 
 /* ---------- the student's drawing board ---------- */
 const prefersDark = () => isDark();
@@ -8992,7 +9016,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=315');
+      exploreMod = await import('./explore/cell3d.js?v=316');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -9042,7 +9066,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=315');
+      labsMod = await import('./labs/labs.js?v=316');
       islandRest();
     }
     labsMod.open({
@@ -11004,10 +11028,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=315').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=316').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=315', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=316', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.

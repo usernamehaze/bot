@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Cassie: Study Tutor",
-  "version": "3.81.0",
+  "version": "3.82.0",
   "description": "Highlight text on any page and ask Cassie for an explanation, answer, or code. Free, no key needed.",
   "homepage_url": "https://askcassie.study/",
   "icons": {
@@ -56,6 +56,14 @@
       "run_at": "document_idle"
     }
   ],
+  "externally_connectable": {
+    "matches": [
+      "https://askcassie.study/*",
+      "https://www.askcassie.study/*",
+      "https://askcassie.pages.dev/*",
+      "https://usernamehaze.github.io/*"
+    ]
+  },
   "permissions": [
     "storage",
     "activeTab",

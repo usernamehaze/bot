@@ -954,6 +954,37 @@ test('an old saved Gemini key (apiKey) moves to geminiKey, is removed from what�
   await ctx.close();
 });
 
+test('v316 the extension and the app talk only through Chrome’s extension messaging: a fake window message (a file, a chat or a key) from another script on the page is ignored; the extension answers only Cassie’s own sites and never sends a key; the app takes only a reviewable file of a sane size', async (b) => {
+  const man = JSON.parse(fs.readFileSync(fileAt('extension/manifest.json'), 'utf8'));
+  const ext = man.externally_connectable && man.externally_connectable.matches || [];
+  expect(ext.length && ext.every((m) => /^https:\/\/(www\.)?askcassie\.(study|pages\.dev)\/\*$|^https:\/\/usernamehaze\.github\.io\/\*$/.test(m)) && !(man.externally_connectable.ids || []).length, 'only Cassie’s own sites can message the extension: ' + JSON.stringify(man.externally_connectable));
+  const bridge = fs.readFileSync(fileAt('extension/bridge.js'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  expect(!/postMessage/.test(bridge) && /dataset\.cassieExtId = chrome\.runtime\.id/.test(bridge), 'the bridge passes nothing through the page, only the extension’s id');
+  const bg = fs.readFileSync(fileAt('extension/background.js'), 'utf8');
+  const ext2 = bg.slice(bg.indexOf('chrome.runtime.onMessageExternal'));
+  expect(/CASSIE_APP_ORIGINS\.includes\(sender\.origin\)/.test(ext2) && !/groqKey|geminiKey/.test(ext2.slice(0, 1400)) && !/pendingImports\.set\([^)]*groqKey/.test(bg), 'the extension answers only Cassie’s sites, with no key');
+  const { ctx, page, errors } = await open(b, { state: { groqKey: '' } });
+  const before = await page.evaluate(() => ({ chats: state.chats.length, key: state.groqKey || '' }));
+  await page.evaluate(() => {
+    window.postMessage({ source: 'cassie-ext', type: 'import-history', items: [{ id: 'fake1', ts: Date.now(), q: 'FAKE QUESTION', a: 'FAKE ANSWER', url: 'https://evil.example/' }] }, location.origin);
+    window.postMessage({ source: 'cassie-ext', type: 'import-file', name: 'x.pdf', mime: 'application/pdf', base64: btoa('%PDF-1.4 fake'), prompt: 'FAKE PROMPT', groqKey: 'gsk_attacker_key_0123456789' }, location.origin);
+  });
+  await page.waitForTimeout(800);
+  const after = await page.evaluate(() => ({ chats: state.chats.length, key: state.groqKey || '', fake: JSON.stringify(state.chats).includes('FAKE'), log: document.getElementById('chat-log').innerText }));
+  expect(after.chats === before.chats && !after.fake && after.key === before.key && !/FAKE PROMPT/.test(after.log), 'a fake window message changes nothing (no chat, no file, no key): ' + JSON.stringify(after).slice(0, 300));
+  // what the extension hands over is checked: a web page or an oversized file is not taken
+  const took = await page.evaluate(async () => {
+    const seen = []; const orig = window.attachFile; window.attachFile = async (f) => { seen.push(f.type + ':' + f.name); return false; };
+    await importExtensionFile({ name: 'page.html', mime: 'text/html', base64: btoa('<script>alert(1)</script>') });
+    await importExtensionFile({ name: 'huge.pdf', mime: 'application/pdf', base64: 'A'.repeat(30e6 + 10) });
+    await importExtensionFile({ name: 'notes.pdf', mime: 'application/pdf', base64: btoa('%PDF-1.4 ok') });
+    await importExtensionFile({ name: 'photo.jpg', mime: 'image/*', base64: btoa('jpgdata') });
+    window.attachFile = orig; return seen;
+  });
+  expect(JSON.stringify(took) === '["application/pdf:notes.pdf","image/jpeg:photo.jpg"]', 'only a reviewable file of a sane size is taken (image/* gets its real type): ' + JSON.stringify(took));
+  expect(!errors.length, 'page errors: ' + errors.join(' | '));
+  await ctx.close();
+});
 test('askcassie.study is Cassie’s main address: the server lets it (and www) use Cassie but not other sites (askcassie.pages.dev and the old GitHub Pages copy neither), the extension opens it and talks to it, and what Cassie shares names it', async () => {
   const w = (await import(require('url').pathToFileURL(fileAt('server/worker.js')).href)).default;
   for (const [o, ok] of [['https://askcassie.study', true], ['https://www.askcassie.study', true], ['https://askcassie.pages.dev', false], ['https://usernamehaze.github.io', false], ['https://askcassie.study.evil.example', false], ['https://evil.example', false]]) {
@@ -5274,14 +5305,16 @@ test('Cursor Cassie on the page (like Clicky): her cursor follows the mouse when
     expect(!/[—–]/.test(await panel.locator('.lessons').innerText()), 'no dashes in Your lessons');
     // the app tab reloads once while it opens, before the app has taken the lesson (an update, a flaky line):
     // the lesson must still reach it
-    await ctx.addInitScript(() => { if (!/askcassie/.test(location.host)) return; window.addEventListener('message', (e) => { if (e.data && e.data.type === 'import-file' && !sessionStorage.getItem('reloadedOnce')) { sessionStorage.setItem('reloadedOnce', '1'); e.stopImmediatePropagation(); location.reload(); } }, true); });
+    // (v316: the file comes through Chrome's extension messaging: the tab reloads just as the first answer with a file arrives)
+    await ctx.addInitScript(() => { if (!/askcassie/.test(location.host)) return; const rt = window.chrome && chrome.runtime; if (!rt || !rt.sendMessage) return; const orig = rt.sendMessage.bind(rt); rt.sendMessage = (id, msg, cb) => orig(id, msg, (r) => { if (msg && msg.type === 'CASSIE_PULL' && r && r.file && !sessionStorage.getItem('reloadedOnce')) { sessionStorage.setItem('reloadedOnce', '1'); location.reload(); return; } if (cb) cb(r); }); });
     const appOpened = ctx.waitForEvent('page', { timeout: 15000 });
     await first.locator('[data-open]').click();
     const app = await appOpened;
     await app.waitForLoadState().catch(() => {});
-    if (!/askcassie\.pages\.dev/.test(await app.evaluate(() => location.host).catch(() => ''))) await app.goto(app.url().startsWith('chrome-error') ? 'https://askcassie.pages.dev/app.html' : app.url()).catch((e) => { if (!/interrupted by another navigation/.test(e.message)) throw e; }); // (the test's stand-in for the site is set up a moment after a new tab's first load; the tab's own reload below may cut in)
+    if (!/askcassie\.pages\.dev/.test(await app.evaluate(() => location.host).catch(() => ''))) await app.goto('https://askcassie.pages.dev/app.html') /* (v316: the test's own copy of the site, never the live askcassie.study) */.catch((e) => { if (!/interrupted by another navigation/.test(e.message)) throw e; }); // (the test's stand-in for the site is set up a moment after a new tab's first load; the tab's own reload below may cut in)
     await app.waitForLoadState().catch(() => {});
-    await app.waitForFunction(() => typeof state === 'object' && state.chats.some((c) => (c.messages || []).some((m) => /lesson you taught me on a page called “Photosynthesis notes”/.test(m.content || m.text || ''))), null, { timeout: 20000 });
+    await app.waitForFunction(() => typeof state === 'object' && state.chats.some((c) => (c.messages || []).some((m) => /lesson you taught me on a page called “Photosynthesis notes”/.test(m.content || m.text || ''))), null, { timeout: 20000 })
+      .catch(async (e) => { throw new Error('the lesson never reached the app: ' + JSON.stringify(await app.evaluate(async () => ({ host: location.host, id: document.documentElement.dataset.cassieExtId || null, log: window.__extLog || null, reloaded: sessionStorage.getItem('reloadedOnce'), chats: state.chats.length, last: JSON.stringify(state.chats.flatMap((c) => c.messages || []).slice(-2)).slice(0, 300)})).catch((x) => x.message))); });
     const att = await app.evaluate(() => JSON.stringify(state.chats.flatMap((c) => c.messages || []).filter((m) => /lesson you taught me/.test(m.content || m.text || ''))).slice(0, 800));
     expect(/Cassie lesson\.txt|The table shows the two stages/.test(att) && await app.evaluate(() => sessionStorage.getItem('reloadedOnce')) === '1', 'the lesson reached the app chat with its words, even after the tab reloaded while opening: ' + att);
     await app.close();
@@ -17394,7 +17427,7 @@ test('extension: drop a PDF, words or a photo on Cassie’s Island on any page',
     await page.locator('.cx-isle-chip', { hasText: 'Summarize' }).click();
     const app = await appOpened;
     // the tab the extension opens starts loading before the test can serve it: load it again (the file waits for this tab)
-    if (!/askcassie/.test(app.url()) || !(await app.locator('#chat-log').count())) await app.goto('https://askcassie.pages.dev/app.html');
+    if (!/askcassie\.pages\.dev/.test(app.url()) || !(await app.locator('#chat-log').count())) await app.goto('https://askcassie.pages.dev/app.html'); // (v316: the test's own copy of the site, never the live one)
     try { await app.waitForSelector('#chat-log .bubble-assistant >> text=water evaporates', { timeout: 20000 }); } catch (e) { throw new Error('app url ' + app.url() + ' pages ' + ctx.pages().map((x) => x.url()).join(',') + ' app chat: ' + (await app.locator('#chat-log').innerText({ timeout: 2000 }).catch(() => '-')).slice(0, 600) + ' | url ' + app.url() + ' | calls ' + groqCalls.length + ' | attach ' + await app.locator('#attach-preview').innerText().catch(() => '?')); }
     expect(groqCalls.some((b) => /condensation/i.test(b) && /Summarize this file/.test(b)), 'the app should read the dropped PDF and summarize it');
     await page.bringToFront();
