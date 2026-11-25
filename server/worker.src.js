@@ -184,6 +184,9 @@ const SCHEMA = [
   // payments (PayMongo): who bought which pass, for how much, and PayMongo's payment number (never card details)
   `CREATE TABLE IF NOT EXISTS payments (id TEXT PRIMARY KEY, session TEXT, account TEXT, plan TEXT, bill TEXT, php INTEGER, shown TEXT, status TEXT, pay_ref TEXT, method TEXT, live INTEGER, created INTEGER, paid INTEGER)`,
   `CREATE INDEX IF NOT EXISTS payments_session ON payments(session)`,
+  // (v316) AI drawings that passed every check, waiting for the owner to look at them; and the ones approved for the drawing book
+  `CREATE TABLE IF NOT EXISTS drawing_candidates (id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER, subject TEXT, mode TEXT, spec TEXT, png TEXT, status TEXT, UNIQUE (subject, mode))`,
+  `CREATE TABLE IF NOT EXISTS drawings_verified (subject TEXT, mode TEXT, spec TEXT, ts INTEGER, PRIMARY KEY (subject, mode))`,
   `INSERT OR IGNORE INTO identities (provider, sub, account) SELECT 'google', google, id FROM accounts WHERE google IS NOT NULL`,
 ];
 let schemaReady = false;
@@ -538,6 +541,8 @@ async function tidy(env) {
     env.DB.prepare("DELETE FROM quota WHERE day < ? AND length(day) IN (10, 13) AND k NOT LIKE 'gpic:%'").bind(today),
     env.DB.prepare('DELETE FROM scores WHERE day < ?').bind(dayOf(now - 14 * 86400e3)),
     env.DB.prepare("DELETE FROM payments WHERE status = 'pending' AND created < ?").bind(now - 2 * 864e5), // (checkouts never paid)
+    env.DB.prepare("DELETE FROM drawing_candidates WHERE status != 'new' AND ts < ?").bind(now - 30 * 864e5), // (looked at a month ago: gone)
+    env.DB.prepare("DELETE FROM drawing_candidates WHERE status = 'new' AND ts < ?").bind(now - 90 * 864e5),
   ]);
 }
 function cleanMessages(list) {
@@ -1251,6 +1256,69 @@ async function image(request, env, ctx) {
 
 /* ------------------------------------------------------------------ feedback */
 const FEEDBACK = new Set(['up', 'down', 'report', 'auto']); // auto: an error the app hit (the message only)
+/* ------------------------------------------------------------------ the drawing book, grown by the team (v316) */
+// An AI drawing that passed every one of Cassie's own checks is sent here with the few words of its subject
+// ("blender", "washing machine") and a small picture of it: never the student's own words, name or account.
+// The owner looks at each one on the dashboard. Approved, it joins the drawing book for every student
+// (GET /drawings), the way the hand-checked drawings do; rejected, it is not suggested again.
+const DRAW_SUBJECT = /^[a-z0-9][a-z0-9 -]{1,79}$/;
+async function drawingSuggest(request, env) {
+  const h = allowedOrigin(request, env);
+  if (!h) return new Response('forbidden', { status: 403 });
+  const b = await readJson(request, 400000);
+  if (!b) return new Response('too big', { status: 413, headers: h });
+  const uid = clean(b.uid, 64), subject = clean(b.subject, 80).toLowerCase().replace(/\s+/g, ' ').trim(), mode = b.mode === '3d' ? '3d' : '2d';
+  const okSpec = b.spec && typeof b.spec === 'object' && !Array.isArray(b.spec) && Array.isArray(b.spec.parts) && b.spec.parts.length >= 2 && b.spec.parts.length <= 12;
+  const spec = okSpec ? JSON.stringify({ ...b.spec, mode }) : '';
+  const png = typeof b.png === 'string' && b.png.length <= 300000 && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(b.png) ? b.png : '';
+  if (!/^[\w-]{8,64}$/.test(uid) || !DRAW_SUBJECT.test(subject) || !spec || spec.length > 90000) return new Response('bad', { status: 400, headers: h });
+  await ensureSchema(env.DB);
+  if (await countUse(env.DB, 'dsug:' + uid, dayOf(Date.now())) > 20) return new Response(null, { status: 204, headers: h }); // (a few a day each is plenty)
+  const known = await env.DB.prepare('SELECT 1 AS k FROM drawings_verified WHERE subject = ? AND mode = ?').bind(subject, mode).first();
+  if (!known) await env.DB.prepare("INSERT OR IGNORE INTO drawing_candidates (ts, subject, mode, spec, png, status) VALUES (?, ?, ?, ?, ?, 'new')").bind(Date.now(), subject, mode, spec, png).run();
+  return new Response(null, { status: 204, headers: h });
+}
+// every approved drawing, for the app's drawing book (it keeps a copy, so they work offline too)
+async function drawingsPublic(request, env) {
+  const h = allowedOrigin(request, env);
+  if (!h) return new Response('forbidden', { status: 403 });
+  await ensureSchema(env.DB);
+  const rows = (await env.DB.prepare('SELECT subject, mode, spec, ts FROM drawings_verified ORDER BY ts DESC LIMIT 400').all()).results || [];
+  const list = rows.map((r) => { try { return { subject: r.subject, mode: r.mode, ts: r.ts, spec: JSON.parse(r.spec) }; } catch (e) { return null; } }).filter(Boolean);
+  return json({ list }, 200, { ...h, 'cache-control': 'public, max-age=300' });
+}
+// the owner's review: GET lists what is waiting (with its picture) and what is in the book; POST approves, rejects or removes one
+async function adminDrawings(request, env) {
+  const no = await adminOk(request, env);
+  if (no) return json({ error: no.error }, no.status);
+  const db = env.DB;
+  if (request.method === 'GET') {
+    const [waiting, approved] = await Promise.all([
+      db.prepare("SELECT id, ts, subject, mode, spec, png FROM drawing_candidates WHERE status = 'new' ORDER BY ts DESC LIMIT 20").all().then((r) => r.results || []),
+      db.prepare('SELECT subject, mode, ts FROM drawings_verified ORDER BY ts DESC LIMIT 400').all().then((r) => r.results || []),
+    ]);
+    const parts = (t) => { try { const sp = JSON.parse(t); return { title: clean(sp.title, 90), parts: (sp.parts || []).map((x) => clean(x && x.label, 40)).filter(Boolean) }; } catch (e) { return { title: '', parts: [] }; } };
+    return json({ waiting: waiting.map((r) => ({ id: r.id, ts: r.ts, subject: r.subject, mode: r.mode, png: r.png || '', ...parts(r.spec) })), approved });
+  }
+  const b = await readJson(request);
+  if (!b) return json({ error: 'bad request' }, 400);
+  if (b.action === 'approve' || b.action === 'reject') {
+    const row = await db.prepare("SELECT id, subject, mode, spec FROM drawing_candidates WHERE id = ? AND status = 'new'").bind(+b.id || 0).first();
+    if (!row) return json({ error: 'That drawing is not waiting any more.' }, 404);
+    const now = Date.now();
+    await db.batch([
+      ...(b.action === 'approve' ? [db.prepare('INSERT OR REPLACE INTO drawings_verified (subject, mode, spec, ts) VALUES (?, ?, ?, ?)').bind(row.subject, row.mode, row.spec, now)] : []),
+      db.prepare('UPDATE drawing_candidates SET status = ?, ts = ? WHERE id = ?').bind(b.action === 'approve' ? 'approved' : 'rejected', now, row.id),
+    ]);
+    return json({ ok: true });
+  }
+  if (b.action === 'remove') {
+    await db.prepare('DELETE FROM drawings_verified WHERE subject = ? AND mode = ?').bind(clean(b.subject, 80), b.mode === '3d' ? '3d' : '2d').run();
+    return json({ ok: true });
+  }
+  return json({ error: 'unknown action' }, 400);
+}
+
 async function feedback(request, env) {
   const h = allowedOrigin(request, env);
   if (!h) return new Response('forbidden', { status: 403 });
@@ -2005,6 +2073,9 @@ export default {
       if (url.pathname === '/speak') return await speak(request, env, ctx);
       if (request.method === 'POST' && url.pathname === '/e') return await ingest(request, env);
       if (request.method === 'POST' && url.pathname === '/f') return await feedback(request, env);
+      if (request.method === 'POST' && url.pathname === '/drawings/suggest') return await drawingSuggest(request, env);
+      if (request.method === 'GET' && url.pathname === '/drawings') return await drawingsPublic(request, env);
+      if (url.pathname === '/admin/drawings' && (request.method === 'GET' || request.method === 'POST')) return await adminDrawings(request, env);
       if (request.method === 'POST' && url.pathname === '/care') { const h = allowedOrigin(request, env); if (!h) return new Response('forbidden', { status: 403 }); if (env.DB) { await ensureSchema(env.DB); countCare(env, ctx); } return new Response(null, { status: 204, headers: h }); }
       if (url.pathname.startsWith('/auth/')) return await auth(request, env, url.pathname);
       if (request.method === 'POST' && url.pathname === '/early') return await early(request, env);

@@ -573,3 +573,15 @@ export function fromBook(question, want3d = false) {
   return null;
 }
 export const bookKeys = () => BOOK.map((e) => e.key);
+// (v316) the subject's own words, the way the book matches them: "how does a blender work?" is "blender",
+// "draw me a washing machine" is "machine washing" (sorted, so the order of the words never matters)
+export const subjectOf = (q) => [...new Set(words(String(q || '')).filter((w) => w.length > 2))].sort().join(' ');
+// (v316) a drawing the team approved from what students asked (GET /drawings on Cassie's server), matched
+// by its subject's exact words, like the book; the 3D one when 3D is asked, else the flat one
+export function fromVerified(question, want3d, list) {
+  const subj = subjectOf(question);
+  if (!subj || !Array.isArray(list)) return null;
+  const mine = list.filter((x) => x && x.subject === subj && x.spec && typeof x.spec === 'object' && Array.isArray(x.spec.parts));
+  const hit = (want3d && mine.find((x) => x.mode === '3d')) || mine.find((x) => x.mode === '2d') || mine.find((x) => x.mode === '3d');
+  return hit ? JSON.parse(JSON.stringify({ ...hit.spec, mode: hit.mode, book: 'team:' + subj })) : null;
+}

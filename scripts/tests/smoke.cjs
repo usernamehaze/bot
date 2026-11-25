@@ -699,6 +699,46 @@ async function realServer(env = {}) {
   };
   return { call, DB, w };
 }
+test('v316 the drawing book, grown by the team (server): an AI drawing is suggested with its subject and a picture, waits for the owner, joins GET /drawings only once approved; a rejected one is not public; bad input and other sites are refused', async () => {
+  const { call } = await realServer({ ADMIN_TOKEN: 'test-admin-token-0123456789' });
+  const auth = { authorization: 'Bearer test-admin-token-0123456789' };
+  const spec = { title: 'How a blender works', mode: '2d', parts: [{ id: 'jar', label: 'Jar', shapes: [{ t: 'rect', x: 10, y: 10, w2: 100, h: 120 }] }, { id: 'blades', label: 'Blades', shapes: [{ t: 'line', x1: 40, y1: 120, x2: 80, y2: 120 }] }] };
+  const png = 'data:image/png;base64,iVBORw0KGgo=';
+  let r = await call('POST', '/drawings/suggest', { uid: 'u-12345678', subject: 'blender', mode: '2d', spec, png });
+  expect(r.status === 204, 'a good drawing is taken: ' + r.status);
+  for (const [why, body, h] of [['a strange subject', { uid: 'u-12345678', subject: 'blender<script>', mode: '2d', spec, png }], ['no parts', { uid: 'u-12345678', subject: 'kettle', mode: '2d', spec: { parts: [] } }], ['no device number', { subject: 'kettle', mode: '2d', spec }]]) {
+    r = await call('POST', '/drawings/suggest', body);
+    expect(r.status === 400, why + ' is refused: ' + r.status);
+  }
+  r = await call('POST', '/drawings/suggest', { uid: 'u-12345678', subject: 'kettle', mode: '2d', spec }, { origin: 'https://evil.example' });
+  expect(r.status === 403, 'another site cannot suggest one: ' + r.status);
+  r = await call('GET', '/admin/drawings');
+  expect(r.status === 401, 'only the owner sees what is waiting: ' + r.status);
+  r = await call('GET', '/admin/drawings', null, auth);
+  const w = (r.json && r.json.waiting) || [];
+  expect(w.length === 1 && w[0].subject === 'blender' && w[0].mode === '2d' && w[0].parts.join() === 'Jar,Blades' && w[0].png === png && w[0].title === 'How a blender works', 'the owner sees it, with its picture and parts: ' + JSON.stringify(w).slice(0, 300));
+  r = await call('GET', '/drawings');
+  expect(r.status === 200 && r.json.list.length === 0, 'nothing is in the book before it is approved');
+  r = await call('POST', '/admin/drawings', { action: 'approve', id: w[0].id }, auth);
+  expect(r.status === 200, 'approved: ' + r.text);
+  r = await call('GET', '/drawings');
+  expect(r.json.list.length === 1 && r.json.list[0].subject === 'blender' && r.json.list[0].spec.parts.length === 2 && /max-age=300/.test(r.headers.get('cache-control') || ''), 'once approved it is in the book for everyone: ' + JSON.stringify(r.json).slice(0, 200));
+  await call('POST', '/drawings/suggest', { uid: 'u-12345678', subject: 'blender', mode: '2d', spec, png });
+  r = await call('GET', '/admin/drawings', null, auth);
+  expect(!r.json.waiting.length, 'a subject already in the book is not suggested again');
+  // rejected: not public, and not asked about again
+  await call('POST', '/drawings/suggest', { uid: 'u-12345678', subject: 'kettle', mode: '2d', spec, png });
+  r = await call('GET', '/admin/drawings', null, auth);
+  const k = r.json.waiting.find((x) => x.subject === 'kettle');
+  await call('POST', '/admin/drawings', { action: 'reject', id: k.id }, auth);
+  await call('POST', '/drawings/suggest', { uid: 'u-12345678', subject: 'kettle', mode: '2d', spec, png });
+  const [after, pub] = [await call('GET', '/admin/drawings', null, auth), await call('GET', '/drawings')];
+  expect(!after.json.waiting.length && pub.json.list.every((x) => x.subject !== 'kettle'), 'a rejected one is not in the book, and not asked about again');
+  // removed from the book
+  await call('POST', '/admin/drawings', { action: 'remove', subject: 'blender', mode: '2d' }, auth);
+  r = await call('GET', '/drawings');
+  expect(r.json.list.length === 0, 'Remove takes it out of the book');
+});
 test('the real server: file sections (big PDFs read in parts) share an app-wide budget a minute, so chat questions never wait on them; past it a wait the app handles by itself (retry-after up to 30 s)', async () => {
   const realFetch = globalThis.fetch;
   globalThis.fetch = async (u, o) => (/api\.groq\.com/.test(String(u)) ? new Response(JSON.stringify({ choices: [{ message: { content: 'A section summary.' } }] }), { status: 200, headers: { 'content-type': 'application/json' } }) : realFetch(u, o));
@@ -954,6 +994,33 @@ test('an old saved Gemini key (apiKey) moves to geminiKey, is removed from what�
   await ctx.close();
 });
 
+test('v316 the drawing book, grown by the team (app): an AI drawing that passed every check is sent with its subject words and a picture, never the question; not for a photo, a name, a book subject, usage counts off, under 13 or an unknown age; once per subject; an approved drawing shows at once like the book, with no AI', async (b) => {
+  const drawCalls = [];
+  const { ctx, page, errors } = await open(b, { book: true, lite: 'off', state: { groqKey: 'gsk_test', analytics: { usage: true, topics: false } }, fakeGroq: (body) => { if (/explains by DRAWING/.test(JSON.stringify(body.messages || []))) drawCalls.push(1); return { text: 'Words.' }; } });
+  const sent = [];
+  await page.route(/\/drawings\/suggest$/, async (r) => { sent.push(JSON.parse(r.request().postData() || '{}')); await r.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*' } }); });
+  const good = JSON.parse(fs.readFileSync(fileAt('tests/fixtures/live/volcano2d-good.json'), 'utf8'));
+  const send = (q, opt = {}) => page.evaluate(async ([q, sp, opt]) => {
+    localStorage.removeItem('cassie.suggested'); state.analytics = { usage: opt.usage !== false, topics: false }; state.profile = { ...(state.profile || {}), age: opt.age === undefined ? 16 : opt.age };
+    await liveDrawSuggest(q, { ...sp, q }, { book: !!opt.book, photo: !!opt.photo });
+  }, [q, good, opt]);
+  await send('how does a geyser work?');
+  expect(sent.length === 1 && sent[0].subject === 'geyser' && sent[0].mode === '2d' && !('q' in sent[0].spec) && !/how does/i.test(JSON.stringify(sent[0])) && /^data:image\/png;base64,/.test(sent[0].png) && /^[\w-]{8,64}$/.test(sent[0].uid), 'a good AI drawing is sent with only its subject and a picture: ' + JSON.stringify({ ...sent[0], png: String(sent[0] && sent[0].png).slice(0, 30), spec: '...' }));
+  await page.evaluate(async (sp) => { await liveDrawSuggest('how does a geyser work?', sp, { book: false, photo: false }); }, good);
+  expect(sent.length === 1, 'once per subject on this device');
+  for (const [why, q, opt] of [['a photo', 'how does a geyser work?', { photo: true }], ['usage counts off', 'how does a geyser work?', { usage: false }], ['under 13', 'how does a geyser work?', { age: 11 }], ['an unknown age', 'how does a geyser work?', { age: null }], ['a name', 'draw how Maria waters her plant', {}], ['a book subject', 'draw a bicycle', {}], ['from the book', 'how does a geyser work?', { book: true }]]) {
+    const n = sent.length; await send(q, opt);
+    expect(sent.length === n, 'nothing is sent for ' + why + ': ' + JSON.stringify(sent.slice(n)).slice(0, 200));
+  }
+  // an approved drawing: shown at once, like the book, with no AI
+  await page.evaluate((sp) => { localStorage.setItem('cassie.teamDrawings', JSON.stringify({ at: Date.now(), list: [{ subject: 'geyser', mode: '2d', spec: { ...sp, title: 'How a geyser erupts' } }] })); chatLog.innerHTML = ''; state.messages = []; }, good);
+  drawCalls.length = 0;
+  await page.fill('#prompt-input', 'how does a geyser work?'); await page.click('#send-btn');
+  await page.waitForFunction(() => /How a geyser erupts/.test((document.querySelector('#chat-log .ld-title') || {}).textContent || ''), null, { timeout: 20000 });
+  expect(!drawCalls.length, 'the approved drawing is shown with no AI: ' + drawCalls.length);
+  expect(!errors.length, 'page errors: ' + errors.join(' | '));
+  await ctx.close();
+});
 test('v316 the extension and the app talk only through Chrome’s extension messaging: a fake window message (a file, a chat or a key) from another script on the page is ignored; the extension answers only Cassie’s own sites and never sends a key; the app takes only a reviewable file of a sane size', async (b) => {
   const man = JSON.parse(fs.readFileSync(fileAt('extension/manifest.json'), 'utf8'));
   const ext = man.externally_connectable && man.externally_connectable.matches || [];
@@ -3310,6 +3377,7 @@ test('privacy.html explains every table Cassie’s server keeps (a new table fai
     chats: /Counts for fair limits/, accounts: /Your account/, sessions: /your sign ins/, health: null /* (Cassie's own checks: no one's data) */,
     rooms: /Study rooms/, room_members: /Study rooms/, room_ops: /Study rooms/, room_here: /where your pointer is/, plans: /your plan \(Free, Plus or Pro\) and when it ends/,
     scores: /Daily puzzles/, identities: /Google or Apple, we keep which one/, push_subs: /Study reminders/, early: /The early list/, payments: /Payments\s*, if you buy a plan/, trials: /Free trial\s*, if you start one/,
+    drawing_candidates: /Drawings for Cassie.s drawing book/, drawings_verified: /Drawings for Cassie.s drawing book/,
   };
   const unknown = tables.filter((t) => !(t in SAID));
   expect(!unknown.length, 'the server keeps a table privacy.html doesn’t explain: ' + unknown.join(', ') + '. Say on the page what it holds, then add it here.');
