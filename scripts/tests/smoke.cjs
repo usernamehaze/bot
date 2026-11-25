@@ -3466,7 +3466,7 @@ test('Google Play, October 2026: every price is the same for everyone (no studen
   for (const f of ['terms.html', 'index.html']) expect(read(f).includes(LINE), f + ' says every price is the same for everyone, with nothing to check');
   expect(!/[–—]/.test(LINE), 'no dashes in it');
   // no restricted permission anywhere in Cassie's own code (the Play app is this web app in Chrome)
-  const own = require('child_process').execSync('git ls-files "*.js" "*.html" "*.json"', { cwd: ROOT }).toString().split('\n').filter((f) => f && !/^(scripts\/tests|web\/vendor|_site)\//.test(f) && !/three\.module/.test(f));
+  const own = require('child_process').execSync('git ls-files "*.js" "*.html" "*.json"', { cwd: ROOT }).toString().split('\n').filter((f) => f && !/^(scripts\/tests|web\/vendor|_site|\.claude)\//.test(f) && !/three\.module/.test(f)); // (.claude: Claude Code's skills, tools for whoever works on the repo, never shipped)
   const RESTRICTED = /navigator\.geolocation|navigator\.contacts|ContactsManager|showDirectoryPicker|requestFileSystem|OTPCredential|navigator\.(serial|usb|bluetooth|hid)\b/;
   const hits = own.filter((f) => RESTRICTED.test(read(f)));
   expect(!hits.length, 'no location, contacts, local network, all files or SMS access in the code: ' + hits.join(', '));
