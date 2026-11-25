@@ -2836,7 +2836,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=319'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=320'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2858,7 +2858,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=319'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=320'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -3134,7 +3134,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=319').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=320').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -7462,7 +7462,7 @@ First think how the real object is built: its real parts, which part holds or co
 - parts that turn get "spin": true; hot or glowing parts get "glow": true
 - something soft or living (an organ, an animal, a plant, a cell) is built from its real rounded shapes: spheres, capsules and lathes, smooth, in its real colours; a process is built as the real things it happens in, with flows for what moves through them
 ${LIVE_MOTION_3D}
-${seen}Make it look like the real thing, not like toy blocks: give every part its real colour and "finish":"metal"|"plastic"|"rubber"|"wood" (what it is really made of), and its real profile: a lathe for anything turned or rounded (a nozzle, a bottle, a nose cone, a wheel), a plate for a flat cut shape, a pipe for a hose, wire or tube, a capsule for a rounded body. A plain cylinder or box only where the real part is one.
+${seen}Make it look like the real thing, not like toy blocks: give every part its real colour and "finish" (what it is really made of: "metal" for steel or iron, "chrome", "aluminum", "gold", "copper", "plastic", "paint" for a painted body like a car or plane, "rubber", "wood", "glass", "water", "skin" for organs, flesh and living tissue, "fabric", "stone", "ceramic"; a single shape may carry its own "finish", like the glass of a window in a painted body), and its real profile: a lathe for anything turned or rounded (a nozzle, a bottle, a nose cone, a wheel), a plate for a flat cut shape, a pipe for a hose, wire or tube, a capsule for a rounded body. A plain cylinder or box only where the real part is one.
 {"title","mode":"3d","axis":the model's main length "x"|"y"|"z","intro":one sentence,"summary":one sentence,"next":[2 short questions the student could ask next to go deeper, each about one of its parts],"photo":what a real photo of it shows,"parts":[{"id","label":1 to 3 words,"say":1 or 2 short sentences,"color":"#hex","inside":the id of the part it sits in, or null,"attached":[ids of the parts it touches],"size":how big it really is (its longest side) against the whole object, 0 to 1,"shell","spin","glow","shapes":[...]}]}
 ${LIVE_ANATOMY}
 4 to 12 parts in building order, 2 to 8 shapes each. The whole model about 6 units long, centred on 0,0,0. Every shape has "pos":[x,y,z] and, when it has a length, "axis":"x"|"y"|"z".
@@ -7574,11 +7574,11 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=319')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=320')));
 // (v310) Cassie's drawing book: a checked drawing of a common subject (a bicycle, the heart, the solar system...) shows
 // at once, right every time, with no AI and no question used (offline too). Anything else is drawn by the AI.
 let liveBookLib = null;
-const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=319').catch(() => null)));
+const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=320').catch(() => null)));
 // (v316) the drawing book, grown by the team: AI drawings that passed every check go to Cassie's server with
 // only their subject's few words; the owner approves the good ones on the dashboard, and the app keeps a copy of
 // every approved drawing, so they show at once (offline too) like the hand-checked ones
@@ -9166,7 +9166,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=319');
+      exploreMod = await import('./explore/cell3d.js?v=320');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -9216,7 +9216,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=319');
+      labsMod = await import('./labs/labs.js?v=320');
       islandRest();
     }
     labsMod.open({
@@ -11180,10 +11180,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=319').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=320').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=319', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=320', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.

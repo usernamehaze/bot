@@ -14,7 +14,7 @@ cp index.html app.html start.html privacy.html terms.html support.html bot.html 
 cp app.js errors.js mic.js care.js board.js bot-page.js cards.js cassie-bot.js cassie-bot3d.js cassie-3d.js cite.js config.js export.js gradient.js listen.js memory.js rewards.js \
    native.js sketch.js start.js study-room.js sw.js tour.js voice.js extlink.js opening.js boardprep.js livedraw.js drawbook.js isoview.js "$OUT"/
 cp _headers "$OUT"/   # Cloudflare Pages response headers (security)
-cp -r icons landing explore labs vendor "$OUT"/
+cp -r icons landing explore labs vendor models "$OUT"/   # (v320 models/: the drawing book's Blender models, scripts/blender/)
 # notes for developers and an unused logo aren't needed to run the site (they stay in the repo)
 rm -f "$OUT"/explore/body/README.md "$OUT"/icons/logo.svg
 [ -d .well-known ] && cp -r .well-known "$OUT"/ || true   # Play Store app link (assetlinks.json)

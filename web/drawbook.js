@@ -12,7 +12,7 @@ const BOOK = [
   {
     key: 'bicycle', is: /\b(bicycles?|bikes?|cycling|bisikleta)\b/i, not: /\b(motor ?bikes?|motorcycles?|e-?bikes?|dirt ?bikes?)\b/i,
     '3d': {
-      title: 'How a bicycle works', mode: '3d', axis: 'x',
+      title: 'How a bicycle works', mode: '3d', axis: 'x', glb: 'models/bicycle.glb', // (v320: made in Blender, scripts/blender/bicycle.py)
       intro: 'A bicycle turns the push of your legs into turning wheels: pedals, cranks, chain, rear wheel.',
       summary: 'You push the pedals, the chainring pulls the chain, the chain turns the rear gear, and the rear wheel rolls the bike forward.',
       photo: 'a real city bicycle standing on a road, side view, steel frame, two spoked wheels, chain and pedals',
@@ -370,7 +370,7 @@ const BOOK = [
   {
     key: 'airplane', is: /\b(air ?planes?|aero ?planes?|airliners?|passenger (jet|plane)s?|eroplano)\b/i, not: /\b(paper (air)?planes?|model planes?)\b/i,
     '3d': {
-      title: 'How an airplane flies', mode: '3d', axis: 'x',
+      title: 'How an airplane flies', mode: '3d', axis: 'x', glb: 'models/airplane.glb', // (v320: made in Blender, scripts/blender/airplane.py; the shapes below are its stand-in)
       intro: 'An airliner: the wings make lift, the engines push it forward, and the tail keeps it steady and steers it.',
       summary: 'Engines push the plane forward; air rushing over the curved wings lifts it up; the tail wings and the fin keep it level and steer it.',
       photo: 'a real passenger airliner flying, seen from the side and slightly below',

@@ -29,6 +29,32 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const KINDS2 = ['line', 'arrow', 'rect', 'circle', 'ellipse', 'poly', 'path', 'text'];
 const KINDS3 = ['cylinder', 'tube', 'disc', 'cone', 'torus', 'ring', 'blades', 'sphere', 'box', 'capsule', 'pipe', 'arrow', 'lathe', 'plate'];
 const has = (x, k) => x[k] != null && x[k] !== '';
+// (v320) what a 3D part is really made of, with photographically grounded values from the Blender skills pack
+// (github.com/arjun988/blender-skills, realistic-style/references/pbr-values.md): metals are fully metallic, everything
+// else not at all, and each surface its own real roughness; glass and water let light through; skin is soft and a
+// little wet. [metalness, roughness, extra MeshPhysicalMaterial settings]
+const FINISH = {
+  metal: [1, .45], chrome: [1, .06], aluminum: [1, .35], gold: [1, .3], copper: [1, .35],
+  plastic: [0, .45], paint: [0, .32, { clearcoat: .8, clearcoatRoughness: .12 }], rubber: [0, .85], wood: [0, .6],
+  glass: [0, .03, { transmission: .96, ior: 1.45, thickness: .25 }], water: [0, .02, { transmission: .94, ior: 1.33, thickness: .4 }],
+  skin: [0, .48, { clearcoat: .35, clearcoatRoughness: .4, sheen: .4, sheenRoughness: .6 }], fabric: [0, .92, { sheen: .8, sheenRoughness: .8 }],
+  stone: [0, .9], ceramic: [0, .22, { clearcoat: .5, clearcoatRoughness: .1 }],
+};
+const FINISHES = Object.keys(FINISH);
+// (v320) a part the AI did not say the material of: its name usually tells (a turbine is metal, a lens glass, a tyre rubber)
+const GUESS = [
+  ['glass', /\b(glass|window|windscreen|windshield|lens|screen|bulb|jar|bottle|cornea)\b/i],
+  ['water', /\b(water|ocean|sea|lake|river|tank of water)\b/i],
+  ['rubber', /\b(tyres?|tires?|rubber|belt|hose|gasket|seal|grip|sole)\b/i],
+  ['chrome', /\b(chrome|mirror|exhaust pipe|faucet|tap)\b/i],
+  ['copper', /\b(copper|wire|wiring|coil|winding)\b/i],
+  ['skin', /\b(heart|lungs?|brain|kidneys?|liver|stomach|intestines?|muscles?|skin|tongue|eye|organ|tissue|cells?|nucleus|membrane|cytoplasm|mitochondri\w*|blood|vein|artery|aorta|ventricle|atri\w*|leaf|leaves|petal|stem|root|fruit|flesh)\b/i],
+  ['metal', /\b(engine|motor|turbine|fan|compressor|rotor|shaft|axle|gears?|cog|chain|crank|piston|cylinder block|bolts?|nuts?|screws?|spring|frame|blade|nozzle|pump|valve|pipe|rail|steel|iron|metal|magnet)\b/i],
+  ['wood', /\b(wood|wooden|table|plank|log|trunk|bark)\b/i],
+  ['stone', /\b(rock|stone|crust|mantle|mountain|cliff|concrete|brick|wall)\b/i],
+  ['fabric', /\b(cloth|fabric|sail|seat cushion|cushion|rope|net)\b/i],
+];
+const guessFinish = (name) => { const hit = GUESS.find(([, re]) => re.test(name)); return hit ? hit[0] : null; };
 function kindOf(x, mode) {
   const known = mode === '3d' ? KINDS3 : KINDS2;
   const said = String(x.t || x.type || x.shape || x.kind || '').toLowerCase();
@@ -102,7 +128,7 @@ export function clean(raw) {
     anchor: mode === '2d' && Array.isArray(p && p.anchor) && p.anchor.length === 2 && Number.isFinite(+p.anchor[0]) && Number.isFinite(+p.anchor[1]) ? [num(p.anchor[0], 0, 400), num(p.anchor[1], 0, 260)] : null,
     glow: !!(p && p.glow), spin: !!(p && p.spin), shell: !!(p && p.shell),
     beat: p && p.beat === 'breathe' ? 'breathe' : p && p.beat ? 'beat' : null, // (v314) a part that pumps (a heart) or breathes (lungs)
-    finish: ['metal', 'plastic', 'rubber', 'wood'].includes(p && p.finish) ? p.finish : null, // (3d) what it is really made of
+    finish: FINISHES.includes(p && p.finish) ? p.finish : mode === '3d' ? guessFinish(`${p && p.label || ''} ${p && p.id || ''}`) : null, // (3d) what it is really made of (v320: the Blender skills' real material values; unsaid, guessed from its name)
     // (3d) her plan for the part: what it sits inside, its real size against the whole, what it touches
     inside: mode === '3d' ? words(p && p.inside, 40) || null : null,
     size: mode === '3d' && Number.isFinite(+(p && p.size)) && +p.size > 0 ? Math.min(1, +p.size) : null,
@@ -131,7 +157,8 @@ export function clean(raw) {
     const pts = (Array.isArray(f.pts) ? f.pts : []).slice(0, 16).filter((q) => Array.isArray(q) && q.length === 3 && q.every((v) => Number.isFinite(+v))).map((q) => q.map((v) => num(v, -20, 20)));
     return pts.length >= 2 ? { ...base, pts } : null;
   }).filter(Boolean);
-  return { ...(next.length ? { next } : {}), ...(flows.length ? { flows } : {}), title: words(s.title, 90) || 'How it works', mode, intro: words(s.intro, 300), summary: words(s.summary, 300), photo: words(s.photo, 300), simple: !!s.simple, axis: ['x', 'y', 'z'].includes(s.axis) ? s.axis : 'x', parts, ref, ...(fresh ? { fresh } : {}), ...(focus ? { focus } : {}) };
+  const glb = mode === '3d' && typeof s.glb === 'string' && /^models\/[\w-]{1,40}\.glb$/.test(s.glb) ? s.glb : null; // (v320: a Blender model from the drawing book, only from Cassie's own folder)
+  return { ...(glb ? { glb } : {}), ...(next.length ? { next } : {}), ...(flows.length ? { flows } : {}), title: words(s.title, 90) || 'How it works', mode, intro: words(s.intro, 300), summary: words(s.summary, 300), photo: words(s.photo, 300), simple: !!s.simple, axis: ['x', 'y', 'z'].includes(s.axis) ? s.axis : 'x', parts, ref, ...(fresh ? { fresh } : {}), ...(focus ? { focus } : {}) };
 }
 
 // ---------- is it a good drawing? (2d) the points every shape reaches, and what is wrong ----------
@@ -559,7 +586,7 @@ export async function render(host, rawSpec, opts = {}) {
   let mv = null; const mvHost = spec.mode === '3d' ? el('div', 'ld-mv') : null;
   const machineOn = async () => {
     if (mv) return mv;
-    let m = null; try { m = await import('./isoview.js?v=319'); } catch (e) { return null; }
+    let m = null; try { m = await import('./isoview.js?v=320'); } catch (e) { return null; }
     mv = m.machine(mvHost, spec, { dark: !lightPage() });
     if (mv) {
       const row = el('div', 'ld-mv-acts');
@@ -965,7 +992,8 @@ export async function snapshot(rawSpec) {
 
 // ---------- 3D models: built piece by piece ----------
 let three = null;
-let threeFrom = () => Promise.all([import('./explore/three.module.min.js'), import('./explore/OrbitControls.js')]).then(([T, oc]) => ({ T, OrbitControls: oc.OrbitControls }));
+let threeFrom = () => Promise.all([import('./explore/three.module.min.js'), import('./explore/OrbitControls.js'), import('./explore/RoundedBoxGeometry.js').catch(() => null), import('./explore/GLTFLoader.js').catch(() => null)])
+  .then(([T, oc, rb, gl]) => ({ T: Object.assign(Object.create(null), T, rb ? { RoundedBox: rb.RoundedBoxGeometry } : {}, gl ? { GLTFLoader: gl.GLTFLoader } : {}), OrbitControls: oc.OrbitControls }));
 const loadThree = () => (three || (three = threeFrom()));
 // (the Chrome extension keeps its own copy of three.js: it says where) useThree(() => Promise<{ T, OrbitControls }>)
 export function useThree(from) { threeFrom = from; three = null; }
@@ -1010,6 +1038,7 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
   if (real) {
     try {
       renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap; renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.15;
+      scene.children.forEach((l) => { if (l.isHemisphereLight) l.intensity = .7; }); // (v320: the studio room lights it from every side; the flat fill only lifts the darks)
       sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024); sun.shadow.radius = 6; sun.shadow.bias = -.0005;
       const room = new T.Scene(), glowBox = (c, x, y, z, w, h, d) => { const m = new T.Mesh(new T.BoxGeometry(w, h, d), new T.MeshBasicMaterial({ color: c })); m.position.set(x, y, z); room.add(m); };
       room.add(new T.Mesh(new T.BoxGeometry(40, 40, 40), new T.MeshBasicMaterial({ color: 0x8a8f99, side: T.BackSide })));
@@ -1030,12 +1059,24 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
   const v3 = (a, d = [0, 0, 0]) => (Array.isArray(a) ? new T.Vector3(num(a[0], -20, 20, d[0]), num(a[1], -20, 20, d[1]), num(a[2], -20, 20, d[2])) : new T.Vector3(...d));
   // a shape along an axis: three.js builds cylinders and cones along y, so turn them to x or z
   const along = (obj, axis) => { if (axis === 'x') obj.rotation.z = -Math.PI / 2; else if (axis === 'z') obj.rotation.x = Math.PI / 2; return obj; };
+  // (v320) a model made in Blender for the drawing book (models/<name>.glb): each part's object carries the part's id as
+  // its name, so it is named, picked, faded, pulled apart and spun like a built one; with no Blender model (or no loader,
+  // as in the extension), the part is built from its shapes as always
+  let glb = null;
+  if (spec.glb && T.GLTFLoader) { try { glb = await new Promise((ok, no) => new T.GLTFLoader().load(new URL(spec.glb, import.meta.url).href, ok, undefined, no)); } catch (e) { glb = null; } }
+  const glbPart = (id) => (glb ? glb.scene.getObjectByName(id) : null);
+  stage.dataset.model = glb ? 'blender' : 'built'; // (which one this is: for the tests, and for anyone looking)
   const groups = spec.parts.map((p, i) => {
     const g = new T.Group(); g.userData = { i, part: p };
-    const fin = real ? ({ metal: [.9, .32], plastic: [.02, .42], rubber: [0, .92], wood: [0, .75] })[p.finish] || [.25, .5] : null;
-    const mat = new T.MeshStandardMaterial({ color: new T.Color(p.color), metalness: fin ? fin[0] : matte ? .05 : .5, roughness: fin ? fin[1] : matte ? .65 : .4, side: T.DoubleSide, transparent: true, opacity: 1, emissive: p.glow ? new T.Color(p.color) : new T.Color(0x000000), emissiveIntensity: p.glow ? .55 : 0 });
+    const mat = finishMat(T, p.color, real ? p.finish : null, { real, matte, glow: p.glow });
     const made = []; // ([shape, its mesh], for the pieces that spin)
-    for (const s of p.shapes) { const m = shape3d(T, s, mat, along, v3, AX); if (m) { g.add(m); made.push([s, m]); } }
+    const fromBlender = glbPart(p.id);
+    if (fromBlender) {
+      const copy = fromBlender.clone(true); copy.position.set(0, 0, 0); copy.rotation.set(0, 0, 0); copy.scale.set(1, 1, 1); // (its parts keep their places in the model)
+      copy.traverse((m) => { if (m.isMesh) { m.material = m.material.clone(); m.material.transparent = true; m.material.side = T.DoubleSide; if (p.glow) { m.material.emissive = new T.Color(p.color); m.material.emissiveIntensity = .5; } } });
+      [...copy.children].forEach((ch) => { g.add(ch); const ax = ch.userData && ch.userData.spin; if (['x', 'y', 'z'].includes(ax)) made.push([{ t: 'disc', axis: ax }, ch]); });
+    }
+    for (const s of fromBlender ? [] : p.shapes) { const own = real && FINISH[s.finish] && s.finish !== p.finish ? finishMat(T, s.color && /^#[0-9a-f]{3,8}$/i.test(s.color) ? s.color : p.color, s.finish, { real, matte, glow: p.glow }) : mat; const m = shape3d(T, s, own, along, v3, AX); if (m) { g.add(m); made.push([s, m]); } }
     if (real && !p.shell) g.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } });
     // (v280) a part that spins: each of its round pieces (a wheel, disc, gear, fan, shaft) turns in place about its own
     // axle, through its own middle; it never swings round the whole model, and a chain or frame in the part stays still
@@ -1293,6 +1334,15 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
   };
   return view;
 }
+// (v320) a part's material: its real finish (FINISH), its colour kept off pure black and pure white for anything that is
+// not metal (no real surface is either: the Blender skills' first albedo rule), glass and water see-through
+function finishMat(T, colour, finish, { real, matte, glow }) {
+  const f = real ? FINISH[finish] : null, c = new T.Color(colour || '#9aa3ad');
+  if (real && (!f || f[0] < .5)) { const hsl = {}; c.getHSL(hsl); c.setHSL(hsl.h, hsl.s, Math.min(.9, Math.max(.035, hsl.l))); }
+  const base = { color: c, metalness: f ? f[0] : real ? 0 : matte ? .05 : .5, roughness: f ? f[1] : real ? .5 : matte ? .65 : .4, side: T.DoubleSide, transparent: true, opacity: 1, emissive: glow ? c.clone() : new T.Color(0x000000), emissiveIntensity: glow ? .55 : 0 };
+  if (f && f[2] && T.MeshPhysicalMaterial) { const m = new T.MeshPhysicalMaterial({ ...base, ...f[2] }); if (f[2].transmission) { m.opacity = 1; m.depthWrite = false; } return m; }
+  return new T.MeshStandardMaterial(base);
+}
 function shape3d(T, s, mat, along, v3, AX) {
   const t = String(s.t || s.type || '').toLowerCase();
   const axis = ['x', 'y', 'z'].includes(s.axis) ? s.axis : 'x';
@@ -1308,7 +1358,12 @@ function shape3d(T, s, mat, along, v3, AX) {
     if (axis === 'x') g.rotation.z = (s.dir === -1 ? 1 : -1) * Math.PI / 2; else if (axis === 'z') g.rotation.x = (s.dir === -1 ? -1 : 1) * Math.PI / 2; else if (s.dir === -1) g.rotation.z = Math.PI;
     m = g;
   } else if (t === 'sphere') m = new T.Mesh(new T.SphereGeometry(r, 40, 28, 0, s.cut ? Math.PI * 1.5 : Math.PI * 2), own);
-  else if (t === 'box') { const sz = Array.isArray(s.size) ? s.size : [1, 1, 1]; m = new T.Mesh(new T.BoxGeometry(num(sz[0], .02, 20, 1), num(sz[1], .02, 20, 1), num(sz[2], .02, 20, 1)), own); }
+  else if (t === 'box') {
+    const sz = Array.isArray(s.size) ? s.size : [1, 1, 1], bx = num(sz[0], .02, 20, 1), by = num(sz[1], .02, 20, 1), bz = num(sz[2], .02, 20, 1);
+    // (v320) real edges are rounded a little and catch the light (Blender skills, hard-surface: "no razor edges")
+    const RB = T.RoundedBox, bev = Math.min(bx, by, bz) * .12;
+    m = new T.Mesh(RB && bev > .01 && !s.sharp ? new RB(bx, by, bz, 3, bev) : new T.BoxGeometry(bx, by, bz), own);
+  }
   else if (t === 'torus' || t === 'ring') { m = new T.Mesh(new T.TorusGeometry(r, num(s.tube, .01, 4, .12), 18, 56), own); if (axis === 'x') m.rotation.y = Math.PI / 2; else if (axis === 'y') m.rotation.x = Math.PI / 2; }
   else if (t === 'blades') {
     m = new T.Group(); const n = Math.round(num(s.n, 2, 40, 12)), bl = num(s.len, .05, 8, r), wd = num(s.width, .02, 2, .18);

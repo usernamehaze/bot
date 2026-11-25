@@ -1021,6 +1021,36 @@ test('an old saved Gemini key (apiKey) moves to geminiKey, is removed from what�
   await ctx.close();
 });
 
+test('v320 Blender models and real materials: the book’s airplane and bicycle are Blender models (models/*.glb, from scripts/blender/), each part named as the book’s, shown at once with no AI, tapped, pulled apart and turning; every 3D part takes a real finish (glass, chrome, skin and more); a model from anywhere else is refused', async (b) => {
+  const drawCalls = [], got = [];
+  const { ctx, page, errors } = await open(b, { book: true, lite: 'off', device: 'Desktop Chrome', viewport: { width: 1280, height: 860 }, scale: process.env.SHOTS ? 2 : 1, state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: (body) => { if (/explains by DRAWING/.test(JSON.stringify(body.messages || []))) drawCalls.push(1); return { text: 'Words.' }; } });
+  page.on('request', (r) => { if (/\/models\/\w+\.glb/.test(r.url())) got.push(r.url().replace(/^.*\/models\//, '')); });
+  try {
+    for (const [q, name, n] of [['show me an airplane in 3D', 'airplane', 7], ['show me a bicycle in 3D', 'bicycle', 11]]) {
+      await page.evaluate((q) => { chatLog.innerHTML = ''; state.messages = []; liveDrawReply(q, true); }, q);
+      await page.waitForFunction(() => { const s = document.querySelector('#chat-log .ld-stage'); return s && s.dataset.model; }, null, { timeout: 30000 });
+      await page.waitForFunction((n) => document.querySelectorAll('#chat-log .ld-tag').length >= n, n, { timeout: 30000 });
+      const r = await page.evaluate(() => ({ model: document.querySelector('#chat-log .ld-stage').dataset.model, tags: [...document.querySelectorAll('#chat-log .ld-tag')].map((t) => t.textContent.trim()) }));
+      expect(r.model === 'blender' && r.tags.length === n && got.includes(name + '.glb'), name + ': the Blender model, every part named: ' + JSON.stringify(r) + ' ' + got.join());
+      if (process.env.SHOTS) { await page.waitForTimeout(1500); await page.locator('#chat-log .ld').last().screenshot({ path: `${process.env.SHOTS}/v320-${name}-blender.png` }); }
+    }
+    expect(!drawCalls.length, 'from the book: no AI asked');
+    // pulled apart and tapped: the Blender parts behave like built ones
+    await page.click('#chat-log .ld .ld-btn >> text=Pull apart');
+    await page.waitForTimeout(600);
+    expect(await page.evaluate(() => document.querySelector('#chat-log .ld .ld-btn[aria-pressed="true"]') !== null), 'Pull apart works on a Blender model');
+    // the finishes and the model whitelist
+    const fin = await page.evaluate(async () => { const m = await liveDrawLoad(); const sp = (finish, glb) => m.clean({ title: 't', mode: '3d', ...(glb ? { glb } : {}), parts: [{ id: 'a', label: 'A', finish, shapes: [{ t: 'box', size: [1, 1, 1], pos: [0, 0, 0] }] }, { id: 'b', label: 'B', shapes: [{ t: 'sphere', r: .4, pos: [1, 0, 0], finish: 'glass' }] }] });
+      return { kept: ['glass', 'chrome', 'skin', 'paint', 'water', 'ceramic', 'fabric', 'stone', 'gold', 'copper', 'aluminum'].every((f) => sp(f).parts[0].finish === f), odd: sp('unobtainium').parts[0].finish, shape: sp('metal').parts[1].shapes[0].finish, ok: sp('metal', 'models/airplane.glb').glb, far: sp('metal', 'https://evil.example/x.glb').glb || null, up: sp('metal', 'models/../x.glb').glb || null }; });
+    expect(fin.kept && fin.odd === null && fin.shape === 'glass' && fin.ok === 'models/airplane.glb' && !fin.far && !fin.up, 'every real finish is kept (a shape can have its own); a model only from Cassie’s own models folder: ' + JSON.stringify(fin));
+    const guess = await page.evaluate(async () => { const m = await liveDrawLoad(); return ['Turbine', 'Front tyre', 'Left ventricle', 'Lens', 'Seat cushion', 'Gizmo'].map((label) => m.clean({ title: 't', mode: '3d', parts: [{ id: 'p', label, shapes: [{ t: 'box', size: [1, 1, 1], pos: [0, 0, 0] }] }, { id: 'q', label: 'Q', finish: 'wood', shapes: [{ t: 'box', size: [1, 1, 1], pos: [1, 0, 0] }] }] }).parts[0].finish).join(); });
+    expect(guess === 'metal,rubber,skin,glass,fabric,', 'a part with no finish said takes the one its name tells (a turbine is metal, a tyre rubber, a ventricle living tissue): ' + guess);
+    const sys = await page.evaluate(() => liveDrawPrompt(true));
+    expect(/"chrome", "aluminum", "gold", "copper", "plastic", "paint"/.test(sys) && /"glass", "water", "skin"/.test(sys), 'the AI is told the real finishes it can use');
+    expect(!errors.length, 'page errors: ' + errors.join(' | '));
+  } finally { await ctx.close(); }
+});
+
 test('v319 a 3D model with every answer (the Anatomy way: an idea is a machine): after her words she builds it in 3D right under them, saved with the chat; Machine view draws the same model with Anatomy’s kit (no WebGL needed), turns and comes apart; not for a greeting, and off in Settings', async (b) => {
   const noun = fs.readFileSync(fileAt('tests/fixtures/live/noun3d.json'), 'utf8'), jet = fs.readFileSync(fileAt('tests/fixtures/live/jet3d.json'), 'utf8');
   const asks = [];
@@ -1063,6 +1093,9 @@ test('v319 a 3D model with every answer (the Anatomy way: an idea is a machine):
         await page.fill('#prompt-input', 'what is a verb?'); await page.click('#send-btn'); await page.waitForTimeout(1500);
         expect(await page.evaluate(() => document.querySelectorAll('#chat-log .ld').length) === n0, 'no model for a greeting, nor with the setting off');
         expect(await page.evaluate(() => !!document.getElementById('every-model-toggle')), 'the setting is in Settings');
+        // a student can find it: Settings, then the page it is on, then it shows
+        const where = await page.evaluate(() => { const t = document.getElementById('every-model-toggle'); const card = t.closest('[data-page]'); const sec = t.closest('[data-sec]'); return { page: card && card.dataset.page, sec: sec && sec.dataset.sec, hiddenBy: (() => { let e = t; while (e && e !== document.body) { if (e.hidden) return e.className || e.id; e = e.parentElement; } return null; })() }; });
+        expect(where.sec === 'study', 'the setting is under Study, where a student looks for it (v320): ' + JSON.stringify(where));
       }
       expect(!errors.length, name + ': page errors: ' + errors.join(' | '));
     } finally { await ctx.close(); }
@@ -3862,7 +3895,7 @@ test('v279: the app draws like the extension: a photo sent with “draw this” 
   // what she is asked
   const pr = await page.evaluate(() => [liveDrawPrompt(false, { picture: true }), liveDrawPrompt(true), liveDrawPrompt(false, { flatNote: true }), liveDrawPrompt(false)]);
   expect(/The student sent a picture with the question\. Look at it first/.test(pr[0]) && /draw THAT one/.test(pr[0]) && !/The student sent a picture/.test(pr[3]), 'with a picture she draws the very thing in it');
-  expect(/"finish":"metal"\|"plastic"\|"rubber"\|"wood"/.test(pr[1]) && /lathe \{profile/.test(pr[1]) && /pipe \{pts/.test(pr[1]) && /not like toy blocks/.test(pr[1]), 'a model is asked for with real finishes and profiles');
+  expect(/"finish" \(what it is really made of: "metal".*"chrome".*"glass".*"skin"/.test(pr[1]) && /lathe \{profile/.test(pr[1]) && /pipe \{pts/.test(pr[1]) && /not like toy blocks/.test(pr[1]), 'a model is asked for with real finishes and profiles');
   expect(/They asked for 3D, but/.test(pr[2]) && /never as a cartoon symbol/.test(pr[3]) && /30 or more strokes/.test(pr[3]), 'flat drawings are asked for like a textbook figure');
   // a photo and "draw this": drawn live, from the photo
   const PX = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
@@ -3969,7 +4002,7 @@ test('v253: "draw" asks how to show it (Draw it, 3D model, Real photo with Gemin
   // 9. a 3D ask skips the question; with Gemini, Real photo is offered
   await page.evaluate(() => createNewChat()); const b3 = calls.length;
   await page.fill('#prompt-input', 'show me a 3D model of a jet engine'); await page.click('#send-btn'); await page.waitForTimeout(800);
-  expect(!(await page.locator('.ld-pop').count()) && calls.slice(b3).some((c) => /"mode": "3d"/.test(c.sys || '') && /"finish":"metal"\|"plastic"\|"rubber"\|"wood"/.test(c.sys || '')), '9. a 3D ask goes straight to a 3D model, asked for with real finishes');
+  expect(!(await page.locator('.ld-pop').count()) && calls.slice(b3).some((c) => /"mode": "3d"/.test(c.sys || '') && /"finish" \(what it is really made of: "metal".*"chrome".*"glass".*"skin"/.test(c.sys || '')), '9. a 3D ask goes straight to a 3D model, asked for with real finishes');
   // (v315) a soft or living thing asked for in 3D is built in 3D too, from smooth rounded shapes
   await page.evaluate(() => createNewChat()); const b4 = calls.length;
   await page.fill('#prompt-input', 'show me a 3D model of a heart'); await page.click('#send-btn'); await page.waitForTimeout(800);
@@ -10515,14 +10548,14 @@ test('Cassie for Chrome draws from her book (3.77): "draw a bicycle" on any page
 test('Cassie’s live drawing, accurate (3.69): she is told to draw the very thing in the picture of the screen, in its real colours, and to describe it; the first drawing shows at once, then her own look at a picture of it (Plus and Pro, when her best model drew it) swaps in a corrected one with a line that says so, unless the student has moved on; a 3D model has real finishes, a soft shadow and names beside it; a smaller model is asked again without the examples', async () => {
   const bgSrc = fs.readFileSync(fileAt('extension/background.js'), 'utf8'), ldSrc = fs.readFileSync(fileAt('livedraw.js'), 'utf8');
   expect(/her look at every drawing, on every plan/.test(bgSrc) && /msg\.look \|\| msg\.again \? 2 : 1/.test(bgSrc), 'her look at her own drawing is for every drawing (it is part of the drawing: never the student\u2019s share)');
-  expect(/finish: \['metal', 'plastic', 'rubber', 'wood'\]/.test(ldSrc) && /ShadowMaterial/.test(ldSrc) && /PMREMGenerator/.test(ldSrc), 'a model has real finishes, a studio light and a soft shadow');
+  expect(/const FINISH = \{/.test(ldSrc) && /glass: \[0, \.03, \{ transmission/.test(ldSrc) && /ShadowMaterial/.test(ldSrc) && /PMREMGenerator/.test(ldSrc), 'a model has real finishes, a studio light and a soft shadow');
   const X = await liveExt();
   const { page, sw, replies, prompts, card, tap, until, ask, fixture, LIVE } = X;
   try {
     const inWorld = await X.open(`http://localhost:${APP_PORT}/tests/fixtures/live/pictures.html`);
     const pr = JSON.parse(await inWorld(`JSON.stringify([CassieLive.prompt({ q: 'draw this', draw: true }), CassieLive.prompt({ q: 'show me this in 3D', dim: '3d' })])`));
     expect(pr.every((t) => /Look at the picture of their screen first/.test(t) && /its real colours/.test(t) && /describe it accurately in plain words/.test(t)), 'flat or 3D, she draws the thing in the picture, in its real colours, and describes it');
-    expect(/"finish":"metal"\|"plastic"\|"rubber"\|"wood"/.test(pr[1]) && /not like toy blocks/.test(pr[1]), 'a model is asked for with real finishes and profiles');
+    expect(/"finish" \(what it is really made of: "metal".*"chrome".*"glass".*"skin"/.test(pr[1]) && /not like toy blocks/.test(pr[1]), 'a model is asked for with real finishes and profiles');
     // her look finds a wrong shape: the first drawing shows at once, the corrected one takes its place when she is done
     const fixed = JSON.parse(fixture('heart')); fixed.title = 'The heart, corrected'; fixed.parts = fixed.parts.slice(0, 6);
     await sw.evaluate(() => { self.__looks = []; self.__look = JSON.stringify({ labels: [], shapes: [{ n: 2, ok: false, why: 'the atria are drawn as flat ovals' }], facts: [] }); });

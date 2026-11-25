@@ -1,0 +1,1 @@
+Blender skills pack (github.com/arjun988/blender-skills @ 904f095, MIT): 94 skills for Claude Code driving Blender (through Blender MCP, or headless with the bpy module, as scripts/blender/ does). Copied unchanged.
