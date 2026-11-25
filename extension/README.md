@@ -97,7 +97,9 @@ developer fee) — a good step once you're ready to share it more widely.
 
 Highlight a sentence, question, or term on any page. After a brief moment,
 a small "Cassie" popup appears near your selection with an **Explain /
-Answer / Code** choice. Click the **×** or press **Escape** to dismiss it.
+Draw** choice. **Explain** asks how much: short and direct, or longer; the
+answer is always at the top. **Draw** asks 2D drawing or 3D model. Click the
+**×** or press **Escape** to close it (Highlight help stays on).
 
 **Highlight help ON / OFF:** the switch in Cassie's side buttons (right edge
 of the page, next to Snip), or **Highlight help** in the extension popup. When

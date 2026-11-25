@@ -2129,6 +2129,22 @@ function giveCare(lang, aiWords) {
   return renderCare(lang, aiWords);
 }
 
+// (v318) an answer belongs to the chat it was asked in. If the student opens another page or chat while Cassie is
+// still working, her answer is saved to that chat (it is there when they go back) and never lands on the page on screen
+function replyHome(typing) {
+  const msgs = state.messages, id = state.currentId;
+  return {
+    here: () => state.messages === msgs && (!sideWide.matches || deskPage === 'chat' || !chatLog.querySelector('.home-desk')), // (still this chat, on the chat page)
+    away(msg) {
+      if (msg) msgs.push(msg);
+      const c = (state.chats || []).find((x) => x.id === id); if (c) c.updatedAt = Date.now();
+      save();
+      if (state.messages === msgs && (!sideWide.matches || deskPage === 'chat')) renderHistory(); // (back in that chat already: show it)
+    },
+  };
+}
+// (v318) Cassie is still answering in the chat on screen (a picture, a drawing, an answer): Send and Enter wait
+function cassieWorkingHere() { return !!chatLog.querySelector('.typing-dots') && (sendBtn.disabled || sendBtn.classList.contains('is-busy')); }
 function renderTyping() {
   const bubble = document.createElement('div');
   bubble.className = 'bubble bubble-assistant';
@@ -2195,6 +2211,10 @@ function runTool(ex) {
 const STARTER_WORDS = /^(Quiz me on|Explain this topic simply|Solve this step by step|Research this topic with real sources|Summarize this into clean study notes):\s*$/i;
 function sendBox() {
   const text = promptInput.value;
+  if (cassieWorkingHere()) { // (what was typed stays in the box, to send once she is done)
+    const t = [...chatLog.querySelectorAll('.typing-dots')].pop(); if (t) setTypingStatus(t.closest('.bubble') || t, 'Still working on this one. Send yours when I finish.');
+    return;
+  }
   if (STARTER_WORDS.test(text.trim()) && !attachments.length) { promptInput.focus(); return; } // (the topic isn't typed yet)
   const q = text.trim().match(/^Quiz me on:\s*(.+)$/is);
   if (q && !quizMode && !attachments.length) { promptInput.value = ''; autoGrow(); startQuizOn(q[1].trim()); return; }
@@ -2815,7 +2835,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=317'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=318'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2837,7 +2857,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=317'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=318'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -3113,7 +3133,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=317').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=318').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -7015,6 +7035,7 @@ async function handleSend(text, opts = {}) {
   setCursorMode('thinking');
   if (doc || many || image) botMood('reading');
   const typingBubble = renderTyping();
+  const home = replyHome(typingBubble);
   const sendDone = busyButton(sendBtn); // (a spinner on Send while Cassie answers)
   const onWait = (secs) => { setTypingStatus(typingBubble, `Groq's free per-minute limit: continuing in ${secs}s…`); botMood('busy'); };
 
@@ -7043,6 +7064,7 @@ async function handleSend(text, opts = {}) {
       liveShowAsk(sendText);
       return;
     }
+    if (!home.here()) { typingBubble.remove(); setCursorMode('idle'); home.away({ role: 'assistant', content: reply }); return; } // (v318: they left this chat)
     if (marker || asciiPic) {
       const subject = marker ? marker[1].trim() : ((imageRequest(sendText) || {}).subject || (sendText.match(/\bof\s+(.+)$/i) || [0, sendText.replace(PICTURE_WORD_RE, '')])[1].replace(/[?!.\s]+$/, '').trim());
       setCursorMode('idle');
@@ -7080,7 +7102,9 @@ async function handleSend(text, opts = {}) {
     detourToElement(bubble, { click: true, resumeAfter: 900 });
     speak(reply);
   } catch (err) {
+    const gone = !home.here();
     typingBubble.remove();
+    if (gone) { setCursorMode('idle'); return; } // (v318: not on another page)
     const offline = !image && !doc && graphWithoutBrain(sendText);
     if (offline) { // the graph still comes, drawn here without the AI
       renderMessage('assistant', offline);
@@ -7460,12 +7484,12 @@ async function liveDrawCall(messages, q, image) {
     // (v279) a picture came with the question: her best brain looks at it with the drawing form; else whichever brain reads pictures
     const url = `data:${image.mimeType || 'image/jpeg'};base64,${image.base64}`;
     const seen = messages.map((m, i) => (i === messages.findIndex((x) => x.role === 'user') ? { role: 'user', content: [{ type: 'text', text: String(m.content) }, { type: 'image_url', image_url: { url } }] } : m));
-    if (SERVER && serverClaude) { try { const t = await serverChat(seen, { brain: 'claude', maxTokens: 5000, q, draw: q ? 1 : 2, wait: q ? 50000 : 35000 }); if (t) return { text: t, simple: liveSimple() }; } catch (e) { /* the usual picture reader below */ } }
+    if (SERVER && serverClaude) { try { const t = await serverChat(seen, { brain: 'claude', maxTokens: 8000, q, draw: q ? 1 : 2, wait: q ? 50000 : 35000 }); if (t) return { text: t, simple: liveSimple() }; } catch (e) { /* the usual picture reader below */ } }
     return { text: await askCassie([{ role: 'user', content: messages.map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n\n') }], image, {}), simple: true };
   }
   // (v280) her server answers with a backup brain once the day's share of her best one is used: that drawing is marked simpler
-  if (SERVER && serverClaude) { try { const t = await serverChat(messages, { brain: 'claude', maxTokens: 5000, q, draw: q ? 1 : 2, wait: q ? 50000 : 35000 }); if (t) return { text: t, simple: liveSimple() }; } catch (e) { /* the usual brain below */ } }
-  if (state.groqKey || SERVER) { try { const t = await groqChat(messages, { model: state.groqModel, maxTokens: 5000, rotate: true, q }); if (t) return { text: t, simple: true }; } catch (e) { if (!state.geminiKey) throw e; } }
+  if (SERVER && serverClaude) { try { const t = await serverChat(messages, { brain: 'claude', maxTokens: 8000, q, draw: q ? 1 : 2, wait: q ? 50000 : 35000 }); if (t) return { text: t, simple: liveSimple() }; } catch (e) { /* the usual brain below */ } }
+  if (state.groqKey || SERVER) { try { const t = await groqChat(messages, { model: state.groqModel, maxTokens: 8000, rotate: true, q }); if (t) return { text: t, simple: true }; } catch (e) { if (!state.geminiKey) throw e; } }
   return { text: await askCassie([{ role: 'user', content: messages.map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n\n') }], null, {}), simple: true };
 }
 // Cassie looks at a picture of her own drawing (never counted as a question)
@@ -7518,7 +7542,8 @@ async function liveDrawFirst(question, want3d, image = null, opts = {}) {
   let wrong = issues(spec);
   // (v312) her redo only when the first answer came fast: a drawing she has is shown, never held for minutes
   if (wrong.length && (!spec || Date.now() - t0 < 30000)) {
-    const again = await liveDrawCall([...messages, { role: 'assistant', content: String(text).slice(0, 12000) }, { role: 'user', content: `Your drawing has these problems:\n- ${wrong.join('\n- ')}\nSend the whole corrected JSON object again.` }], false, image);
+    const smaller = !spec && want3d ? '\nKeep it smaller so all of it fits in one reply: at most 6 parts and 5 shapes each, short "say" sentences, and nothing outside the JSON object.' : '';
+    const again = await liveDrawCall([...messages, { role: 'assistant', content: String(text).slice(0, 12000) }, { role: 'user', content: `Your drawing has these problems:\n- ${wrong.join('\n- ')}\nSend the whole corrected JSON object again.${smaller}` }], false, image);
     const s2 = m.clean(again.text);
     if (s2 && issues(s2).length <= wrong.length) { spec = s2; text = again.text; simple = simple || again.simple; }
   }
@@ -7541,11 +7566,11 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=317')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=318')));
 // (v310) Cassie's drawing book: a checked drawing of a common subject (a bicycle, the heart, the solar system...) shows
 // at once, right every time, with no AI and no question used (offline too). Anything else is drawn by the AI.
 let liveBookLib = null;
-const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=317').catch(() => null)));
+const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=318').catch(() => null)));
 // (v316) the drawing book, grown by the team: AI drawings that passed every check go to Cassie's server with
 // only their subject's few words; the owner approves the good ones on the dashboard, and the app keeps a copy of
 // every approved drawing, so they show at once (offline too) like the hand-checked ones
@@ -7720,15 +7745,33 @@ async function liveDrawReply(text, want3d = LIVE_3D_RE.test(text), image = null,
   if (!fromBook && !canChat()) { const b = renderMessage('assistant', 'I need a key to draw. Add one in Settings.'); b.classList.add('need-key-msg'); openSettings(); return; }
   mascotReact('image'); setCursorMode('thinking'); botMood('drawing');
   const typing = renderTyping(); setTypingStatus(typing, 'Cassie is sketching…');
+  const home = replyHome(typing);
   const done = busyButton(sendBtn);
   let first;
   // (v312) she says how it is going, and after 75 s she stops waiting: Try again, or an answer in words
   const slow1 = setTimeout(() => setTypingStatus(typing, 'Still sketching: a big drawing takes a little longer…'), 12000);
   const slow2 = setTimeout(() => setTypingStatus(typing, 'Almost there…'), 35000);
   const TOO_LONG = Symbol('too long');
+  const t0 = Date.now();
+  let flatInstead = false;
   try {
-    first = fromBook || await Promise.race([liveDrawFirst(question, want3d, image, { free: !!opts.other }), new Promise((r) => setTimeout(() => r(TOO_LONG), window.CASSIE_DRAW_MS || 75000))]);
+    // (v318) a 3D model that could not be built (an answer cut off, or no answer): drawn flat instead, and "See it in 3D" tries again
+    const tried = fromBook ? null : want3d && !image ? liveDrawFirst(question, true, null, { free: !!opts.other }).catch((e) => ({ failed: e })) : liveDrawFirst(question, want3d, image, { free: !!opts.other });
+    first = fromBook || await Promise.race([tried, new Promise((r) => setTimeout(() => r(TOO_LONG), window.CASSIE_DRAW_MS || 75000))]);
+    if (first && first !== TOO_LONG && !first.spec && want3d && !fromBook && !image && Date.now() - t0 < 45000 && home.here()) {
+      setTypingStatus(typing, 'The 3D model did not come out right. Drawing it flat instead…');
+      const flat = await Promise.race([liveDrawFirst(question, false, null, { free: true }).catch(() => null), new Promise((r) => setTimeout(() => r(null), 30000))]);
+      if (flat && flat.spec) { first = flat; flatInstead = true; }
+    }
+    if (first && first.failed) throw first.failed;
     clearTimeout(slow1); clearTimeout(slow2);
+    if (!home.here()) { // (v318: they left this chat while she drew: the drawing is saved to it)
+      typing.remove(); done(); setCursorMode('idle');
+      if (first && first !== TOO_LONG && first.spec) { first.spec.q = subject.slice(0, 300); home.away({ role: 'assistant', content: `[I drew a live ${first.spec.mode === '3d' ? '3D model' : 'diagram'}: ${first.spec.title}. Parts: ${first.spec.parts.map((p) => p.label).join(', ')}. ${first.spec.summary}]`, display: '```cassie-draw\n' + JSON.stringify(first.spec) + '\n```' }); }
+      else if (first && first !== TOO_LONG && first.text) home.away({ role: 'assistant', content: String(first.text) });
+      else home.away(null);
+      return;
+    }
     if (first === TOO_LONG) {
       typing.remove(); done(); setCursorMode('idle');
       const say = 'This drawing is taking too long. Try again, or I can explain it in words.';
@@ -7748,7 +7791,9 @@ async function liveDrawReply(text, want3d = LIVE_3D_RE.test(text), image = null,
     }
   } catch (err) {
     clearTimeout(slow1); clearTimeout(slow2);
+    const gone = !home.here();
     typing.remove(); done(); setCursorMode('idle');
+    if (gone) return;
     renderError(err, () => liveDrawReply(label, want3d, image), 'unknown');
     return;
   }
@@ -7758,6 +7803,7 @@ async function liveDrawReply(text, want3d = LIVE_3D_RE.test(text), image = null,
   state.messages.push(msg); save();
   liveDrawFresh = true;
   const bubble = renderMessage('assistant', fenced(first.spec)); // (she starts drawing now, while the check runs)
+  if (flatInstead && bubble) { const p = document.createElement('p'); p.className = 'ld-fixed'; p.textContent = 'The 3D model did not come out right this time, so here it is flat. Tap See it in 3D to try again.'; bubble.prepend(p); }
   track('feature', first.book ? 'live-draw-book' : first.spec.mode === '3d' ? 'live-draw-3d' : 'live-draw');
   done(); setCursorMode('idle'); mascotCelebrate();
   if (first.book) return; // (a checked drawing from her book: nothing to look over)
@@ -7834,10 +7880,17 @@ async function liveDrawFollow(text, before = liveDrawLast()) {
   promptInput.value = ''; autoGrow(); clearFollowups();
   mascotReact('image'); setCursorMode('thinking'); botMood('drawing');
   const typing = renderTyping(); setTypingStatus(typing, 'Cassie is adding to her drawing…');
+  const home = replyHome(typing);
   const done = busyButton(sendBtn);
   let first;
   try { first = await liveDrawFollowFirst(label, before); }
-  catch (err) { typing.remove(); done(); setCursorMode('idle'); renderError(err, () => liveDrawFollow(label, before), 'unknown'); return; }
+  catch (err) { const gone = !home.here(); typing.remove(); done(); setCursorMode('idle'); if (!gone) renderError(err, () => liveDrawFollow(label, before), 'unknown'); return; }
+  if (!home.here()) { // (v318: they left this chat: the answer is saved to it)
+    typing.remove(); done(); setCursorMode('idle');
+    const r = first.got;
+    home.away(r && r.spec ? { role: 'assistant', content: `[I answered on my drawing of ${r.spec.title}: ${r.answer || ''}]`, display: '```cassie-draw\n' + JSON.stringify(r.spec) + '\n```' } : first.text ? { role: 'assistant', content: String(first.text) } : null);
+    return;
+  }
   typing.remove();
   if (!first.got || !first.got.spec) { // she answered in words: show them as usual (never drawing code: v310)
     liveDrawWords(first.text, () => liveDrawFollow(label, before)); done(); setCursorMode('idle'); return;
@@ -7942,9 +7995,12 @@ async function pictureReply(subject, typingBubble) {
   if (ANSWER_SUBJECT_RE.test(bare) || PRONOUN_SUBJECT_RE.test(bare)) subject = imageSubjectFromChat() || bare;
   setTypingStatus(typingBubble, 'Making your picture…');
   sendBtn.disabled = true;
+  const home = replyHome(typingBubble);
   try {
     const { src, keep, gemini } = await generateImage(subject);
+    const gone = !home.here();
     typingBubble.remove();
+    if (gone) { setCursorMode('idle'); home.away({ role: 'assistant', content: `[I made a picture of: ${subject}]`, display: `Here’s your picture of ${subject}.`, image: keep ? src : undefined }); return; } // (v318)
     const caption = `Here’s your picture of ${subject}.` + (gemini && geminiPicNote ? ' ' + geminiPicNote : '');
     const bubble = renderMessage('assistant', caption);
     addImageToBubble(bubble, src, { download: true, name: imageFileName(subject) });
@@ -7954,7 +8010,9 @@ async function pictureReply(subject, typingBubble) {
     setCursorMode('idle');
     mascotCelebrate();
   } catch (err) {
+    const gone = !home.here();
     typingBubble.remove();
+    if (gone) { setCursorMode('idle'); return; }
     renderError(err, () => pictureReply(subject, renderTyping()), 'picture_failed');
     setCursorMode('idle');
   } finally {
@@ -8906,6 +8964,11 @@ async function attachInto(a, file) {
 }
 attachRemove.addEventListener('click', clearAttach);
 
+// (v318) a tap anywhere in the ask box that is not a button puts you in it to type (the empty row under the words too)
+composer.addEventListener('mousedown', (e) => {
+  if (e.button || e.target === promptInput || e.target.closest('button, a, input, select, label, [role="button"], .attach-list, .attach-chip')) return;
+  e.preventDefault(); promptInput.focus();
+});
 composer.addEventListener('submit', (e) => {
   e.preventDefault();
   // nothing typed yet: Send puts you in the box to type (a tap always does something)
@@ -9060,7 +9123,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=317');
+      exploreMod = await import('./explore/cell3d.js?v=318');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -9110,7 +9173,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=317');
+      labsMod = await import('./labs/labs.js?v=318');
       islandRest();
     }
     labsMod.open({
@@ -11072,10 +11135,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=317').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=318').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=317', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=318', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.

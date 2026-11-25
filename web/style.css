@@ -492,6 +492,8 @@ button.sidebar-section { min-height: 40px; } /* (v233: the Study tools toggle is
 .composer:focus-within { border-color: var(--primary); }
 .composer-row { display: flex; align-items: center; gap: var(--sp-2, 8px); }
 .composer-spacer { flex: 1; }
+.composer { cursor: text; } /* (v318: the whole box is where you type) */
+.composer button, .composer a, .composer label { cursor: pointer; }
 .icon-btn { flex-shrink: 0; }
 .icon-btn.round { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--border); }
 .icon-btn.round.primary { border-color: var(--primary); }

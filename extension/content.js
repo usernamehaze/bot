@@ -348,9 +348,9 @@
   // Feature: hotkey — double-tap Ctrl summons Cassie at the cursor
   // (Clicky-style). Ctrl alone does nothing, so a quick double tap is clean
   // and never clashes with a real shortcut like Ctrl+C. If text is selected it
-  // opens Explain/Answer/Code for it; otherwise the "ask about this page" box.
+  // opens Explain/Draw for it; otherwise the "ask about this page" box.
   function summonHud() {
-    highlightsBack();
+    // (v318) it opens Cassie for this highlight only: Highlight help stays as its switch says
     dockBack(); // (the side buttons too, when they were hidden on this site)
     const sel = window.getSelection();
     const text = sel ? selectionText(sel) : '';
@@ -702,16 +702,11 @@
   }
   function applyTheme() { popover.classList.toggle('dark', isDarkBg()); }
 
-  // Closed by the student (× or Escape): highlights stop opening Cassie on every tab, until Ctrl is tapped twice
-  // (Highlight help turns OFF, the same switch as in the side buttons and the popup).
+  // Closed by the student (× or Escape): just closed. (v318) Highlight help stays as it is: only its switch (in the
+  // side buttons or the popup) turns it off, never an answer or a close.
   function dismissPopover() {
     window.getSelection()?.removeAllRanges();
     hidePopover();
-    hlOn = false;
-    try {
-      chrome.storage.local.set({ cassieHighlight: 'off' }); // (written at once: a quick Ctrl, Ctrl then × can't land out of order)
-      chrome.storage.local.get(['cassieHideNoted'], (o) => { if (!(o && o.cassieHideNoted)) { chrome.storage.local.set({ cassieHideNoted: true }); hiddenNote(); } });
-    } catch (e) { /* the switch still works */ }
   }
   function hiddenNote() { screenNote('Hidden. Double-tap Ctrl to bring Cassie back.'); }
   // a short note at the bottom of the screen for 5 seconds
@@ -723,7 +718,7 @@
     shadow.appendChild(n);
     setTimeout(() => n.remove(), 5000);
   }
-  // Ctrl tapped twice: highlights open Cassie again
+  // (no longer used: since v318 only the switch turns Highlight help on or off)
   function highlightsBack() {
     if (hlOn) return;
     hlOn = true;
@@ -1887,8 +1882,7 @@
       <div class="question">What should I do with this?</div>
       <div class="choice-row">
         <button type="button" class="choice-btn" data-mode="explain">Explain</button>
-        <button type="button" class="choice-btn" data-mode="answer">Answer</button>
-        <button type="button" class="choice-btn" data-mode="code">Code</button>
+        <button type="button" class="choice-btn" data-mode="draw">Draw</button>
       </div>
       ${dockHidden() ? '<button type="button" class="dock-back">Show side buttons</button>' : ''}
     `;
@@ -1896,16 +1890,60 @@
   }
 
   body.addEventListener('click', (e) => {
+    const sub = e.target.closest('.sub-btn'); // (v318) Explain: short or longer; Draw: 2D or 3D
+    if (sub) {
+      const k = sub.dataset.sub, explain = k === 'short' || k === 'long';
+      try { chrome.storage.local.set(explain ? { cassieExplainLevel: k } : { cassieDrawKind: k }); } catch (err) { /* only remembering */ }
+      if (explain) { if (pendingPic) runPicture('explain-' + k); else runExplainOrAnswer(pendingText, pendingRect, 'explain-' + k); }
+      else runDraw(pendingText, pendingRect, k);
+      return;
+    }
     const lv = e.target.closest('.level-btn');
     if (lv) { try { chrome.storage.local.set({ cassieCodeLevel: lv.dataset.level }); } catch (err) { /* only remembering */ } runCode(pendingText, pendingRect, lv.dataset.level); return; }
     const back = e.target.closest('.dock-back');
     if (back) { dockBack(); back.remove(); return; }
     const btn = e.target.closest('.choice-btn');
     if (!btn) return;
+    if (btn.dataset.mode === 'explain' || btn.dataset.mode === 'draw') { showSubChoice(btn.dataset.mode, pendingRect); return; }
     if (pendingPic) { runPicture(btn.dataset.mode); return; }
     if (btn.dataset.mode === 'code') { showCodeLevels(pendingText, pendingRect); return; }
     runExplainOrAnswer(pendingText, pendingRect, btn.dataset.mode);
   });
+
+  /* ---------- (v318) Explain: a short, direct answer or a longer explanation (the answer at the top either way);
+     Draw: a flat drawing or a 3D model. The last choice is marked, so Enter picks it again. ---------- */
+  function showSubChoice(kind, rect) {
+    body.classList.remove('muted');
+    const L = window.CassieLive, can3d = !L || L.wants3d('show it in 3d');
+    body.innerHTML = kind === 'explain' ? `
+      <div class="question">How much should I explain?</div>
+      <div class="level-row">
+        <button type="button" class="level-btn sub-btn" data-sub="short">Short and direct (the answer, then why in a few lines)</button>
+        <button type="button" class="level-btn sub-btn" data-sub="long">Longer (the answer, then step by step)</button>
+      </div>` : `
+      <div class="question">How should I draw it?</div>
+      <div class="level-row">
+        <button type="button" class="level-btn sub-btn" data-sub="2d">2D drawing (flat, with labels)</button>
+        ${can3d ? '<button type="button" class="level-btn sub-btn" data-sub="3d">3D model (turn it around)</button>' : ''}
+      </div>`;
+    positionPopover(rect);
+    const key = kind === 'explain' ? 'cassieExplainLevel' : 'cassieDrawKind';
+    try {
+      chrome.storage.local.get(key).then((o) => {
+        const want = o && o[key], b = body.querySelector(`.sub-btn[data-sub="${want}"]`) || body.querySelector('.sub-btn');
+        if (b) { b.classList.add('last'); b.focus({ preventScroll: true }); }
+      }).catch(() => {});
+    } catch (e) { /* storage gone after an update: no mark */ }
+  }
+  // Draw: what was highlighted, drawn on her card beside the page (live.js), flat or in 3D
+  function runDraw(text, rect, kind) {
+    const what = String(text || '').trim().slice(0, 1500) || 'the part of the page I highlighted';
+    const q = kind === '3d' ? `Show this as a 3D model I can turn around: "${what}"` : `Draw this as a flat labelled drawing so I can understand it: "${what.replace(/\b(3d|three[\s-]?d)\b/gi, '')}"`;
+    pendingPic = null; codeRun = null;
+    if (careFirst(q, rect)) return;
+    if (window.CassieLive && window.CassieTeach && window.CassieTeach.run) { liveHere(q, rect); return; }
+    runExplainOrAnswer(text, rect, 'explain-long'); // (no drawing here: she explains in words)
+  }
 
   /* ---------- Code: Simple or Complete, code that runs as it is, names of the student's own ---------- */
   function showCodeLevels(text, rect) {
@@ -2074,14 +2112,16 @@ Situation: "${text}"`;
       setContent('I couldn’t take a picture of that part of the page. Try the Snip tool, or paste a screenshot on the board.', { muted: true });
       return;
     }
-    const todo = mode === 'answer' ? 'Then work out the correct answer carefully and give ONLY the final answer (for multiple choice, the right option).'
+    const todo = mode === 'explain-short' ? 'Then give the answer first, on its own bold line at the top (for multiple choice, the right option). Under it, say why in 2 to 4 short, plain sentences.'
+      : mode === 'explain-long' ? 'Then give the answer first, on its own bold line at the top (for multiple choice, the right option). Under it, explain step by step like a friendly tutor, and why each step works.'
+      : mode === 'answer' ? 'Then work out the correct answer carefully and give ONLY the final answer (for multiple choice, the right option).'
       : mode === 'code' ? 'Then write clean, working code that solves or implements it, in one fenced code block, and say in 1 or 2 short sentences how it works.'
       : 'Then explain it step by step, like a friendly tutor, and give the answer with why.';
     const prompt = `A student highlighted this part of a webpage${document.title ? ` (page: ${document.title})` : ''}${text ? `. The words they selected: """${text.slice(0, 1500)}"""` : ''}.
 First write the line "What I read:" and under it copy out exactly every word and every line of code you can read in the picture, even in an unusual font or style. Code goes in a fenced code block and keeps its line breaks and indentation. Leave nothing out and invent nothing.
 ${todo}
 If the picture has nothing you can read, say what it shows and ask ONE specific question about it. Never just ask for more context.`;
-    convoLabel = `${mode === 'answer' ? 'Answer' : mode === 'code' ? 'Code' : 'Explain'}: ${text || 'a picture'}`;
+    convoLabel = `${mode === 'answer' ? 'Answer' : mode === 'code' ? 'Code' : 'Explain'}: ${text || 'a picture'}`; // (explain-short and explain-long are Explain)
     try {
       const reply = await askVision(cap.image, prompt, null, 1600, undefined, { kind: 'highlight', q: convoLabel });
       if (myGen !== gen) return;
@@ -2103,8 +2143,10 @@ If the picture has nothing you can read, say what it shows and ask ONE specific 
       prompt = `Work out the correct answer to this carefully and double-check it before responding, then give ONLY the final answer. No explanation, no extra words. If it's multiple choice, give the correct option:\n\n"${text}"`;
     } else if (mode === 'code') {
       prompt = `Write clean, well-commented code that correctly solves or implements this. Pick a sensible language if none is stated, put the code in a fenced code block, make sure it actually works, and briefly explain how it works:\n\n"${text}"`;
+    } else if (mode === 'explain-short') {
+      prompt = `Work this out carefully and double-check it. Start with the answer, on its own bold line at the very top (if it is not a question, the main idea in one line). Under it, explain why in 2 to 4 short, plain sentences. Nothing more:\n\n"${text}"`;
     } else {
-      prompt = `Work through this carefully step by step and double-check your result, then give the answer followed by a clear explanation of why/how:\n\n"${text}"`;
+      prompt = `Work through this carefully step by step and double-check your result. Start with the answer, on its own bold line at the very top (if it is not a question, the main idea in one line). Under it, give a clear explanation of why and how, step by step, like a friendly tutor:\n\n"${text}"`;
     }
     convo = [{ role: 'user', content: prompt }];
     convoLabel = `${mode === 'answer' ? 'Answer' : mode === 'code' ? 'Code' : 'Explain'}: ${text}`;
@@ -2112,7 +2154,7 @@ If the picture has nothing you can read, say what it shows and ask ONE specific 
   }
 
   /* Highlight help is ON or OFF (the switch in the side buttons next to Snip, or the popup):
-       ON  — highlighting text opens Cassie's Explain / Answer / Code choice
+       ON  — highlighting text opens Cassie's Explain / Draw choice (v318)
        OFF — highlighting is just highlighting: copy and paste like normal
      (Older saved settings 'button' and 'auto' both mean ON.) */
   let hlOn = true;

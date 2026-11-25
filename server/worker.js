@@ -1252,10 +1252,21 @@ async function chat(request, env, ctx) {
     }
   }
 
-  const maxTokens = Math.min(Math.max(+body.max_tokens || 2048, 64), 4000);
+  const maxTokens = Math.min(Math.max(+body.max_tokens || 2048, 64), draw ? 8000 : 4000); // (v318: a whole 3D model needs the room; cut off, it could not be built)
   const temperature = typeof body.temperature === 'number' ? Math.min(Math.max(body.temperature, 0), 1.2) : 0.6;
   let lastStatus = 503, lastDetail = '';
   const problems = [];
+  // (v318) a photo: Gemini reads pictures far better than Groq's picture models, so it is asked first (Groq is the backup)
+  let geminiAsked = false;
+  if (cleaned.image && !draw && env.GEMINI_KEY) {
+    geminiAsked = true;
+    const g = await askGemini(env, cleaned.messages, maxTokens);
+    if (g.reply) {
+      ctx.waitUntil(countChat(env, today, 'gemini'));
+      return json({ choices: [{ index: 0, message: { role: 'assistant', content: g.reply }, finish_reason: 'stop' }] }, 200, { ...h, ...left, 'x-cassie-source': 'gemini' });
+    }
+    problems.push(g.detail);
+  }
   if (env.GROQ_KEY) {
     let models;
     if (cleaned.image || body.model === 'vision') { models = (await visionModels(env)).slice(0, 4); if (!models.length) problems.push('Groq: no picture-reading model on this key'); }
@@ -1283,7 +1294,7 @@ async function chat(request, env, ctx) {
     }
   }
   // Gemini (your GEMINI_KEY): reads pictures and answers text when Groq couldn't
-  if (env.GEMINI_KEY && !draw) {
+  if (env.GEMINI_KEY && !draw && !geminiAsked) {
     const g = await askGemini(env, cleaned.messages, maxTokens);
     if (g.reply) {
       ctx.waitUntil(countChat(env, today, 'gemini'));

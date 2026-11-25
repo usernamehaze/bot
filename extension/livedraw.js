@@ -431,7 +431,11 @@ async function fromOpenverse(subject, ms) {
   }
   return null;
 }
+// (v318) off: the pictures it found were too often the wrong thing (a map, a painting, another machine), and a
+// wrong picture made the drawing worse than none. Cassie draws from what she knows; a student's own photo still works.
+export const REFERENCES_ON = false;
 export async function findReference(question, ms = 5000) {
+  if (!REFERENCES_ON) return null;
   const q = String(question || '');
   // (v306) on low data a reference picture (about 80 KB) is skipped: Lite mode, Data Saver, or a 2G or 3G connection
   const net = (typeof navigator !== 'undefined' && navigator.connection) || {};

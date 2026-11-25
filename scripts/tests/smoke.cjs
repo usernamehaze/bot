@@ -739,6 +739,32 @@ test('v316 the drawing book, grown by the team (server): an AI drawing is sugges
   r = await call('GET', '/drawings');
   expect(r.json.list.length === 0, 'Remove takes it out of the book');
 });
+test('v318 the real server: a photo is read by Gemini first (it reads pictures far better than Groq), and Groq only if Gemini cannot; a drawing gets room for a whole 3D model (8000 tokens), a chat answer still 4000', async () => {
+  const realFetch = globalThis.fetch, seen = [];
+  let geminiDown = false;
+  globalThis.fetch = async (u, o) => {
+    const url = String(u), body = o && o.body ? JSON.parse(o.body) : {};
+    if (/generativelanguage\.googleapis\.com/.test(url)) { seen.push('gemini'); if (geminiDown) return new Response('{"error":{"message":"busy"}}', { status: 503 }); return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'A girl with white hair holding a sword.' }] } }] }), { status: 200, headers: { 'content-type': 'application/json' } }); }
+    if (/api\.groq\.com\/openai\/v1\/models/.test(url)) return new Response(JSON.stringify({ data: [{ id: 'meta-llama/llama-4-scout-17b-16e-instruct' }, { id: 'openai/gpt-oss-120b' }] }), { status: 200, headers: { 'content-type': 'application/json' } });
+    if (/api\.groq\.com/.test(url)) { seen.push('groq:' + body.model + ':' + body.max_tokens); return new Response(JSON.stringify({ choices: [{ message: { content: /Read the sum/.test(JSON.stringify(body.messages)) ? '56' : 'From Groq.' } }] }), { status: 200, headers: { 'content-type': 'application/json' } }); }
+    return realFetch(u, o);
+  };
+  try {
+    const { call } = await realServer({ GROQ_KEY: 'gsk_test_fake', GEMINI_KEY: 'gm_test_fake', DAILY_LIMIT: '500', FREE_DAILY_QUESTIONS: '500' });
+    const pic = [{ role: 'user', content: [{ type: 'text', text: 'Who is this character?' }, { type: 'image_url', image_url: { url: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==' } }] }];
+    let r = await call('POST', '/chat', { uid: 'pic-uid-1x', q: 1, messages: pic });
+    expect(r.status === 200 && r.headers.get('x-cassie-source') === 'gemini' && seen[0] === 'gemini' && !seen.some((x) => /^groq/.test(x)), 'a photo goes to Gemini first: ' + seen.join(',') + ' ' + r.text.slice(0, 120));
+    seen.length = 0; geminiDown = true;
+    r = await call('POST', '/chat', { uid: 'pic-uid-2x', q: 1, messages: pic });
+    expect(r.status === 200 && r.headers.get('x-cassie-source') === 'groq' && seen[0] === 'gemini' && !seen.slice(seen.findIndex((x) => /^groq/.test(x))).includes('gemini'), 'Gemini busy (each of its models tried once): Groq reads it, and Gemini is not asked again after: ' + seen.join(','));
+    seen.length = 0;
+    r = await call('POST', '/chat', { uid: 'draw-uid-1x', q: 1, draw: 1, max_tokens: 8000, messages: [{ role: 'system', content: 'You are Cassie, who explains by DRAWING, here by building a 3D model.' }, { role: 'user', content: 'show a jet engine in 3D' }] });
+    expect(r.status === 200 && seen.some((x) => /^groq:[^:]+:8000$/.test(x)), 'a drawing gets 8000 tokens on Groq: ' + seen.join(','));
+    seen.length = 0;
+    r = await call('POST', '/chat', { uid: 'chat-uid-9x', q: 1, max_tokens: 8000, messages: [{ role: 'user', content: 'What is osmosis?' }] });
+    expect(r.status === 200 && seen.some((x) => /^groq:[^:]+:4000$/.test(x)), 'a chat answer still at most 4000: ' + seen.join(','));
+  } finally { globalThis.fetch = realFetch; }
+});
 test('the real server: file sections (big PDFs read in parts) share an app-wide budget a minute, so chat questions never wait on them; past it a wait the app handles by itself (retry-after up to 30 s)', async () => {
   const realFetch = globalThis.fetch;
   globalThis.fetch = async (u, o) => (/api\.groq\.com/.test(String(u)) ? new Response(JSON.stringify({ choices: [{ message: { content: 'A section summary.' } }] }), { status: 200, headers: { 'content-type': 'application/json' } }) : realFetch(u, o));
@@ -994,6 +1020,49 @@ test('an old saved Gemini key (apiKey) moves to geminiKey, is removed from what�
   await ctx.close();
 });
 
+test('v318 an answer stays in its own chat: leaving for the Calendar while Cassie answers, the answer is saved to that chat and never lands on the Calendar page; while she answers, Send and Enter wait (what was typed stays); a tap anywhere in the ask box puts you in it', async (b) => {
+  let release; const gate = new Promise((r) => { release = r; });
+  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, lite: 'off', state: { groqKey: 'gsk_test' }, fakeGroq: async () => { await gate; return { text: 'Photosynthesis makes sugar from light.' }; } });
+  try {
+    await page.evaluate(() => deskGo('chat'));
+    // a tap in the empty row under the words puts you in the box
+    await page.evaluate(() => promptInput.blur());
+    const sp = await page.locator('#composer .composer-spacer').boundingBox();
+    await page.mouse.click(sp.x + sp.width / 2, sp.y + sp.height / 2);
+    expect(await page.evaluate(() => document.activeElement && document.activeElement.id) === 'prompt-input', 'a tap in the empty part of the ask box puts you in it to type');
+    await page.fill('#prompt-input', 'what is photosynthesis'); await page.keyboard.press('Enter');
+    await page.waitForSelector('#chat-log .typing-dots', { timeout: 10000 });
+    // while she answers, a second message waits
+    await page.fill('#prompt-input', 'and respiration?'); await page.keyboard.press('Enter'); await page.click('#send-btn', { force: true }).catch(() => {});
+    const held = await page.evaluate(() => ({ users: state.messages.filter((m) => m.role === 'user').length, box: promptInput.value, say: (chatLog.querySelector('.typing-status') || {}).textContent || '' }));
+    expect(held.users === 1 && held.box === 'and respiration?' && /Still working on this one/.test(held.say), 'a second message waits while she answers: ' + JSON.stringify(held));
+    const id = await page.evaluate(() => state.currentId);
+    await page.evaluate(() => deskGo('calendar'));
+    release();
+    await page.waitForFunction((id) => { const c = state.chats.find((x) => x.id === id); return c && c.messages.some((m) => m.role === 'assistant' && /Photosynthesis makes sugar/.test(m.content)); }, id, { timeout: 10000 });
+    await page.waitForTimeout(400);
+    const after = await page.evaluate(() => ({ text: chatLog.textContent, page: deskPage, desk: !!chatLog.querySelector('.home-desk') }));
+    expect(!/Photosynthesis makes sugar/.test(after.text) && after.desk, 'the answer is not put on the Calendar page: ' + JSON.stringify({ page: after.page, desk: after.desk, has: /Photosynthesis/.test(after.text) }));
+    await page.evaluate((id) => { setDeskPage('chat'); selectChat(id); }, id);
+    await page.waitForFunction(() => /Photosynthesis makes sugar/.test(chatLog.textContent), null, { timeout: 5000 });
+    expect(await page.evaluate(() => !chatLog.querySelector('.dk-col, .hub-exam')), 'back in that chat: the answer is there, and no Study plan board with it');
+    expect(!errors.length, 'page errors: ' + errors.join(' | '));
+  } finally { await ctx.close(); }
+});
+
+test('v318 a 3D model that could not be built is drawn flat instead, and says so (See it in 3D tries again)', async (b) => {
+  const good = JSON.parse(fs.readFileSync(fileAt('tests/fixtures/live/volcano2d-good.json'), 'utf8'));
+  const asks = [];
+  const { ctx, page, errors } = await open(b, { book: true, lite: 'off', state: { groqKey: 'gsk_test' }, fakeGroq: (body) => { const all = JSON.stringify(body.messages || []); if (/explains by DRAWING, here by building a 3D model/.test(all)) { asks.push(/Keep it smaller/.test(all) ? '3d-smaller' : '3d'); return { text: '{"title":"How a geyser erupts","mode":"3d","parts":[{"id":"a","label":"Pool","shapes":[{"t":"sph' }; } if (/explains by DRAWING/.test(all)) { asks.push('2d'); return { text: JSON.stringify({ ...good, title: 'How a geyser erupts' }) }; } return { text: '{}' }; } });
+  try {
+    await page.evaluate(() => { liveDrawReply('show how a geyser erupts in 3D', true); });
+    await page.waitForFunction(() => /How a geyser erupts/.test((document.querySelector('#chat-log .ld-title') || {}).textContent || ''), null, { timeout: 30000 });
+    const got = await page.evaluate(() => ({ note: (document.querySelector('#chat-log .ld-fixed') || {}).textContent || '', mode: (JSON.parse(/^```cassie-draw\n([\s\S]*)\n```$/.exec(state.messages[state.messages.length - 1].display)[1]) || {}).mode }));
+    expect(got.mode === '2d' && /did not come out right this time, so here it is flat/.test(got.note), 'drawn flat, and it says so: ' + JSON.stringify(got));
+    expect(asks[0] === '3d' && asks.includes('3d-smaller') && asks.includes('2d'), 'it tried 3D, then a smaller 3D, then flat: ' + asks.join(','));
+    expect(!errors.length, 'page errors: ' + errors.join(' | '));
+  } finally { await ctx.close(); }
+});
 test('v316 the drawing book, grown by the team (app): an AI drawing that passed every check is sent with its subject words and a picture, never the question; not for a photo, a name, a book subject, usage counts off, under 13 or an unknown age; once per subject; an approved drawing shows at once like the book, with no AI', async (b) => {
   const drawCalls = [];
   const { ctx, page, errors } = await open(b, { book: true, lite: 'off', state: { groqKey: 'gsk_test', analytics: { usage: true, topics: false } }, fakeGroq: (body) => { if (/explains by DRAWING/.test(JSON.stringify(body.messages || []))) drawCalls.push(1); return { text: 'Words.' }; } });
@@ -7992,9 +8061,8 @@ test('v305 drawings, more realistic: every way the AI writes a shape is read (a 
   });
   await ctx.route(/upload\.wikimedia\.org/, (route) => route.fulfill({ body: PNG, contentType: 'image/png', headers: { 'access-control-allow-origin': '*' } }));
   const ref = await page.evaluate(async () => { const m = await liveDrawLoad(); const v = await m.findReference('draw how a volcano erupts'); const d = await m.findReference('draw a dragon'), f = await m.findReference('draw a frog'); return { v: v && { mime: v.mimeType, len: v.base64.length, ref: v.ref }, d, f }; });
-  expect(ref.v && ref.v.mime === 'image/png' && ref.v.len > 1000 && ref.v.ref.text === 'Volcano scheme.svg, Wikimedia Commons' && /File:Volcano_scheme\.svg$/.test(ref.v.ref.url), 'a volcano gets the English Commons diagram (not the Hindi one), credited: ' + JSON.stringify(ref.v && ref.v.ref));
-  expect(api.every((u) => /origin=\*/.test(u)) && api.some((u) => /iiurlwidth=500/.test(u)), 'Commons is asked the light, standard way (origin=*, a standard 500px size): ' + api.join(' | '));
-  expect(ref.d === null && ref.f === null, 'no reference for an imaginary creature or a living thing');
+  // (v318) reference pictures are off: the ones found were too often the wrong thing, and made drawings worse
+  expect(ref.v === null && ref.d === null && ref.f === null && !api.length, 'no reference picture is looked up any more: ' + JSON.stringify(ref) + ' ' + api.join(' | '));
   // the card credits it, with a link
   const card = await page.evaluate(async () => { const m = await liveDrawLoad(); const host = document.createElement('div'); document.body.appendChild(host); await m.render(host, { title: 'How a volcano erupts', mode: '2d', ref: { text: 'Volcano scheme.svg, Wikimedia Commons', url: 'https://commons.wikimedia.org/wiki/File:Volcano_scheme.svg' }, parts: [{ label: 'Cone', say: 'a', anchor: [200, 150], shapes: [{ t: 'path', d: 'M100 240 L200 60 L300 240 Z' }, { t: 'line', x1: 200, y1: 60, x2: 200, y2: 240 }] }, { label: 'Ground', say: 'b', anchor: [200, 245], shapes: [{ t: 'line', x1: 0, y1: 240, x2: 400, y2: 240 }, { t: 'line', x1: 0, y1: 250, x2: 400, y2: 250 }] }] }, { animate: false }); const r2 = host.querySelector('.ld-ref'); return r2 ? { text: r2.textContent, href: r2.querySelector('a').href, rel: r2.querySelector('a').rel } : null; });
   expect(card && card.text === 'Drawn from a reference: Volcano scheme.svg, Wikimedia Commons' && /Volcano_scheme/.test(card.href) && card.rel === 'noopener', 'the card says where the reference came from, with a link: ' + JSON.stringify(card));
@@ -9357,7 +9425,10 @@ test('extension: the pop-up is for highlights (a code screenshot opens it too, a
     u = await ui();
     expect(u.open && /What should I do with this/.test(u.text) && !(await boardOpen()), 'a picture highlight opens the pop-up, not the snip board: ' + JSON.stringify(u));
     expect((await sw.evaluate(() => self.__prompts.length)) === 0, 'nothing is sent until an option is picked');
+    expect(await page.evaluate((r) => [...eval(r).querySelectorAll('.choice-btn')].map((x) => x.textContent.trim()).join(), R) === 'Explain,Draw', 'the pop-up offers Explain and Draw only');
     await page.evaluate((r) => eval(r).querySelector('.choice-btn[data-mode="explain"]').click(), R);
+    expect((await sw.evaluate(() => self.__prompts.length)) === 0 && /How much should I explain/.test((await ui()).text), 'Explain asks how much first: ' + (await ui()).text);
+    await page.evaluate((r) => eval(r).querySelector('.sub-btn[data-sub="long"]').click(), R);
     await page.waitForFunction((r) => /prints each one doubled/.test(eval(r).querySelector('.popover').innerText), R, { timeout: 20000 });
     const sent = await sw.evaluate(() => ({ p: self.__prompts.slice(), img: self.__images.slice() }));
     expect(sent.p.length === 1 && /^data:image\//.test(sent.img[0]) && /copy out exactly every word and every line of code/.test(sent.p[0]) && /keeps its line breaks and indentation/.test(sent.p[0]) && /Never just ask for more context/.test(sent.p[0]), 'a picture went to Cassie with the copy-first prompt: ' + JSON.stringify([sent.img, sent.p[0] && sent.p[0].slice(0, 200)]));
@@ -9380,21 +9451,22 @@ test('extension: the pop-up is for highlights (a code screenshot opens it too, a
     expect(b4.w <= 1280 * 0.9 + 1 && b4.h <= 800 * 0.9 + 1 && b4.x + b4.w <= 1280 && b4.y + b4.h <= 800, 'it grows up to 90% of the screen and stays on screen: ' + JSON.stringify(b4));
     await page.mouse.move(b4.x + b4.w - 6, b4.y + b4.h - 6); await page.mouse.down(); await page.mouse.move(b4.x + b4.w - 300, b4.y + b4.h - 200, { steps: 5 }); await page.mouse.up();
     const kept = (await ui()).box;
-    // closing keeps it closed: highlights open nothing, on a reload too, with a one-time note
-    await page.evaluate((r) => eval(r).querySelector('.popover .header button').click(), R);
+    // (v318) Draw asks flat or 3D first (nothing is sent before that)
+    const sentBefore = await sw.evaluate(() => self.__prompts.length);
+    await page.evaluate(() => getSelection().removeAllRanges()); await highlight('#plain');
+    await page.evaluate((r) => eval(r).querySelector('.choice-btn[data-mode="draw"]').click(), R);
     u = await ui();
-    for (let k = 0; k < 20 && !(!u.open && /Double-tap Ctrl to bring Cassie back/.test(u.note)); k++) { await page.waitForTimeout(150); u = await ui(); } // (the note shows a moment later on a slow machine)
-    expect(!u.open && /Double-tap Ctrl to bring Cassie back/.test(u.note), 'closed, with the note: ' + JSON.stringify(u));
-    await highlight('#plain');
-    expect(!(await ui()).open, 'closed: a highlight opens nothing');
+    const kinds = await page.evaluate((r) => [...eval(r).querySelectorAll('.sub-btn')].map((x) => x.dataset.sub).join(), R);
+    expect(/How should I draw it/.test(u.text) && /^2d(,3d)?$/.test(kinds) && (await sw.evaluate(() => self.__prompts.length)) === sentBefore, 'Draw asks 2D drawing or 3D model first: ' + kinds + ' ' + u.text);
+    // (v318) closing only closes it: Highlight help stays on (only its switch turns it off), so the next highlight opens it, where it was put
+    await page.evaluate((r) => eval(r).querySelector('.popover .header button').click(), R);
+    await page.waitForTimeout(400);
+    u = await ui();
+    expect(!u.open && !u.note && (await sw.evaluate(() => chrome.storage.local.get('cassieHighlight'))).cassieHighlight === 'on', 'closed, and Highlight help is still on: ' + JSON.stringify(u));
     await load(true);
     await highlight('#plain');
-    expect(!(await ui()).open, 'still closed after a reload');
-    // Ctrl tapped twice: it opens (for the highlight there), and highlights open it again, after a reload too, where it was put
-    await page.keyboard.press('Control'); await page.keyboard.press('Control');
-    await page.waitForTimeout(300);
     u = await ui();
-    expect(u.open && /What should I do with this/.test(u.text), 'double Ctrl brings it back: ' + JSON.stringify(u));
+    expect(u.open && /What should I do with this/.test(u.text), 'the next highlight opens it, after a reload too: ' + JSON.stringify(u));
     expect(Math.abs(u.box.w - kept.w) <= 2 && Math.abs(u.box.h - kept.h) <= 2 && Math.abs(u.box.x - kept.x) <= 2 && Math.abs(u.box.y - kept.y) <= 2, 'at the size and place it was left (after a reload): ' + JSON.stringify([kept, u.box]));
     await page.evaluate(() => getSelection().removeAllRanges());
     await load(true);
@@ -10295,11 +10367,11 @@ test('Cassie’s live drawing, like the app (3.76): asked to draw, she looks up 
     await ask('draw how a geyser erupts');
     await until({ beat: '0' }, 20000);
     const P = await prompts();
-    expect(P.length === 1 && /A second picture comes after the picture of their screen: a reference picture/.test(P[0]), 'she was told about the reference picture: ' + P.length);
+    expect(P.length === 1 && !/A second picture comes after the picture of their screen/.test(P[0]), '(v318) no reference picture any more, only the screen: ' + P.length);
     expect(/"next":\[2 short questions/.test(P[0]), 'and asked for what to ask next');
     let c = await card();
     const ref = await page.evaluate((h) => { const r = document.querySelector(h).shadowRoot.querySelector('.lv-ref'); return r && !r.hidden ? { text: r.textContent, href: r.querySelector('a').href } : null; }, LIVE);
-    expect(ref && ref.text === 'Drawn from a reference: Volcano scheme.svg, Wikimedia Commons' && /Volcano_scheme/.test(ref.href), 'her card credits the reference: ' + JSON.stringify(ref));
+    expect(!ref, '(v318) no reference, so no credit line: ' + JSON.stringify(ref));
     // "Ask next" once she is done
     await until({ status: 'done' }, 60000);
     const qs = await page.evaluate((h) => [...document.querySelector(h).shadowRoot.querySelectorAll('.lv-nextq button')].map((b) => b.textContent), LIVE);
@@ -17260,7 +17332,7 @@ test('extension: highlight help ON or OFF (the switch next to Snip) — off, hig
       await page.waitForTimeout(650);
     };
 
-    // 1. ON (the default): a highlight opens the Explain / Answer / Code choice — no extra button
+    // 1. ON (the default): a highlight opens the Explain / Draw choice — no extra button
     await select();
     let s = await ui();
     expect(s.pop && /What should I do with this/.test(s.popText) && !s.chip, 'a highlight opens Cassie: ' + JSON.stringify(s));
@@ -17272,11 +17344,9 @@ test('extension: highlight help ON or OFF (the switch next to Snip) — off, hig
     // 2. the ON/OFF switch in the side buttons (with Snip): off = highlight and copy like normal
     const hl = () => page.evaluate(() => { const b = document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.dock-hl'); return b && b.getAttribute('aria-pressed'); });
     await page.waitForFunction(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.dock-hl'), null, { timeout: 5000 });
-    // closing the pop-up (×) turned highlight help OFF, the same switch; the switch turns it back ON
-    await page.waitForFunction(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.dock-hl').getAttribute('aria-pressed') === 'false', null, { timeout: 3000 });
-    await page.evaluate(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.dock-hl').click());
-    await page.waitForFunction(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.dock-hl').getAttribute('aria-pressed') === 'true', null, { timeout: 3000 });
-    expect(await hl() === 'true', 'the switch is ON again');
+    // (v318) closing the pop-up (×) leaves highlight help ON: only the switch turns it off
+    await page.waitForTimeout(300);
+    expect(await hl() === 'true', 'closing the pop-up keeps the switch ON');
     await page.evaluate(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.dock-hl').click());
     await page.waitForFunction(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.dock-hl').getAttribute('aria-pressed') === 'false', null, { timeout: 3000 });
     if (process.env.SHOTS) { await page.evaluate(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.dock').classList.add('open')); await page.screenshot({ path: process.env.SHOTS + '/ext-hl-switch.png' }); await page.evaluate(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.dock').classList.remove('open')); }
@@ -17299,7 +17369,7 @@ test('extension: highlight help ON or OFF (the switch next to Snip) — off, hig
     const id = new URL(sw.url()).host;
     const pop = await ctx.newPage();
     await pop.goto(`chrome-extension://${id}/popup.html`);
-    expect(await pop.locator('#hl-mode').inputValue() === 'off', 'closing the pop-up turned highlight help off, and the toolbar popup says so');
+    expect(await pop.locator('#hl-mode').inputValue() === 'on', 'closing the pop-up kept highlight help on, and the toolbar popup says so');
     await pop.selectOption('#hl-mode', 'on');
     await page.bringToFront(); await page.waitForTimeout(200);
     expect(await hl() === 'true', 'the toolbar popup turns it back on, and the side switch follows');
@@ -17370,6 +17440,8 @@ test('extension Code: Simple or Complete first, a code box with Copy code and Co
       // (closing keeps Cassie away from highlights until Ctrl is tapped twice, as a student would)
       await page.keyboard.press('Control'); await page.keyboard.press('Control'); await page.waitForTimeout(150);
       await select();
+      // (v318: the pop-up offers Explain and Draw only; Code's own path is still checked here, from a button put in for the test)
+      await page.evaluate(([r]) => { const row = eval(r).querySelector('.choice-row'); const b = document.createElement('button'); b.type = 'button'; b.className = 'choice-btn'; b.dataset.mode = 'code'; b.textContent = 'Code'; row.appendChild(b); }, [root]);
       await click('.choice-btn[data-mode="code"]');
       await page.waitForFunction(([r]) => eval(r).querySelectorAll('.level-btn').length === 2, [root], { timeout: 5000 });
       const levels = await page.evaluate(([r]) => [...eval(r).querySelectorAll('.level-btn')].map((b) => b.textContent.trim() + (b.classList.contains('last') ? ' (last)' : '')), [root]);
