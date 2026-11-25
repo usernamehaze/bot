@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Moving Drawing Demo</title>
+<style>
+  :root {
+    --bg: #101013; --card: #1b1b20; --line: #3a3a44; --text: #f2f2f5; --muted: #b4b4c0;
+    --blue: #6b9bff; --red: #ff5a5f; --heart: #3a2a30; --heart-edge: #c9707a; --lung: #2c3340; --lung-edge: #8fa3c4;
+    --chip: #2a2a31; --chip-on: #f2f2f5; --chip-on-text: #111;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 24px 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 24px; padding: 16px; }
+  .eyebrow { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+  .eyebrow i { width: 8px; height: 8px; border-radius: 50%; background: var(--red); display: inline-block; }
+  h1 { font-size: 20px; margin: 8px 0 16px; }
+  .stage { background: #0c0c0f; border-radius: 16px; overflow: hidden; }
+  svg { display: block; width: 100%; height: auto; }
+  .say { min-height: 72px; margin: 16px 0 8px; font-size: 16px; }
+  .say b { color: var(--text); }
+  .step-n { color: var(--muted); font-size: 14px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  button { font: inherit; color: var(--text); background: var(--chip); border: 1px solid var(--line); border-radius: 999px; min-height: 44px; padding: 8px 16px; cursor: pointer; }
+  button.on { background: var(--chip-on); color: var(--chip-on-text); border-color: var(--chip-on); }
+  button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  .legend { display: flex; gap: 16px; color: var(--muted); font-size: 14px; margin-top: 16px; flex-wrap: wrap; }
+  .legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; vertical-align: middle; }
+  .legend .lo::before { background: var(--blue); } .legend .hi::before { background: var(--red); }
+  .lbl { font-size: 11px; fill: var(--text); paint-order: stroke; stroke: #0c0c0f; stroke-width: 3px; }
+  .lbl.sm { font-size: 10px; fill: var(--muted); }
+  .vessel { fill: none; stroke: var(--line); stroke-width: 9; stroke-linecap: round; transition: stroke .3s, opacity .3s; }
+  .vessel.lit { stroke: #55555f; }
+  .dim { opacity: .28; }
+  .part { cursor: pointer; transition: opacity .3s; }
+  .note { color: var(--muted); font-size: 14px; margin-top: 16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <div class="eyebrow"><i></i>Cassie drew it, moving</div>
+    <h1>How blood flows from the heart to the body</h1>
+    <div class="stage">
+      <svg id="svg" viewBox="0 0 400 300" role="img" aria-label="Blood flowing through the heart, lungs and body">
+        <g id="vessels"></g>
+        <!-- lungs -->
+        <g class="part" data-step="4">
+          <path d="M70 70 C60 30 100 18 130 30 C150 40 150 80 140 95 C120 105 80 100 70 70 Z" fill="var(--lung)" stroke="var(--lung-edge)" stroke-width="1.5"/>
+          <path d="M330 70 C340 30 300 18 270 30 C250 40 250 80 260 95 C280 105 320 100 330 70 Z" fill="var(--lung)" stroke="var(--lung-edge)" stroke-width="1.5"/>
+          <text class="lbl" x="200" y="14" text-anchor="middle">Lungs: blood picks up oxygen</text>
+        </g>
+        <!-- heart -->
+        <g id="heart" class="part" style="transform-origin: 200px 160px">
+          <path d="M200 215 C150 190 128 160 135 132 C142 108 170 104 185 118 L200 130 L215 118 C230 104 258 108 265 132 C272 160 250 190 200 215 Z" fill="var(--heart)" stroke="var(--heart-edge)" stroke-width="2"/>
+          <line x1="200" y1="128" x2="200" y2="205" stroke="var(--heart-edge)" stroke-width="1.5"/>
+          <line x1="140" y1="152" x2="260" y2="152" stroke="var(--heart-edge)" stroke-width="1" stroke-dasharray="3 3"/>
+          <g class="chamber" data-step="1"><text class="lbl sm" x="168" y="146" text-anchor="middle">Right</text><text class="lbl sm" x="168" y="146" dy="11" text-anchor="middle" style="font-size:9px">atrium</text></g>
+          <g class="chamber" data-step="2"><text class="lbl sm" x="172" y="176" text-anchor="middle">Right</text><text class="lbl sm" x="172" y="187" text-anchor="middle" style="font-size:9px">ventricle</text></g>
+          <g class="chamber" data-step="5"><text class="lbl sm" x="232" y="146" text-anchor="middle">Left</text><text class="lbl sm" x="232" y="157" text-anchor="middle" style="font-size:9px">atrium</text></g>
+          <g class="chamber" data-step="6"><text class="lbl sm" x="228" y="176" text-anchor="middle">Left</text><text class="lbl sm" x="228" y="187" text-anchor="middle" style="font-size:9px">ventricle</text></g>
+        </g>
+        <!-- body -->
+        <g class="part" data-step="7">
+          <rect x="120" y="257" width="160" height="38" rx="10" fill="#26262d" stroke="var(--line)"/>
+          <text class="lbl" x="200" y="272" text-anchor="middle">Body: cells use the oxygen</text>
+        </g>
+        <text class="lbl sm" x="84" y="226" text-anchor="start">Vena cava</text>
+        <text class="lbl sm" x="316" y="226" text-anchor="end">Aorta</text>
+        <g id="cells"></g>
+      </svg>
+    </div>
+    <div class="say" aria-live="polite"><div class="step-n" id="stepn"></div><div id="say"></div></div>
+    <div class="row">
+      <button id="play" class="on" type="button">Pause</button>
+      <button id="prev" type="button">Back</button>
+      <button id="next" type="button">Next step</button>
+      <button id="all" type="button">Show the whole loop</button>
+    </div>
+    <div class="legend"><span class="lo">Low in oxygen</span><span class="hi">Rich in oxygen</span></div>
+    <p class="note">A demo of a moving drawing: the blood cells follow the real path, change colour in the lungs and the body, and the heart beats. Tap a part or use Next step.</p>
+  </div>
+</div>
+<script>
+const NS = 'http://www.w3.org/2000/svg';
+// the path of blood, in pieces; each piece belongs to a step and has its start and end colour
+const SEG = [
+  { d: 'M150 277 C40 277 30 160 60 130 C80 112 130 110 160 132', step: 1, from: 0, to: 0 },            // body -> vena cava -> right atrium
+  { d: 'M160 132 C166 150 168 160 172 176', step: 2, from: 0, to: 0 },                                // right atrium -> right ventricle
+  { d: 'M172 176 C186 150 178 110 160 92 C140 72 120 66 108 66', step: 3, from: 0, to: 0 },           // right ventricle -> lungs
+  { d: 'M108 66 C130 40 270 40 292 66', step: 4, from: 0, to: 1 },                                    // through the lungs: blue to red
+  { d: 'M292 66 C280 66 260 72 240 92 C226 108 230 124 234 140', step: 5, from: 1, to: 1 },           // lungs -> left atrium
+  { d: 'M234 140 C232 152 230 164 228 176', step: 6, from: 1, to: 1 },                                // left atrium -> left ventricle
+  { d: 'M228 176 C246 150 300 100 340 130 C370 160 360 277 250 277', step: 7, from: 1, to: 1 },       // left ventricle -> aorta -> body
+  { d: 'M250 277 C220 292 180 292 150 277', step: 8, from: 1, to: 0 },                                // through the body: red to blue
+];
+const STEPS = [
+  ['Back to the heart', 'Blood that has given its oxygen to the body comes back through the <b>vena cava</b> into the <b>right atrium</b>.'],
+  ['Into the right ventricle', 'The right atrium squeezes and pushes the blood down through a valve into the <b>right ventricle</b>.'],
+  ['To the lungs', 'The right ventricle pumps the blood up the <b>pulmonary artery</b> to the <b>lungs</b>.'],
+  ['Oxygen in, carbon dioxide out', 'In the lungs the blood drops <b>carbon dioxide</b> and picks up <b>oxygen</b>. It turns bright red.'],
+  ['Back to the heart', 'Oxygen rich blood comes back through the <b>pulmonary veins</b> into the <b>left atrium</b>.'],
+  ['Into the left ventricle', 'The left atrium pushes it into the <b>left ventricle</b>, the strongest chamber, with the thickest wall.'],
+  ['Out to the body', 'The left ventricle pumps it out through the <b>aorta</b>, the biggest artery, to every part of the body.'],
+  ['The body uses it', 'The body’s cells take the oxygen and give back carbon dioxide. The blood turns dark again and the loop starts over.'],
+];
+const svg = document.getElementById('svg'), vg = document.getElementById('vessels'), cg = document.getElementById('cells');
+const paths = SEG.map((s) => { const p = document.createElementNS(NS, 'path'); p.setAttribute('d', s.d); p.setAttribute('class', 'vessel'); vg.appendChild(p); return p; });
+const lens = paths.map((p) => p.getTotalLength()), total = lens.reduce((a, b) => a + b, 0);
+const BLUE = [107, 155, 255], RED = [255, 90, 95];
+const mix = (k) => `rgb(${BLUE.map((v, i) => Math.round(v + (RED[i] - v) * k)).join(',')})`;
+const N = 34, cells = [];
+for (let i = 0; i < N; i++) { const c = document.createElementNS(NS, 'ellipse'); c.setAttribute('rx', 4.2); c.setAttribute('ry', 3); cg.appendChild(c); cells.push({ el: c, at: (i / N) * total }); }
+const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let step = 0, playing = !still, whole = false, last = performance.now(), stepClock = 0;
+const where = (d) => { let k = 0; while (d > lens[k]) { d -= lens[k]; k = (k + 1) % lens.length; } return [k, d]; };
+function show() {
+  const s = SEG[step];
+  document.getElementById('stepn').textContent = whole ? 'The whole loop' : `Step ${step + 1} of ${STEPS.length}: ${STEPS[step][0]}`;
+  document.getElementById('say').innerHTML = whole ? 'Blood goes round two loops: heart to lungs and back, then heart to body and back. About once a minute for all of your blood.' : STEPS[step][1];
+  paths.forEach((p, i) => { p.classList.toggle('lit', whole || i === step); p.classList.toggle('dim', !whole && i !== step); });
+  document.querySelectorAll('[data-step]').forEach((g) => g.classList.toggle('dim', !whole && +g.dataset.step !== s.step && +g.dataset.step !== s.step - 1 + 1));
+}
+function frame(now) {
+  const dt = Math.min(50, now - last); last = now;
+  // the heart beats about 70 times a minute: a quick squeeze, then rest
+  const beat = (now % 860) / 860, squeeze = beat < .18 ? Math.sin(beat / .18 * Math.PI) : 0;
+  document.getElementById('heart').style.transform = `scale(${1 - squeeze * .045})`;
+  const speed = (playing ? 0.055 : 0) * (1 + squeeze * 1.6);
+  for (const c of cells) {
+    c.at = (c.at + speed * dt) % total;
+    const [k, d] = where(c.at), pt = paths[k].getPointAtLength(d), s = SEG[k];
+    c.el.setAttribute('cx', pt.x.toFixed(1)); c.el.setAttribute('cy', pt.y.toFixed(1));
+    c.el.setAttribute('fill', mix(s.from + (s.to - s.from) * (d / lens[k])));
+    c.el.style.opacity = whole || k === step ? 1 : .12;
+  }
+  if (playing && !whole) { stepClock += dt; if (stepClock > 4200) { stepClock = 0; step = (step + 1) % STEPS.length; show(); } }
+  requestAnimationFrame(frame);
+}
+const btn = (id, fn) => document.getElementById(id).addEventListener('click', fn);
+btn('play', () => { playing = !playing; document.getElementById('play').textContent = playing ? 'Pause' : 'Play'; document.getElementById('play').classList.toggle('on', playing); });
+btn('next', () => { whole = false; step = (step + 1) % STEPS.length; stepClock = 0; show(); });
+btn('prev', () => { whole = false; step = (step + STEPS.length - 1) % STEPS.length; stepClock = 0; show(); });
+btn('all', () => { whole = !whole; document.getElementById('all').classList.toggle('on', whole); show(); });
+document.querySelectorAll('.chamber, .part[data-step]').forEach((g) => g.addEventListener('click', (e) => { e.stopPropagation(); whole = false; step = +g.dataset.step - 1; stepClock = 0; show(); }));
+if (still) { document.getElementById('play').textContent = 'Play'; document.getElementById('play').classList.remove('on'); }
+show(); requestAnimationFrame(frame);
+</script>
+</body>
+</html>
