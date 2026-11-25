@@ -1,0 +1,1 @@
+Anatomy kit (kit/iso-kit.mjs, kit/lathe.mjs, kit/tube.mjs) from github.com/wheresryan22/anatomy @ 1482e84, MIT licence (LICENSE.txt). Unchanged copies: Cassie draws her 3D models with it in Machine view (isoview.js).

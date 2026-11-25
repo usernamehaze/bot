@@ -353,6 +353,7 @@ const levelSelect = document.getElementById('level-select');
 const citationSelect = document.getElementById('citation-select');
 const textsizeSelect = document.getElementById('textsize-select');
 const easyreadToggle = document.getElementById('easyread-toggle');
+const everyModelToggle = document.getElementById('every-model-toggle'); // (v319)
 const appEl = document.getElementById('app');
 function applyReading() {
   if (!appEl) return;
@@ -2835,7 +2836,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=318'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=319'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2857,7 +2858,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=318'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=319'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -3133,7 +3134,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=318').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=319').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -7071,7 +7072,8 @@ async function handleSend(text, opts = {}) {
       await pictureReply(subject, typingBubble);
       return;
     }
-    state.messages.push({ role: 'assistant', content: reply });
+    const answerMsg = { role: 'assistant', content: reply };
+    state.messages.push(answerMsg);
     save();
     typingBubble.remove();
     const bubble = renderMessage('assistant', reply);
@@ -7085,6 +7087,7 @@ async function handleSend(text, opts = {}) {
       : '';
     const want = window.CassieExport ? (window.CassieExport.wantedFormat(sendText) || (wantsStudyFile(sendText) && looksLikeContent(reply) ? 'docx' : '')) : '';
     addTextDownload(bubble, reply, { title, want });
+    if (!doc && !image && !many && !bubble.querySelector('.cassie-board')) answerModel(sendText, reply, answerMsg).catch(() => {}); // (v319: and a 3D model of it)
     if (doc && doc.text && !doc.combined) { // open the file itself to read it and highlight any part
       const rb = document.createElement('button');
       rb.type = 'button'; rb.className = 'attach-read reader-open-btn'; rb.textContent = `Read & highlight ${doc.name.length > 28 ? doc.name.slice(0, 28) + '…' : doc.name}`;
@@ -7440,6 +7443,10 @@ const LIVE_SOFT_RE = /\b(heart|lungs?|brain|kidneys?|liver|stomach|intestines?|e
 // (v314) what moves in a drawing: the app moves dots along each flow's path, beats a heart and turns a wheel
 const LIVE_MOTION_2D = 'If something moves through it (blood, water, air, food, electricity, refrigerant, magma), also give "flows":[{"part": the id or ids of the parts it moves through, "d": the path it travels, "M ... C ..." with CAPITAL letters only, along its vessel, pipe or arrow and in the direction it moves, "color":"#hex", "to":"#hex" its colour at the end when it changes on the way (blood turns from blue to red in the lungs), "dots": 3 to 10}], in the order it travels: the app moves dots along each path. A part that pumps (a heart) gets "beat":true, lungs get "beat":"breathe", and a part that turns (a wheel, gear, fan, drum) gets "spin":true.';
 const LIVE_MOTION_3D = 'If something moves through it (water, air, fuel, steam, electricity, blood), also give "flows":[{"part": the id or ids of the parts it moves through, "pts":[[x,y,z],...] 3 to 12 points along its real path, inside its pipes or case and in the direction it moves, "color":"#hex", "to":"#hex" its colour at the end when it changes (cold air turning into hot gas), "dots": 3 to 10}]: the app moves dots along each path. A part that pumps gets "beat":true.';
+// (v319) the Anatomy way (github.com/wheresryan22/anatomy): the object is the explanation. Anything a student asks,
+// even an idea, is built as a real, well-made machine whose working IS the answer, from many small parts that belong to it
+const LIVE_ANATOMY = `The object is the explanation. If they asked about a real thing, build that thing. If they asked about an idea that is not a thing (a grammar rule, a cause in history, a maths rule, a law, an economics idea, a feeling, a word), invent a real, well made physical machine, tool or instrument whose working IS the idea, and build that: a rule that must match every time is a lock whose pins must all line up; supply and demand is a balance scale with weights on each pan; a sum is a counter with turning number wheels; sorting words is a machine with labelled chutes. Say in "intro" what the machine is and what each moving part stands for, and in each part's "say" what it means for the answer. Never boxes or slabs with labels on them.
+Build it from many small, precise parts that belong to the machine, never a few plain blocks: a heavy base on feet, posts and rails, a carriage, springs, knobs, screws, a dial whose needle shows the result, the parts that hold the parts. Every part touches the part that holds it.`;
 function liveDrawPrompt(want3d, opts = {}) {
   const seen = opts.reference ? `The picture is a reference picture of it from a free picture library (v305). Draw the real thing as it looks there: its true outline and proportions, the side it is seen from, and its parts, each where it really is. Leave out anything else in the picture, write every name in English, and still show every main part a textbook figure of the topic shows, even one the picture leaves out (the solar system has the Sun and the orbits).\n` : opts.picture ? `The student sent a picture with the question. Look at it first. If the thing they ask about is in it (a photo, a figure, a diagram, their own sketch), ${want3d ? 'build' : 'draw'} THAT one: its true outline and proportions, the side it is seen from, its real colours, and the parts you can see, each where it really is.\n` : '';
   const flatNote = opts.flatNote ? `They asked for 3D, but a 3D model here is built from simple solids and would look wrong for something soft, living or a process, so draw it flat, and say that in a few words at the start of "intro".\n` : '';
@@ -7457,7 +7464,8 @@ First think how the real object is built: its real parts, which part holds or co
 ${LIVE_MOTION_3D}
 ${seen}Make it look like the real thing, not like toy blocks: give every part its real colour and "finish":"metal"|"plastic"|"rubber"|"wood" (what it is really made of), and its real profile: a lathe for anything turned or rounded (a nozzle, a bottle, a nose cone, a wheel), a plate for a flat cut shape, a pipe for a hose, wire or tube, a capsule for a rounded body. A plain cylinder or box only where the real part is one.
 {"title","mode":"3d","axis":the model's main length "x"|"y"|"z","intro":one sentence,"summary":one sentence,"next":[2 short questions the student could ask next to go deeper, each about one of its parts],"photo":what a real photo of it shows,"parts":[{"id","label":1 to 3 words,"say":1 or 2 short sentences,"color":"#hex","inside":the id of the part it sits in, or null,"attached":[ids of the parts it touches],"size":how big it really is (its longest side) against the whole object, 0 to 1,"shell","spin","glow","shapes":[...]}]}
-3 to 8 parts in building order, 1 to 8 shapes each. The whole model about 6 units long, centred on 0,0,0. Every shape has "pos":[x,y,z] and, when it has a length, "axis":"x"|"y"|"z".
+${LIVE_ANATOMY}
+4 to 12 parts in building order, 2 to 8 shapes each. The whole model about 6 units long, centred on 0,0,0. Every shape has "pos":[x,y,z] and, when it has a length, "axis":"x"|"y"|"z".
 Shapes: cylinder {r,r2,len,axis,pos,open,cut}, disc {r,thick,axis,pos}, cone {r,len,axis,pos,dir}, sphere {r,pos,cut}, box {size:[w,h,d],pos}, torus {r,tube,axis,pos}, blades {n,len,width,hub,axis,pos}, capsule {r,len,axis,pos}, pipe {pts:[[x,y,z],...],r} (a tube, hose or cable through 2 to 8 points), arrow {pts:[[x,y,z],...],r} (a flow or a push; its head is at the last point), lathe {profile:[[radius,along],...],axis,pos} (a profile turned round the axis), plate {outline:[[a,b],...],thick,axis,pos} (a flat shape cut from a sheet).
 ${tail}`;
   return `You are Cassie, a careful tutor for students who explains by DRAWING on a whiteboard. Reply with ONLY one JSON object.
@@ -7566,11 +7574,11 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=318')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=319')));
 // (v310) Cassie's drawing book: a checked drawing of a common subject (a bicycle, the heart, the solar system...) shows
 // at once, right every time, with no AI and no question used (offline too). Anything else is drawn by the AI.
 let liveBookLib = null;
-const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=318').catch(() => null)));
+const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=319').catch(() => null)));
 // (v316) the drawing book, grown by the team: AI drawings that passed every check go to Cassie's server with
 // only their subject's few words; the owner approves the good ones on the dashboard, and the app keeps a copy of
 // every approved drawing, so they show at once (offline too) like the hand-checked ones
@@ -7611,6 +7619,41 @@ async function liveDrawSuggest(question, spec, first) {
     const r = await fetch(SERVER + '/drawings/suggest', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ uid: installId(), subject, mode: sp.mode, spec: keep, png: png && png.length <= 290000 ? png : '' }), signal: waitAtMost(15000) });
     if (r.ok) { sent.push(key); try { localStorage.setItem('cassie.suggested', JSON.stringify(sent.slice(-200))); } catch (e) { /* full */ } }
   } catch (e) { /* tried again next time it is drawn */ }
+}
+/* (v319) A 3D model with every answer. After Cassie answers in words she builds what she said, in 3D (an idea as a
+   machine whose working is the answer: LIVE_ANATOMY), right under it, while the student reads. It is not another
+   question. Off in Settings ("A 3D model with every answer"), in Lite mode, on low data, offline, in a quiz, in
+   Heart-to-heart and for a greeting; a student at risk gets care, never a model. It is saved to the chat it was asked in. */
+const MODEL_SKIP = /^\s*(?:hi+|hello|hey|yo|thanks?|thank\s+you|ty|ok(?:ay)?|okie|sure|yes|no|nope|bye|good\s*(?:morning|afternoon|evening|night)|salamat|kumusta|musta|ingat|sige|oo|hindi|lol|haha+|nice|cool|wow|great|got\s+it)\b[\s!.?]*$/i;
+function answerModelFits(question) {
+  const q = String(question || '').trim(), net = navigator.connection || {};
+  if (state.everyModel === false || q.length < 3 || MODEL_SKIP.test(q) || quizMode || counselorMode || isOffline() || !canChat()) return false;
+  if (document.documentElement.classList.contains('lite') || net.saveData || /^(slow-2g|2g)$/.test(String(net.effectiveType || ''))) return false;
+  return !(window.CassieCare && window.CassieCare.check(q));
+}
+async function answerModel(question, reply, answerMsg) {
+  if (!answerModelFits(question)) return;
+  const typing = renderTyping(), home = replyHome(typing), msgs = state.messages;
+  typing.classList.add('am-wait'); setTypingStatus(typing, 'Building it in 3D…');
+  const put = (msg) => { const k = msgs.indexOf(answerMsg); msgs.splice(k >= 0 ? k + 1 : msgs.length, 0, msg); }; // (right under its answer, whatever was asked since)
+  let first = null;
+  try {
+    const ask = `${question.slice(0, 600)}\n\n(What I answered, to build as a 3D model that shows it: ${String(reply).replace(/\s+/g, ' ').slice(0, 900)})`;
+    first = await Promise.race([liveDrawFirst(ask, true, null, { free: true }), new Promise((r) => setTimeout(() => r(null), window.CASSIE_DRAW_MS || 75000))]);
+  } catch (e) { first = null; }
+  if (!first || !first.spec) { typing.remove(); return; } // (her words stand on their own)
+  first.spec.q = question.slice(0, 300);
+  const fenced = '```cassie-draw\n' + JSON.stringify(first.spec) + '\n```';
+  const msg = { role: 'assistant', content: `[I built a 3D model of my answer: ${first.spec.title}. Parts: ${first.spec.parts.map((p) => p.label).join(', ')}.]`, display: fenced, model: true };
+  const here = home.here() && typing.isConnected;
+  put(msg);
+  if (!here) { typing.remove(); home.away(null); return; } // (saved to its chat; shown there when they go back)
+  save();
+  liveDrawFresh = true;
+  const bubble = renderMessage('assistant', fenced);
+  const row = bubble && (bubble.closest('.msg') || bubble);
+  if (row) typing.replaceWith(row); else typing.remove();
+  track('feature', 'answer-model');
 }
 async function liveDrawBook(subject, want3d) {
   if (window.CASSIE_NO_BOOK) return null; // (tests of the AI's own drawing turn the book off)
@@ -9123,7 +9166,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=318');
+      exploreMod = await import('./explore/cell3d.js?v=319');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -9173,7 +9216,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=318');
+      labsMod = await import('./labs/labs.js?v=319');
       islandRest();
     }
     labsMod.open({
@@ -9479,6 +9522,7 @@ function openSettings(page = 'profile') { // (v295: Settings opens on You; the f
   if (citationSelect) citationSelect.value = state.citationStyle || 'APA';
   if (textsizeSelect) textsizeSelect.value = state.textSize || 'normal';
   if (easyreadToggle) easyreadToggle.checked = !!state.easyRead;
+  if (everyModelToggle) everyModelToggle.checked = state.everyModel !== false;
   // A first-time user hasn't added a key yet, so open the "API keys" section
   // for them (that's where they need to paste it). Once a key is saved, keep
   // every section collapsed so the screen stays calm.
@@ -9597,6 +9641,7 @@ function commitSettings() {
   if (citationSelect) state.citationStyle = citationSelect.value;
   if (textsizeSelect) state.textSize = textsizeSelect.value;
   if (easyreadToggle) state.easyRead = easyreadToggle.checked;
+  if (everyModelToggle) state.everyModel = everyModelToggle.checked;
   save();
   updateModelPill();
   applyReading();
@@ -11135,10 +11180,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=318').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=319').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=318', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=319', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.

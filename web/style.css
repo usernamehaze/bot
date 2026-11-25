@@ -4574,3 +4574,7 @@ label.notif-top { cursor: pointer; min-height: 44px; }
 .ld-tag.ld-num { min-width: 28px; padding: 2px var(--sp-2, 8px); text-align: center; }
 .ld-tag.ld-num { min-height: 24px; font-size: .75rem; line-height: 1.2; }
 @media (pointer: coarse) { .ld-tag.ld-num { min-height: 24px; min-width: 28px; } .ld-tag.ld-num::before { content: ""; position: absolute; inset: -12px -10px; } } /* (a small number, a 48px tap) */
+/* (v319) Machine view: the 3D model drawn the Anatomy way */
+.ld-mv { margin: 4px 0 6px; }
+.ld-mv-acts { display: flex; gap: 8px; flex-wrap: wrap; padding: 4px 4px 6px; }
+.ld-mv-acts .ld-btn { min-height: 44px; color: var(--anatomy-strong); border-color: var(--anatomy-lo); }

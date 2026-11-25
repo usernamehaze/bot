@@ -1,4 +1,4 @@
-const CACHE_NAME = 'cassie-v318';
+const CACHE_NAME = 'cassie-v319';
 const ASSETS = [
   './',
   'index.html',
@@ -31,6 +31,10 @@ const ASSETS = [
   'boardprep.js',
   'livedraw.js',
   'drawbook.js',
+  'isoview.js', // (v319: Machine view, and the Anatomy kit it draws with: works offline too)
+  'vendor/anatomy/iso-kit.mjs',
+  'vendor/anatomy/lathe.mjs',
+  'vendor/anatomy/tube.mjs',
   'cards.js',
   'cite.js',
   'voice.js',

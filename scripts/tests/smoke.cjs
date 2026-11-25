@@ -1020,6 +1020,54 @@ test('an old saved Gemini key (apiKey) moves to geminiKey, is removed from what�
   await ctx.close();
 });
 
+test('v319 a 3D model with every answer (the Anatomy way: an idea is a machine): after her words she builds it in 3D right under them, saved with the chat; Machine view draws the same model with Anatomy’s kit (no WebGL needed), turns and comes apart; not for a greeting, and off in Settings', async (b) => {
+  const noun = fs.readFileSync(fileAt('tests/fixtures/live/noun3d.json'), 'utf8'), jet = fs.readFileSync(fileAt('tests/fixtures/live/jet3d.json'), 'utf8');
+  const asks = [];
+  const fake = (body) => { const all = JSON.stringify(body.messages || []); if (/here by building a 3D model/.test(all)) { asks.push(all); return { text: /jet/i.test(all) ? jet : noun }; } if (/You check drawings/.test(all)) return { text: '{}' }; return { text: /jet/i.test(all) ? 'A jet engine sucks air in at the front, squeezes it, burns fuel in it, and the hot gas spins a turbine and pushes out the back.' : 'A **noun** is a word that names a person, a place, a thing or an idea. In "Maria went to Manila with her book", the nouns are Maria, Manila and book.' }; };
+  for (const [name, dev] of [['desktop', { device: 'Desktop Chrome', viewport: { width: 1280, height: 860 }, scale: process.env.SHOTS ? 2 : 1 }], ['phone', { device: 'iPhone 13' }]]) {
+    asks.length = 0;
+    const { ctx, page, errors } = await open(b, { ...dev, server: false, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: fake });
+    try {
+      if (name === 'desktop') await page.evaluate(() => deskGo('chat'));
+      await page.fill('#prompt-input', 'what is a noun?'); await page.click('#send-btn');
+      await page.waitForFunction(() => /The noun sorter/.test((document.querySelector('#chat-log .ld-title') || {}).textContent || ''), null, { timeout: 30000 });
+      const got = await page.evaluate(() => { const m = state.messages; const a = m.findIndex((x) => x.role === 'assistant' && /names a person/.test(x.content)); return { a, model: m[a + 1] && m[a + 1].model, order: [...chatLog.querySelectorAll('.bubble-assistant')].map((x) => (x.querySelector('.ld') ? 'model' : /names a person/.test(x.textContent) ? 'words' : '')).filter(Boolean).join(',') }; });
+      expect(got.a >= 0 && got.model && got.order === 'words,model', name + ': her words, then the 3D model of them, saved with the chat: ' + JSON.stringify(got));
+      expect(asks.length >= 1 && /invent a real, well made physical machine/.test(asks[0]) && /What I answered, to build as a 3D model/.test(asks[0]) && /names a person/.test(asks[0]), name + ': she is asked to build her answer, an idea as a machine');
+      await page.waitForFunction(() => document.querySelector('#chat-log .ld .ld-live.off'), null, { timeout: 30000 }).catch(() => {});
+      if (process.env.SHOTS) { await page.locator('#chat-log .ld').last().scrollIntoViewIfNeeded(); await page.waitForTimeout(1200); await page.screenshot({ path: `${process.env.SHOTS}/v319-${name}-answer-3d.png` }); }
+      // Machine view: the same model, drawn with Anatomy's kit
+      await page.click('#chat-log .ld .ld-mv-btn');
+      await page.waitForSelector('#chat-log .ld .iv svg .iv-part', { timeout: 10000 });
+      const mv = await page.evaluate(() => { const v = document.querySelector('#chat-log .ld .iv'); return { parts: new Set([...v.querySelectorAll('[data-part]')].map((g) => g.dataset.part)).size, solids: v.querySelectorAll('.iso-solid, .tb').length, canvas: !document.querySelector('#chat-log .ld .ld-stage').hidden }; });
+      expect(mv.parts === 9 && mv.solids >= 25 && !mv.canvas, name + ': Machine view draws every part with Anatomy solids, in place of the 3D view: ' + JSON.stringify(mv));
+      await page.evaluate(() => document.querySelector('#chat-log .ld .iv [data-part="4"]').dispatchEvent(new MouseEvent('click', { bubbles: true })));
+      expect(/Reading gate/.test(await page.textContent('#chat-log .ld .iv-read')), name + ': a tapped part is lit and says what it means');
+      if (process.env.SHOTS) { await page.locator('#chat-log .ld .iv').scrollIntoViewIfNeeded(); await page.waitForTimeout(300); await page.screenshot({ path: `${process.env.SHOTS}/v319-${name}-machine-view.png` }); }
+      const before = await page.evaluate(() => document.querySelector('#chat-log .ld .iv svg').innerHTML.length);
+      await page.click('#chat-log .ld .ld-mv-acts .ld-btn >> text=Turn it');
+      await page.click('#chat-log .ld .ld-mv-acts .ld-btn >> text=Pull apart');
+      const after = await page.evaluate(() => ({ len: document.querySelector('#chat-log .ld .iv svg').innerHTML.length, back: [...document.querySelectorAll('#chat-log .ld .ld-mv-acts .ld-btn')].map((x) => x.textContent).join() }));
+      expect(after.len !== before && /Put it back/.test(after.back), name + ': it turns and comes apart: ' + JSON.stringify(after));
+      if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/v319-${name}-machine-apart.png` });
+      if (name === 'desktop') {
+        // a machine question: the 3D model of the real thing
+        await page.fill('#prompt-input', 'what does a jet engine do?'); await page.click('#send-btn');
+        await page.waitForFunction(() => [...document.querySelectorAll('#chat-log .ld-title')].some((t) => /jet/i.test(t.textContent)), null, { timeout: 30000 });
+        if (process.env.SHOTS) { await page.locator('#chat-log .ld').last().scrollIntoViewIfNeeded(); await page.waitForTimeout(1500); await page.screenshot({ path: `${process.env.SHOTS}/v319-desktop-jet-3d.png` }); }
+        // a greeting: no model; and off in Settings: no model
+        const n0 = await page.evaluate(() => document.querySelectorAll('#chat-log .ld').length);
+        await page.fill('#prompt-input', 'thanks!'); await page.click('#send-btn'); await page.waitForTimeout(1500);
+        await page.evaluate(() => { state.everyModel = false; });
+        await page.fill('#prompt-input', 'what is a verb?'); await page.click('#send-btn'); await page.waitForTimeout(1500);
+        expect(await page.evaluate(() => document.querySelectorAll('#chat-log .ld').length) === n0, 'no model for a greeting, nor with the setting off');
+        expect(await page.evaluate(() => !!document.getElementById('every-model-toggle')), 'the setting is in Settings');
+      }
+      expect(!errors.length, name + ': page errors: ' + errors.join(' | '));
+    } finally { await ctx.close(); }
+  }
+});
+
 test('v318 an answer stays in its own chat: leaving for the Calendar while Cassie answers, the answer is saved to that chat and never lands on the Calendar page; while she answers, Send and Enter wait (what was typed stays); a tap anywhere in the ask box puts you in it', async (b) => {
   let release; const gate = new Promise((r) => { release = r; });
   const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, lite: 'off', state: { groqKey: 'gsk_test' }, fakeGroq: async () => { await gate; return { text: 'Photosynthesis makes sugar from light.' }; } });
@@ -4026,7 +4074,7 @@ test('v251: live drawing: "draw me how a jet engine works" builds a 3D model par
   await page.waitForFunction(() => /Cassie built it in 3D/.test((document.querySelector('#chat-log .ld-state') || {}).textContent || ''), null, { timeout: 30000 });
   const j = await page.evaluate(() => ({ tags: [...document.querySelectorAll('#chat-log .ld-tag')].filter((t) => !t.hidden).map((t) => t.textContent), title: document.querySelector('#chat-log .ld-title').textContent, acts: [...document.querySelectorAll('#chat-log .ld-btn')].filter((x) => !x.hidden).map((x) => x.textContent), caseOpen: document.querySelector('#chat-log .ld-btn[aria-pressed]').getAttribute('aria-pressed') }));
   expect(n === 1 && !pics.length && j.title === 'How a jet engine works', '3D: one drawing call, no picture maker: ' + JSON.stringify([n, pics.length, j.title]));
-  expect(['2 Fan', '3 Compressor', '4 Combustor', '5 Turbine', '6 Nozzle'].every((x) => j.tags.includes(x)) && j.caseOpen === 'true' && j.acts.join() === 'Pause,Close the case,Pull apart,Draw again,Show another way', '3D: every part named, the case open to see inside, and the actions: ' + JSON.stringify(j));
+  expect(['2 Fan', '3 Compressor', '4 Combustor', '5 Turbine', '6 Nozzle'].every((x) => j.tags.includes(x)) && j.caseOpen === 'true' && j.acts.join() === 'Pause,Close the case,Pull apart,Draw again,Machine view,Show another way', '3D: every part named, the case open to see inside, and the actions: ' + JSON.stringify(j));
   await page.click('#chat-log .ld-btn:has(span:text-is("Pull apart"))', { timeout: 8000 }); await page.waitForTimeout(600);
   expect(await page.getAttribute('.ld-btn:has(span:text-is("Put it back"))', 'aria-pressed') === 'true', '3D: Pull apart pulls it apart, and the button says Put it back');
   await page.click('#chat-log .ld-tag:text-is("4 Combustor")', { timeout: 8000 }); await page.waitForTimeout(300);
@@ -10666,7 +10714,7 @@ test('Cassie’s live drawing in 3D: asked for 3D, or to be shown how parts go t
   expect(same('explore/three.module.min.js', 'extension/vendor/three.module.min.js') && same('explore/OrbitControls.js', 'extension/vendor/OrbitControls.js') && same('explore/THREE-LICENSE.txt', 'extension/vendor/THREE-LICENSE.txt'), 'the extension’s three.js, its controls and its licence are the repo’s own');
   const manifest = JSON.parse(fs.readFileSync(fileAt('extension/manifest.json'), 'utf8'));
   expect(manifest.permissions.slice().sort().join() === 'activeTab,contextMenus,scripting,sidePanel,storage' && manifest.host_permissions.join() === 'https://api.groq.com/*,<all_urls>', 'no new permission: ' + JSON.stringify([manifest.permissions, manifest.host_permissions]));
-  expect(JSON.stringify(manifest.web_accessible_resources) === JSON.stringify([{ resources: ['livedraw.js', 'drawbook.js', 'vendor/three.module.min.js', 'vendor/OrbitControls.js'], matches: ['<all_urls>'] }]), 'only the model builder, her drawing book and three.js can be loaded by her page script: ' + JSON.stringify(manifest.web_accessible_resources));
+  expect(JSON.stringify(manifest.web_accessible_resources) === JSON.stringify([{ resources: ['livedraw.js', 'drawbook.js', 'vendor/three.module.min.js', 'vendor/OrbitControls.js', 'isoview.js', 'vendor/anatomy/iso-kit.mjs', 'vendor/anatomy/lathe.mjs', 'vendor/anatomy/tube.mjs'], matches: ['<all_urls>'] }]) && ['iso-kit.mjs', 'lathe.mjs', 'tube.mjs'].every((f) => fs.readFileSync(fileAt('extension/vendor/anatomy/' + f), 'utf8') === fs.readFileSync(fileAt('web/vendor/anatomy/' + f), 'utf8')), 'only the model builder, her drawing book, three.js and (v319) Machine view with the Anatomy kit, the same files as the app, can be loaded by her page script: ' + JSON.stringify(manifest.web_accessible_resources));
   // the plan-first 3D guide is the app's own: its lines are the same in both
   const appSrc = fs.readFileSync(fileAt('app.js'), 'utf8'), liveSrc = fs.readFileSync(fileAt('extension/live.js'), 'utf8');
   for (const line of ['every part touches or sits inside the part it connects to; nothing floats in the air', 'parts that are inside a case are placed inside it, and the case is "shell": true so the student can open it', 'real proportions: a part that is small in the real object is small here; a part inside another is smaller than it', 'Shapes: cylinder {r,r2,len,axis,pos,open,cut}, disc {r,thick,axis,pos}, cone {r,len,axis,pos,dir}, sphere {r,pos,cut}, box {size:[w,h,d],pos}, torus {r,tube,axis,pos}, blades {n,len,width,hub,axis,pos}']) expect(appSrc.includes(line) && liveSrc.includes(line), 'the 3D guide in the extension keeps the app’s line: ' + line);

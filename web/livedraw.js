@@ -555,9 +555,25 @@ export async function render(host, rawSpec, opts = {}) {
     for (let n = 0; n < text.length;) { n = Math.max(n + 1, Math.ceil(text.length * Math.min(1, (performance.now() - t0) / total))); say.textContent = text.slice(0, n); if (n < text.length) await sleep(16); }
   };
   const view = spec.mode === '3d' ? await draw3d(stage, spec, { animate, setSay, hint, real: true, callout: true }) : draw2d(stage, spec, { animate, setSay, hint });
-  if (!view) { // no 3D on this phone: say what it would have shown
+  // (v319) Machine view: the same 3D model drawn the Anatomy way (isoview.js), with no WebGL; on a phone with no 3D it is the view
+  let mv = null; const mvHost = spec.mode === '3d' ? el('div', 'ld-mv') : null;
+  const machineOn = async () => {
+    if (mv) return mv;
+    let m = null; try { m = await import('./isoview.js?v=319'); } catch (e) { return null; }
+    mv = m.machine(mvHost, spec, { dark: !lightPage() });
+    if (mv) {
+      const row = el('div', 'ld-mv-acts');
+      const turn = el('button', 'ld-btn', 'Turn it'); turn.type = 'button'; turn.addEventListener('click', () => mv.turn(45));
+      const ap = el('button', 'ld-btn', 'Pull apart'); ap.type = 'button'; ap.setAttribute('aria-pressed', 'false'); ap.addEventListener('click', () => { const on = mv.apart(); ap.textContent = on ? 'Put it back' : 'Pull apart'; ap.setAttribute('aria-pressed', String(on)); });
+      row.append(turn, ap); mv.el.appendChild(row);
+    }
+    return mv;
+  };
+  if (mvHost) { mvHost.hidden = true; stage.after(mvHost); }
+  if (!view) { // no 3D on this phone: the machine view instead (or, if even that cannot draw, what it would have shown)
     stage.remove();
-    say.textContent = `${spec.intro ? spec.intro + ' ' : ''}${spec.parts.map((p, i) => `${i + 1}. ${p.label}: ${p.say}`).join(' ')}`;
+    if (mvHost && await machineOn()) mvHost.hidden = false;
+    else say.textContent = `${spec.intro ? spec.intro + ' ' : ''}${spec.parts.map((p, i) => `${i + 1}. ${p.label}: ${p.say}`).join(' ')}`;
   }
   // (v253) a compact row: a small icon and a short word each, muted; the tap area stays 48px
   const ICON = { cube: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/>', flat: '<path d="M4 20l4-1 11-11-3-3L5 16z"/>', pause: '<path d="M8 5v14M16 5v14"/>', play: '<path d="M7 5l12 7-12 7z"/>', next: '<path d="M5 12h12M13 7l5 5-5 5"/>', redo: '<path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4"/>', quiz: '<path d="M9 9a3 3 0 1 1 4 2.8c-.7.3-1 .8-1 1.5V14M12 17.5h.01"/><circle cx="12" cy="12" r="9"/>', photo: '<path d="M4 7.5h3l1.6-2.5h6.8L17 7.5h3a1 1 0 0 1 1 1V18a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8.5a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/>', ask: '<path d="M4 5h16v11H9l-5 4z"/>', change: '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>', open: '<path d="M4 12h16M12 4v16"/>', apart: '<path d="M4 12h5M15 12h5M7 9l-3 3 3 3M17 9l3 3-3 3"/>' };
@@ -568,6 +584,10 @@ export async function render(host, rawSpec, opts = {}) {
     if (view.open) { const ob = btn('Open it up', () => { const on = view.open(); setLabel(ob, on ? 'Close the case' : 'Open it up'); ob.setAttribute('aria-pressed', String(on)); }, 'ld-open', 'open'); ob.setAttribute('aria-pressed', 'false'); }
     if (view.explode) { const pb = btn('Pull apart', () => { const on = view.explode(); setLabel(pb, on ? 'Put it back' : 'Pull apart'); pb.setAttribute('aria-pressed', String(on)); }, '', 'apart'); pb.setAttribute('aria-pressed', 'false'); }
     btn('Draw again', async () => { await view.play(true); done(); if (view.move) view.move(); }, '', 'redo');
+    if (mvHost) { // (v319) the 3D model, or the same model as an Anatomy machine drawing
+      const mb = btn('Machine view', async () => { const on = mvHost.hidden; if (on && !(await machineOn())) return; mvHost.hidden = !on; stage.hidden = on; setLabel(mb, on ? '3D view' : 'Machine view'); mb.setAttribute('aria-pressed', String(on)); }, 'ld-mv-btn', 'cube');
+      mb.setAttribute('aria-pressed', 'false');
+    }
   }
   if (opts.onQuiz) btn('Quiz me', () => opts.onQuiz(spec), '', 'quiz');
   if (opts.onRealistic && (!opts.canRealistic || opts.canRealistic())) btn('Real photo', () => opts.onRealistic(spec), 'ld-photo', 'photo');
