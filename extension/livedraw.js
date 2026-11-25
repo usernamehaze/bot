@@ -670,10 +670,10 @@ function draw2d(stage, spec, { animate, setSay, hint }) {
           if (along.some((id) => obstacles.list[id].word) || taken.some((q) => segHits([lx, ly, a[0], a[1]], q))) continue;
           const gap = Math.hypot(a[0] - lx, a[1] - ly); // (how far the name sits from its part: as close as the clear space allows)
           const cost = gap + inBox.length * 40 + along.length * 80;
-          if (!top || cost < top.cost) top = { box, cost };
+          if (!top || cost < top.cost) top = { box, cost, gap };
         }
       }
-      if (top) { best = top.box; fs = size; break; }
+      if (top && top.gap <= 72) { best = top.box; fs = size; break; } // (v311: far from its part, a long line is worse than a number on it)
     }
     const g = document.createElementNS(NS, 'g'); g.setAttribute('class', 'ld-label'); g.dataset.i = i;
     const dot = document.createElementNS(NS, 'circle'); dot.setAttribute('cx', a[0]); dot.setAttribute('cy', a[1]); dot.setAttribute('r', 2.5); dot.setAttribute('class', 'ld-anchor');

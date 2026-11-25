@@ -6804,7 +6804,8 @@ test('board: pictures are things on the board: the Move tool picks one (corner h
   await page.click('[data-act="save"]');
   const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.click('.csk-pop [data-pop="open"]')]);
   await chooser.setFiles(file);
-  await page.waitForFunction(() => window.CassieSketch.session().strokeCount() === 1 && window.CassieSketch.session().pictures().length === 1, null, { timeout: 5000 });
+  // (the board before had one picture and one stroke too: wait for the old file's own picture, 600 wide)
+  await page.waitForFunction(() => { const s = window.CassieSketch.session(), p = s.pictures(); return s.strokeCount() === 1 && p.length === 1 && Math.round(p[0].w) === 600; }, null, { timeout: 8000 });
   const op = (await P())[0], ol = await S('lastStroke');
   expect(op.x === 0 && op.y === 0 && op.w === 600 && op.h === 300 && op.mode === 'background' && JSON.stringify(ol.points) === '[[100,100],[300,200],[500,250]]', 'the old board: picture and strokes in place: ' + JSON.stringify([op, ol.points]));
   const parts = await S('parts');
@@ -12650,9 +12651,11 @@ test('Learn’s level folders move like the recording on a computer (1280x800): 
     const v = (m.match(/matrix3d\(([^)]+)\)/) || [])[1]; const n = v ? v.split(',').map(Number) : null;
     return { h: fr.height, top: mid.top, turn: n ? Math.abs(Math.atan2(n[6], n[5]) * 180 / Math.PI) : 0, open: f.classList.contains('lf-open'), fan: getComputedStyle(f.querySelector('.lf-paper')).transform };
   });
-  const rest = await look();
+  // (measured once the folder has stopped moving: a slow machine is still finishing the page's own entrance)
+  const still = async () => { let a = await look(); for (let k = 0; k < 12; k++) { await page.waitForTimeout(150); const b2 = await look(); if (Math.abs(b2.top - a.top) < 0.5 && Math.abs(b2.turn - a.turn) < 0.5) return b2; a = b2; } return a; };
+  const rest = await still();
   await page.hover(F); await page.waitForTimeout(450);
-  const lean = await look();
+  const lean = await still();
   const rise = (rest.top - lean.top) / rest.h;
   expect(rise >= 0.2 && lean.turn >= 15, 'the pointer over a folder: papers rise ≥20% and the pocket tips ≥15deg: ' + JSON.stringify({ rise, turn: lean.turn }));
   if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/folders-lean.png', clip: { x: 0, y: 150, width: 1280, height: 330 } });
@@ -16690,7 +16693,7 @@ test('forms check each field as you type: the reason shows under the field in pl
   await page.fill('.auth-form [name=email]', ''); await page.fill('.auth-form [name=password]', '');
   await page.click('.auth-go');
   for (let k = 0; k < 20 && !(/Type your email/.test(await shown('email')) && /Type your password/.test(await shown('password'))); k++) await page.waitForTimeout(150); // (a slow machine shows them a moment later)
-  expect(/Type your email/.test(await shown('email')) && /Type your password/.test(await shown('password')), 'empty sign-in says what to type');
+  expect(/Type your email/.test(await shown('email')) && /Type your password/.test(await shown('password')), 'empty sign-in says what to type: ' + JSON.stringify({ email: await shown('email'), password: await shown('password'), errs: await page.evaluate(() => [...document.querySelectorAll('.auth-form .field-err, .auth-msg, .auth-error')].map((n) => [n.className, n.hidden, n.textContent.slice(0, 80)])), focused: await page.evaluate(() => document.activeElement && (document.activeElement.name || document.activeElement.className)) }));
   expect(await page.evaluate(() => document.activeElement && document.activeElement.name) === 'email', 'the first box to fix gets the focus');
   await ctx.close();
   // the profile questions, Report a problem and a pasted API key
