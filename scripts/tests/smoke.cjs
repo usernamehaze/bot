@@ -740,11 +740,11 @@ test('v316 the drawing book, grown by the team (server): an AI drawing is sugges
   expect(r.json.list.length === 0, 'Remove takes it out of the book');
 });
 test('v318 the real server: a photo is read by Gemini first (it reads pictures far better than Groq), and Groq only if Gemini cannot; a drawing gets room for a whole 3D model (8000 tokens), a chat answer still 4000', async () => {
-  const realFetch = globalThis.fetch, seen = [];
+  const realFetch = globalThis.fetch, seen = [], thinking = [];
   let geminiDown = false;
   globalThis.fetch = async (u, o) => {
     const url = String(u), body = o && o.body ? JSON.parse(o.body) : {};
-    if (/generativelanguage\.googleapis\.com/.test(url)) { seen.push('gemini'); if (geminiDown) return new Response('{"error":{"message":"busy"}}', { status: 503 }); return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'A girl with white hair holding a sword.' }] } }] }), { status: 200, headers: { 'content-type': 'application/json' } }); }
+    if (/generativelanguage\.googleapis\.com/.test(url) && /:generateContent/.test(url)) { seen.push('gemini'); thinking.push(JSON.stringify((body.generationConfig || {}).thinkingConfig || null)); if (geminiDown) return new Response('{"error":{"message":"busy"}}', { status: 503 }); return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'A girl with white hair holding a sword.' }] } }] }), { status: 200, headers: { 'content-type': 'application/json' } }); }
     if (/api\.groq\.com\/openai\/v1\/models/.test(url)) return new Response(JSON.stringify({ data: [{ id: 'meta-llama/llama-4-scout-17b-16e-instruct' }, { id: 'openai/gpt-oss-120b' }] }), { status: 200, headers: { 'content-type': 'application/json' } });
     if (/api\.groq\.com/.test(url)) { seen.push('groq:' + body.model + ':' + body.max_tokens); return new Response(JSON.stringify({ choices: [{ message: { content: /Read the sum/.test(JSON.stringify(body.messages)) ? '56' : 'From Groq.' } }] }), { status: 200, headers: { 'content-type': 'application/json' } }); }
     return realFetch(u, o);
@@ -754,9 +754,10 @@ test('v318 the real server: a photo is read by Gemini first (it reads pictures f
     const pic = [{ role: 'user', content: [{ type: 'text', text: 'Who is this character?' }, { type: 'image_url', image_url: { url: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==' } }] }];
     let r = await call('POST', '/chat', { uid: 'pic-uid-1x', q: 1, messages: pic });
     expect(r.status === 200 && r.headers.get('x-cassie-source') === 'gemini' && seen[0] === 'gemini' && !seen.some((x) => /^groq/.test(x)), 'a photo goes to Gemini first: ' + seen.join(',') + ' ' + r.text.slice(0, 120));
+    expect(/thinkingBudget":0|thinkingLevel":"low/.test(thinking[0] || ''), '(v320) a photo is read with no slow thinking step: ' + thinking.join(' | '));
     seen.length = 0; geminiDown = true;
     r = await call('POST', '/chat', { uid: 'pic-uid-2x', q: 1, messages: pic });
-    expect(r.status === 200 && r.headers.get('x-cassie-source') === 'groq' && seen[0] === 'gemini' && !seen.slice(seen.findIndex((x) => /^groq/.test(x))).includes('gemini'), 'Gemini busy (each of its models tried once): Groq reads it, and Gemini is not asked again after: ' + seen.join(','));
+    expect(r.status === 200 && r.headers.get('x-cassie-source') === 'groq' && seen[0] === 'gemini' && seen.filter((x) => x === 'gemini').length <= 2 && !seen.slice(seen.findIndex((x) => /^groq/.test(x))).includes('gemini'), 'Gemini busy (at most 2 of its models, each once): Groq reads it, and Gemini is not asked again after: ' + seen.join(','));
     seen.length = 0;
     r = await call('POST', '/chat', { uid: 'draw-uid-1x', q: 1, draw: 1, max_tokens: 8000, messages: [{ role: 'system', content: 'You are Cassie, who explains by DRAWING, here by building a 3D model.' }, { role: 'user', content: 'show a jet engine in 3D' }] });
     expect(r.status === 200 && seen.some((x) => /^groq:[^:]+:8000$/.test(x)), 'a drawing gets 8000 tokens on Groq: ' + seen.join(','));

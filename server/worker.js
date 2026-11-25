@@ -555,7 +555,10 @@ async function askOpenRouter(env, messages, maxTokens = 2048, ms = 30000) {
 // a step that may take too long for a drawing: past its time, the next AI tries (v313)
 const inTime = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(() => r(null), Math.max(1000, ms)))]);
 
-async function askGemini(env, messages, maxTokens = 2048) {
+// (v320) a photo is read quickly: no thinking step (Flash thinks by default, which is slow and a photo does not need),
+// and at most `ms` a model before the next one, then the backups, answer
+const geminiThinkingOff = (model) => (/gemini-3/.test(model) ? { thinkingConfig: { thinkingLevel: 'low' } } : /flash/.test(model) ? { thinkingConfig: { thinkingBudget: 0 } } : {}); // (a model that refuses it is asked again without it)
+async function askGemini(env, messages, maxTokens = 2048, { fast = false, ms = 30000, models = 4 } = {}) {
   if (!env.GEMINI_KEY) return { reply: null, detail: '' };
   const system = messages.filter((m) => m.role === 'system').map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n\n');
   const contents = messages.filter((m) => m.role !== 'system').map((m) => ({
@@ -570,12 +573,14 @@ async function askGemini(env, messages, maxTokens = 2048) {
   let detail = '';
   const list = await geminiModels(env);
   if (geminiBlocked.until > Date.now()) return { reply: null, detail: geminiBlockedText(), blocked: true };
-  for (const model of [...new Set(env.GEMINI_MODEL ? [env.GEMINI_MODEL, ...list] : list)].filter((m) => !geminiGone.has(m)).slice(0, 4)) {
+  for (const model of [...new Set(env.GEMINI_MODEL ? [env.GEMINI_MODEL, ...list] : list)].filter((m) => !geminiGone.has(m)).slice(0, models)) {
     try {
-      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-        method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_KEY }, signal: AbortSignal.timeout(30000),
-        body: JSON.stringify({ ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}), contents, generationConfig: { maxOutputTokens: Math.max(4096, maxTokens * 2), temperature: 0.5 } }),
+      const ask = (think) => fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_KEY }, signal: AbortSignal.timeout(ms),
+        body: JSON.stringify({ ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}), contents, generationConfig: { maxOutputTokens: Math.max(4096, maxTokens * 2), temperature: 0.5, ...(think ? geminiThinkingOff(model) : {}) } }),
       });
+      let r = await ask(fast);
+      if (fast && r.status === 400) r = await ask(false); // (a model that takes no thinking setting: asked the usual way)
       if (r.ok) {
         const parts = (await r.json()).candidates?.[0]?.content?.parts || [];
         const reply = parts.filter((x) => !x.thought).map((x) => x.text || '').join('').trim();
@@ -587,7 +592,7 @@ async function askGemini(env, messages, maxTokens = 2048) {
         if (r.status === 404) { gemini.at = 0; if (/no longer available|not found/i.test(m)) geminiGone.add(model); } // a retired name: never again
         detail += `${model}: ${reasonOf(r.status, m)} · `;
       }
-    } catch (e) { detail += `${model}: ${e.name === 'TimeoutError' ? 'no answer in 30 s' : reasonOf(0, e.message)} · `; }
+    } catch (e) { detail += `${model}: ${e.name === 'TimeoutError' ? `no answer in ${Math.round(ms / 1000)} s` : reasonOf(0, e.message)} · `; }
   }
   return { reply: null, detail: detail ? 'Gemini ' + detail.replace(/ · $/, '') : '' };
 }
@@ -1260,7 +1265,7 @@ async function chat(request, env, ctx) {
   let geminiAsked = false;
   if (cleaned.image && !draw && env.GEMINI_KEY) {
     geminiAsked = true;
-    const g = await askGemini(env, cleaned.messages, maxTokens);
+    const g = await askGemini(env, cleaned.messages, maxTokens, { fast: true, ms: 12000, models: 2 }); // (v320: quick, then Groq reads it)
     if (g.reply) {
       ctx.waitUntil(countChat(env, today, 'gemini'));
       return json({ choices: [{ index: 0, message: { role: 'assistant', content: g.reply }, finish_reason: 'stop' }] }, 200, { ...h, ...left, 'x-cassie-source': 'gemini' });
