@@ -3753,10 +3753,10 @@ test('v253: "draw" asks how to show it (Draw it, 3D model, Real photo with Gemin
   await page.evaluate(() => createNewChat()); const b3 = calls.length;
   await page.fill('#prompt-input', 'show me a 3D model of a jet engine'); await page.click('#send-btn'); await page.waitForTimeout(800);
   expect(!(await page.locator('.ld-pop').count()) && calls.slice(b3).some((c) => /"mode": "3d"/.test(c.sys || '') && /"finish":"metal"\|"plastic"\|"rubber"\|"wood"/.test(c.sys || '')), '9. a 3D ask goes straight to a 3D model, asked for with real finishes');
-  // (v279) a soft or living thing asked for in 3D is drawn flat, and she is told to say so
+  // (v315) a soft or living thing asked for in 3D is built in 3D too, from smooth rounded shapes
   await page.evaluate(() => createNewChat()); const b4 = calls.length;
   await page.fill('#prompt-input', 'show me a 3D model of a heart'); await page.click('#send-btn'); await page.waitForTimeout(800);
-  expect(!(await page.locator('.ld-pop').count()) && calls.slice(b4).some((c) => /"mode": "2d"/.test(c.sys || '') && /They asked for 3D, but a 3D model here is built from simple solids/.test(c.sys || '') && /never as a cartoon symbol/.test(c.sys || '')), '9b. a heart asked for in 3D is drawn flat');
+  expect(!(await page.locator('.ld-pop').count()) && calls.slice(b4).some((c) => /"mode": "3d"/.test(c.sys || '') && /spheres, capsules and lathes/.test(c.sys || '') && !/They asked for 3D, but a 3D model here is built from simple solids/.test(c.sys || '')), '9b. a heart asked for in 3D is built in 3D (v315)');
   await page.waitForFunction(() => !document.querySelector('#chat-log .ld-loading') && !!document.querySelector('#chat-log .ld'), null, { timeout: 30000 });
   const four = await page.evaluate(() => { createNewChat(); state.geminiKey = 't'; geminiImageOff = false; liveShowAsk('draw me a leaf'); const r = [...document.querySelectorAll('.ld-pop .ld-pop-name')].map((x) => x.textContent); liveShowClose(false); state.geminiKey = ''; return r; });
   expect(four.join() === 'Draw it,3D model,Real photo,Just explain', '9. with Gemini there are four ways, always in the same order (v311: the last way is marked, not moved first): ' + four.join());
