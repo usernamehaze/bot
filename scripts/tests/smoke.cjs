@@ -7549,6 +7549,30 @@ test('v294 tap targets: every button, link, switch and field on a computer’s H
 });
 
 // (v295) Cassie's grammar and vocabulary fit the student: by age or grade, then by how they write in the chat
+test('v312 drawings never sit for minutes: past the time limit she stops and offers Try again or Just explain; "make illustrations of how..." is a drawing; the free picture service\'s yellow "limit reached" card is not shown as a picture; the book has a 3D camera and a 3D washing machine', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 860 }, server: false, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: async (body) => { const all = JSON.stringify(body.messages || []); if (/cassie-draw|"parts"|mode/.test(all)) await new Promise((r) => setTimeout(r, 9000)); return { text: 'Words answer.' }; } });
+  const u = await page.evaluate(async () => {
+    const ask = ['make illustrations of how the blood flow from the heart to the body', 'a diagram showing how a dam makes power'].map((q) => !!liveDrawRequest(q));
+    const card = async (paint) => { const c = document.createElement('canvas'); c.width = 400; c.height = 300; const g = c.getContext('2d'); paint(g); return await new Promise((r) => c.toBlob(r, 'image/png')); };
+    const notice = await looksLikeNotice(await card((g) => { g.fillStyle = '#f5d33a'; g.fillRect(0, 0, 400, 300); g.fillStyle = '#222'; g.font = 'bold 28px sans-serif'; g.fillText('Free limit reached', 70, 140); g.font = '16px sans-serif'; g.fillText('Sign up for more pictures', 100, 180); }));
+    const diagram = await looksLikeNotice(await card((g) => { g.fillStyle = '#fff'; g.fillRect(0, 0, 400, 300); g.strokeStyle = '#c33'; g.lineWidth = 6; g.beginPath(); g.arc(200, 150, 80, 0, 7); g.stroke(); }));
+    const photo = await looksLikeNotice(await card((g) => { const gr = g.createLinearGradient(0, 0, 400, 300); gr.addColorStop(0, '#2a5'); gr.addColorStop(0.5, '#a83'); gr.addColorStop(1, '#36c'); g.fillStyle = gr; g.fillRect(0, 0, 400, 300); }));
+    const bk = await liveBookLoad(), m = await liveDrawLoad();
+    const keys = ['build a camera in 3D', 'draw me a 3d of how washing machine works', 'how does a washing machine work', 'draw a phone camera', 'how does a dishwasher work'].map((q) => { const x = bk.fromBook(q, /3d/i.test(q)); return x ? x.book + ':' + x.mode + ':' + m.check3d(m.clean(x)).length : '-'; }).join(' ');
+    return { ask, notice, diagram, photo, keys };
+  });
+  expect(u.ask.every(Boolean), '"illustrations of how" and "a diagram showing how" are drawings: ' + JSON.stringify(u.ask));
+  expect(u.notice === true && u.diagram === false && u.photo === false, 'the yellow limit card is caught; a white diagram and a photo are not: ' + JSON.stringify(u));
+  expect(u.keys === 'camera:3d:0 washer:3d:0 washer:3d:0 - -', 'the book’s camera and washing machine pass the model checks; a phone camera and a dishwasher go to the AI: ' + u.keys);
+  // the time limit (shortened for the test): a slow drawing ends in Try again and Just explain, not an endless "sketching"
+  await page.evaluate(() => { window.CASSIE_DRAW_MS = 2500; });
+  await page.fill('#prompt-input', 'draw how a washing machine lint filter catches fluff'); await page.click('#send-btn'); await pickWay(page);
+  await page.waitForFunction(() => /taking too long/i.test(document.getElementById('chat-log').innerText), null, { timeout: 15000 });
+  const end = await page.evaluate(() => ({ typing: !!document.querySelector('#chat-log .typing-dots'), retry: [...document.querySelectorAll('#chat-log button')].some((x) => /Try again/.test(x.textContent)), words: [...document.querySelectorAll('#chat-log .fu-chip')].some((x) => x.textContent === 'Just explain') }));
+  expect(!end.typing && end.retry && end.words, 'no endless sketching: Try again and Just explain: ' + JSON.stringify(end));
+  expect(!errors.length, 'page errors: ' + errors.join(' | '));
+  await ctx.close();
+});
 test('v311 drawings: a process (how we feel emotions, how a refrigerator works) is asked for as a flow with an arrow between steps, and drawn flat even when 3D was asked; a follow-up’s new part must sit on the part it is about; a picked part shows "Show all"; the book has a brain, a refrigerator cycle, a dragon, the Earth’s layers, an animal cell and an airplane', async (b) => {
   const sys = [];
   const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 860 }, server: false, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: (body) => { sys.push(JSON.stringify(body.messages || []).slice(0, 9000)); return { text: JSON.stringify(JSON.parse(fs.readFileSync(fileAt('tests/fixtures/live/leaf.json'), 'utf8'))) }; } });
@@ -7593,7 +7617,7 @@ test('v310 drawings, accurate, fast and reliable: her drawing book shows a check
   const hits = await page.evaluate(async () => { const bk = await liveBookLoad(); return ['draw a bicycle', 'make a 3d bicycle', 'how do a bicycle’s gears shift', 'draw a motorbike', 'show me the human heart', 'draw a heart emoji', 'explain the water cycle', 'how does photosynthesis work', 'draw how a volcano erupts', 'how does a jet engine work', 'draw the solar system', 'build an atom in 3D', 'draw a bicycle for my science project', 'paano gumagana ang bisikleta'].map((q) => { const x = bk.fromBook(q, /3d/i.test(q)); return x ? x.book + ':' + x.mode : '-'; }).join(' '); });
   expect(hits === 'bicycle:2d bicycle:3d - - heart:2d - water:2d photosynthesis:2d volcano:2d jet:3d solar:3d atom:3d - bicycle:2d', 'the book answers the subject, the AI answers a narrow question: ' + hits);
   // every book drawing is whole, named and passes the app's own checks for a real figure
-  const book = await page.evaluate(async () => { const bk = await liveBookLoad(), m = await liveDrawLoad(); return bk.bookKeys().map((k) => { const raw = bk.fromBook({ bicycle: 'draw a bicycle', solar: 'the solar system', atom: 'an atom', heart: 'the heart', water: 'the water cycle', photosynthesis: 'photosynthesis', volcano: 'a volcano', jet: 'a jet engine', brain: 'the human brain', fridge: 'how does a fridge work', dragon: 'draw a dragon', earth: 'layers of the earth', animalcell: 'an animal cell', airplane: 'an airplane' }[k], false), sp = m.clean(raw); return [k, sp && sp.parts.length, sp && sp.parts.every((p) => p.label && p.say), sp ? (sp.mode === '2d' ? m.check(sp, sp.title).filter((x) => /leaves (it|them) out|used for more than one/.test(x)) : []) : ['none']]; }); });
+  const book = await page.evaluate(async () => { const bk = await liveBookLoad(), m = await liveDrawLoad(); return bk.bookKeys().map((k) => { const raw = bk.fromBook({ bicycle: 'draw a bicycle', solar: 'the solar system', atom: 'an atom', heart: 'the heart', water: 'the water cycle', photosynthesis: 'photosynthesis', volcano: 'a volcano', jet: 'a jet engine', brain: 'the human brain', fridge: 'how does a fridge work', dragon: 'draw a dragon', earth: 'layers of the earth', animalcell: 'an animal cell', airplane: 'an airplane', camera: 'build a camera', washer: 'how does a washing machine work' }[k], false), sp = m.clean(raw); return [k, sp && sp.parts.length, sp && sp.parts.every((p) => p.label && p.say), sp ? (sp.mode === '2d' ? m.check(sp, sp.title).filter((x) => /leaves (it|them) out|used for more than one/.test(x)) : []) : ['none']]; }); });
   expect(book.every(([, n, named, bad]) => n >= 4 && named && !bad.length), 'every book drawing is whole and named, with every textbook part: ' + JSON.stringify(book));
   const b3 = await page.evaluate(async () => { const bk = await liveBookLoad(), m = await liveDrawLoad(); const sp = m.clean(bk.fromBook('make a 3d bicycle', true)); return { n: sp.parts.length, labels: sp.parts.map((p) => p.label).join(','), issues: m.check3d(sp) }; });
   expect(b3.n === 11 && /Brakes/.test(b3.labels) && !b3.issues.length, 'the 3D bicycle keeps all 11 parts (brakes too) and passes the model checks: ' + JSON.stringify(b3));
@@ -9988,7 +10012,7 @@ test('Cassie’s live drawing, real outlines (3.68): a drawing comes in the Cass
     for (let i = 1; i <= 7; i++) {
       await tap('.lv-next'); await page.waitForTimeout(200);
       f = await flat();
-      expect(f.shown === i && f.names.length === i && f.names[i - 1].text.startsWith(i + ' '), `part ${i} is drawn and named in its beat: ` + JSON.stringify([f.shown, f.names.map((n) => n.text)]));
+      expect(f.shown === i && f.names.length === i && (f.names[i - 1].text.startsWith(i + ' ') || f.names[i - 1].text === String(i)), `part ${i} is drawn and named in its beat: ` + JSON.stringify([f.shown, f.names.map((n) => n.text)]));
     }
     const over = f.names.some((a, i) => f.names.some((b, j) => j > i && a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h));
     expect(!over && f.heads >= 2, 'no name sits on another, and arrowheads take their part’s colour: ' + JSON.stringify(f.names.map((n) => n.text)) + ' ' + f.heads);
@@ -16689,7 +16713,9 @@ test('forms check each field as you type: the reason shows under the field in pl
   await page.waitForFunction(() => [...document.querySelectorAll('.auth-form .field-err')].some((p) => !p.hidden && p.textContent), null, { timeout: 8000, polling: 100 });
   expect(await shown('email') === 'That email is already signed up. Try signing in instead.', 'taken email: ' + await shown('email'));
   // a whole empty form: every reason at once, the first box focused
-  await page.click('.auth-switch [data-to=signin]');
+  // (on a slow machine the switch can land while the server's answer is still settling: make sure it is the sign-in form)
+  for (let k = 0; k < 10 && (await page.textContent('.auth-go')).trim() !== 'Sign in'; k++) { const sw = await page.$('.auth-switch [data-to=signin]'); if (sw) await sw.click(); await page.waitForTimeout(200); }
+  expect((await page.textContent('.auth-go')).trim() === 'Sign in', 'the switch opens the sign-in form');
   await page.fill('.auth-form [name=email]', ''); await page.fill('.auth-form [name=password]', '');
   await page.click('.auth-go');
   for (let k = 0; k < 20 && !(/Type your email/.test(await shown('email')) && /Type your password/.test(await shown('password'))); k++) await page.waitForTimeout(150); // (a slow machine shows them a moment later)

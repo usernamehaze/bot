@@ -2815,7 +2815,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=311'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=312'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2837,7 +2837,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=311'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=312'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -3113,7 +3113,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=311').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=312').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -5149,7 +5149,7 @@ const waitAtMost = (ms) => (typeof AbortSignal !== 'undefined' && AbortSignal.ti
 var SERVER_WAIT = { chat: 90000, picture: 60000, hear: 45000 }; // (chat: the server's own backups can take a while)
 const tooSlow = (e) => !!e && (e.name === 'TimeoutError' || e.name === 'AbortError');
 let serverSource = ''; // (v280) which brain answered the last question on Cassie's server: 'claude', or a backup such as 'groq'
-async function serverChat(messages, { model, maxTokens = 2048, onWait, lean = false, brain, q, draw } = {}) {
+async function serverChat(messages, { model, maxTokens = 2048, onWait, lean = false, brain, q, draw, wait } = {}) {
   let waits = 0;
   while (true) {
     let res;
@@ -5158,7 +5158,7 @@ async function serverChat(messages, { model, maxTokens = 2048, onWait, lean = fa
         method: 'POST',
         headers: chatHeaders(),
         body: JSON.stringify({ uid: installId(), model: model || GROQ_MODELS[0], messages, max_tokens: maxTokens, temperature: 0.6, reasoning_effort: lean ? 'low' : undefined, brain, q: q ? 1 : undefined, draw: draw || undefined }),
-        signal: waitAtMost(SERVER_WAIT.chat),
+        signal: waitAtMost(wait || SERVER_WAIT.chat),
       });
     } catch (e) {
       throw friendlyError(CassieErrors.say(tooSlow(e) ? 'timeout' : 'network'));
@@ -5175,7 +5175,7 @@ async function serverChat(messages, { model, maxTokens = 2048, onWait, lean = fa
     }
     if (code === 'daily_free') { const e = friendlyError(detail); e.dailyFree = true; throw e; } // out of today's free questions: no waiting
     const secs = parseDuration(res.headers.get('retry-after'));
-    if ((res.status === 429 || res.status === 503) && secs && secs <= 30 && waits < 2) {
+    if ((res.status === 429 || res.status === 503) && secs && secs <= 30 && waits < 2 && !draw) { // (v312: a drawing never waits in line: it falls back at once)
       waits += 1;
       if (onWait) onWait(Math.ceil(secs));
       await sleep(Math.ceil(secs * 1000) + 300);
@@ -7265,13 +7265,28 @@ function loadImageUrl(url, ms = 90000) {
 }
 // (v308) the free service says "at its limit" with a picture of those words (and a busy status): it is checked
 // before it is shown, and a busy answer counts as no picture (then her server, or a plain "try again")
+// (v312) the free service's limit notice is a picture too, sent as a success: a flat, bright, coloured card with a few
+// words on it. A real photo or diagram is never mostly one saturated flat colour, so such a picture counts as no picture.
+async function looksLikeNotice(blob) {
+  try {
+    if (typeof createImageBitmap !== 'function') return false;
+    const bmp = await createImageBitmap(blob), c = document.createElement('canvas'); c.width = 40; c.height = 30;
+    const g = c.getContext('2d'); g.drawImage(bmp, 0, 0, 40, 30); const d = g.getImageData(0, 0, 40, 30).data;
+    const count = new Map();
+    for (let k = 0; k < d.length; k += 4) { const key = (d[k] >> 4) + ',' + (d[k + 1] >> 4) + ',' + (d[k + 2] >> 4); count.set(key, (count.get(key) || 0) + 1); }
+    const [top, n] = [...count.entries()].sort((a, b) => b[1] - a[1])[0];
+    const [r, gr, b] = top.split(',').map((v) => +v * 16 + 8), hi = Math.max(r, gr, b), lo = Math.min(r, gr, b);
+    return n / 1200 > 0.5 && hi > 170 && hi - lo > 30; // (half or more one bright colour, not white, grey or black: the yellow card, the cream one)
+  } catch (e) { return false; }
+}
 async function freeImageOk(url, ms) {
   const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), ms);
   try {
     const res = await fetch(url, { signal: ctl.signal });
     const type = res.headers.get('content-type') || '';
     if (!res.ok || res.status === 204 || (type && !/^image\//i.test(type))) throw new Error('busy');
-    await res.blob(); // (now it is in the browser's cache, for the picture itself)
+    const blob = await res.blob(); // (now it is in the browser's cache, for the picture itself)
+    if (await looksLikeNotice(blob)) throw new Error('busy'); // (v312: its "Free limit reached" comes as an ordinary picture)
   } finally { clearTimeout(t); }
 }
 async function generateImage(prompt) {
@@ -7368,7 +7383,7 @@ async function answerPicture(label) {
 // (v253) any way of asking to see it ("draw", "show me", "sketch", "build me", "illustrate", "diagram", "visualize"):
 // Cassie asks how to show it, once a chat (Draw it, 3D model, Real photo, Just explain). A message that already says
 // how ("in 3D") skips the question; pictures and photos keep the picture maker, graphs keep the math board.
-const LIVE_DRAW_RE = /\b(?:draw|sketch|diagram|illustrate|visuali[sz]e|iguhit|idrawing|i-?drawing|ipakita)\b|\bshow\s+(?:me|us)\b|\bbuild\s+(?:me|us)\b|\bmake\s+(?:me\s+)?an?\s+(?:diagram|model|drawing|sketch)\b|\b(?:explain|teach)\b.*\b(?:with|using|in)\s+(?:a\s+)?(?:drawing|diagram|graphics?|visuals?|3d)\b|\bin\s+3d\b/i;
+const LIVE_DRAW_RE = /\b(?:illustrations?|diagrams?|drawings?|sketch(?:es)?|pictures?)\s+(?:of|showing|about)\s+how\b|\b(?:draw|sketch|diagram|illustrate|visuali[sz]e|iguhit|idrawing|i-?drawing|ipakita)\b|\bshow\s+(?:me|us)\b|\bbuild\s+(?:me|us)\b|\bmake\s+(?:me\s+)?an?\s+(?:diagram|model|drawing|sketch)\b|\b(?:explain|teach)\b.*\b(?:with|using|in)\s+(?:a\s+)?(?:drawing|diagram|graphics?|visuals?|3d)\b|\bin\s+3d\b/i;
 const LIVE_PIC_RE = /\b(?:picture|pic|photo|image|realistic|photorealistic|poster|logo|wallpaper|paint(?:ing)?|cartoon|anime|larawan|illustration\s+of\s+a\s+(?:person|character))\b/i;
 const LIVE_MATH_RE = /\b(?:graph|plot|chart|equation|function|parabola|slope|y\s*=|f\(x\)|x\^)/i;
 // (v308) "make a 3d bicycle", "create a 3D model of the heart", "can you make a bicycle": a thing to be shown, so she
@@ -7428,11 +7443,11 @@ async function liveDrawCall(messages, q, image) {
     // (v279) a picture came with the question: her best brain looks at it with the drawing form; else whichever brain reads pictures
     const url = `data:${image.mimeType || 'image/jpeg'};base64,${image.base64}`;
     const seen = messages.map((m, i) => (i === messages.findIndex((x) => x.role === 'user') ? { role: 'user', content: [{ type: 'text', text: String(m.content) }, { type: 'image_url', image_url: { url } }] } : m));
-    if (SERVER && serverClaude) { try { const t = await serverChat(seen, { brain: 'claude', maxTokens: 5000, q, draw: q ? 1 : 2 }); if (t) return { text: t, simple: liveSimple() }; } catch (e) { /* the usual picture reader below */ } }
+    if (SERVER && serverClaude) { try { const t = await serverChat(seen, { brain: 'claude', maxTokens: 5000, q, draw: q ? 1 : 2, wait: q ? 50000 : 35000 }); if (t) return { text: t, simple: liveSimple() }; } catch (e) { /* the usual picture reader below */ } }
     return { text: await askCassie([{ role: 'user', content: messages.map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n\n') }], image, {}), simple: true };
   }
   // (v280) her server answers with a backup brain once the day's share of her best one is used: that drawing is marked simpler
-  if (SERVER && serverClaude) { try { const t = await serverChat(messages, { brain: 'claude', maxTokens: 5000, q, draw: q ? 1 : 2 }); if (t) return { text: t, simple: liveSimple() }; } catch (e) { /* the usual brain below */ } }
+  if (SERVER && serverClaude) { try { const t = await serverChat(messages, { brain: 'claude', maxTokens: 5000, q, draw: q ? 1 : 2, wait: q ? 50000 : 35000 }); if (t) return { text: t, simple: liveSimple() }; } catch (e) { /* the usual brain below */ } }
   if (state.groqKey || SERVER) { try { const t = await groqChat(messages, { model: state.groqModel, maxTokens: 5000, rotate: true, q }); if (t) return { text: t, simple: true }; } catch (e) { if (!state.geminiKey) throw e; } }
   return { text: await askCassie([{ role: 'user', content: messages.map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n\n') }], null, {}), simple: true };
 }
@@ -7480,11 +7495,13 @@ async function liveDrawFirst(question, want3d, image = null) {
     if (found) { image = { mimeType: found.mimeType, base64: found.base64 }; ref = found.ref; }
   }
   const messages = [{ role: 'system', content: liveDrawPrompt(want3d, { picture: !!image, reference: !!ref, flatNote: soft, process: proc ? m.PROCESS_NOTE : '' }) }, { role: 'user', content: question }];
+  const t0 = Date.now();
   let { text, simple } = await liveDrawCall(messages, true, image); // (the drawing is the one question it counts as)
   let spec = m.clean(text);
   const issues = (sp) => (!sp ? ['the reply was not one valid JSON object in the schema'] : [...(!want3d && sp.mode === '3d' ? ['it must be a flat 2d pen drawing, mode "2d"'] : []), ...m.check(sp, question)]);
   let wrong = issues(spec);
-  if (wrong.length) {
+  // (v312) her redo only when the first answer came fast: a drawing she has is shown, never held for minutes
+  if (wrong.length && (!spec || Date.now() - t0 < 30000)) {
     const again = await liveDrawCall([...messages, { role: 'assistant', content: String(text).slice(0, 12000) }, { role: 'user', content: `Your drawing has these problems:\n- ${wrong.join('\n- ')}\nSend the whole corrected JSON object again.` }], false, image);
     const s2 = m.clean(again.text);
     if (s2 && issues(s2).length <= wrong.length) { spec = s2; text = again.text; simple = simple || again.simple; }
@@ -7508,11 +7525,11 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=311')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=312')));
 // (v310) Cassie's drawing book: a checked drawing of a common subject (a bicycle, the heart, the solar system...) shows
 // at once, right every time, with no AI and no question used (offline too). Anything else is drawn by the AI.
 let liveBookLib = null;
-const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=311').catch(() => null)));
+const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=312').catch(() => null)));
 async function liveDrawBook(subject, want3d) {
   if (window.CASSIE_NO_BOOK) return null; // (tests of the AI's own drawing turn the book off)
   const bk = await liveBookLoad(), m = await liveDrawLoad();
@@ -7533,7 +7550,7 @@ function liveDrawInto(container, body) {
   const animate = liveDrawFresh; liveDrawFresh = false;
   liveDrawLoad().then((m) => m.render(box, body, {
     animate,
-    simpleNote: authToken() ? 'A simpler drawing: Cassie’s best drawing brain wasn’t free for this one (busy, or today’s share is used up).' : 'A simpler drawing. Sign in for Cassie’s best drawings.',
+    simpleNote: 'A simpler drawing: Cassie’s best drawing brain wasn’t free for this one (busy, or today’s share is used up).',
     onQuiz: (spec) => handleSend(`Quiz me on ${spec.title}`, { noDraw: true }),
     onAsk: (p, spec) => { promptInput.value = `Tell me more about the ${p.label} in ${spec.title}`; promptInput.dispatchEvent(new Event('input')); promptInput.focus(); },
     canRealistic: realPhotoOk,
@@ -7632,14 +7649,32 @@ async function liveDrawReply(text, want3d = LIVE_3D_RE.test(text), image = null)
   const typing = renderTyping(); setTypingStatus(typing, 'Cassie is sketching…');
   const done = busyButton(sendBtn);
   let first;
+  // (v312) she says how it is going, and after 75 s she stops waiting: Try again, or an answer in words
+  const slow1 = setTimeout(() => setTypingStatus(typing, 'Still sketching: a big drawing takes a little longer…'), 12000);
+  const slow2 = setTimeout(() => setTypingStatus(typing, 'Almost there…'), 35000);
+  const TOO_LONG = Symbol('too long');
   try {
-    first = fromBook || await liveDrawFirst(question, want3d, image);
+    first = fromBook || await Promise.race([liveDrawFirst(question, want3d, image), new Promise((r) => setTimeout(() => r(TOO_LONG), window.CASSIE_DRAW_MS || 75000))]);
+    clearTimeout(slow1); clearTimeout(slow2);
+    if (first === TOO_LONG) {
+      typing.remove(); done(); setCursorMode('idle');
+      const say = 'This drawing is taking too long. Try again, or I can explain it in words.';
+      state.messages.push({ role: 'assistant', content: say }); save();
+      const bubble = renderMessage('assistant', say);
+      if (bubble) {
+        const e = CassieErrors.empty({ title: 'The drawing is taking too long', text: 'Cassie\u2019s drawing brain is slow right now.', action: 'Try again', onAction: () => { e.remove(); state.messages.pop(); state.messages.pop(); save(); bubble.remove(); const u = [...chatLog.querySelectorAll('.bubble-user')].pop(); if (u) u.remove(); liveDrawReply(label, want3d, image); } });
+        e.classList.add('es-inline'); bubble.appendChild(cassieEmpty(e, 'failed'));
+        const words = document.createElement('button'); words.type = 'button'; words.className = 'fu-chip'; words.textContent = 'Just explain'; words.addEventListener('click', () => { words.remove(); handleSend(label, { noDraw: true }); }); bubble.appendChild(words);
+      }
+      return;
+    }
     if (first.spec) first.spec.q = (about ? about.subject : label).slice(0, 300); // (Draw again redraws the real subject)
     typing.remove();
     if (!first.spec) { // she answered in words: show them as usual (never drawing code: v310)
       liveDrawWords(first.text, () => liveDrawReply(label, want3d, image)); return;
     }
   } catch (err) {
+    clearTimeout(slow1); clearTimeout(slow2);
     typing.remove(); done(); setCursorMode('idle');
     renderError(err, () => liveDrawReply(label, want3d, image), 'unknown');
     return;
@@ -8925,7 +8960,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=311');
+      exploreMod = await import('./explore/cell3d.js?v=312');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -8975,7 +9010,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=311');
+      labsMod = await import('./labs/labs.js?v=312');
       islandRest();
     }
     labsMod.open({
@@ -10937,10 +10972,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=311').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=312').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=311', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=312', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.

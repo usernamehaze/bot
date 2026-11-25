@@ -174,8 +174,9 @@ async function viaServer(messages, maxTokens = 2048, most = 4000, draw = 0) {
     res = await fetch(CASSIE_SERVER + '/chat', {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ uid: await cassieUid(), model: 'openai/gpt-oss-120b', messages, max_tokens: Math.min(most, maxTokens), temperature: 0.5, brain: 'claude', ...(draw ? { draw } : {}) }),
+      signal: AbortSignal.timeout(draw === 1 ? 55000 : draw === 2 ? 35000 : 90000), // (v312: a drawing never hangs her card for minutes)
     });
-  } catch (e) { throw new Error('Couldn’t connect to Cassie. Check your internet connection.'); }
+  } catch (e) { throw new Error(e && e.name === 'TimeoutError' ? 'Cassie is taking too long to draw this one. Ask again in a moment.' : 'Couldn’t connect to Cassie. Check your internet connection.'); }
   if (!res.ok) {
     let d = ''; try { d = (await res.json()).error?.message || ''; } catch (e) { /* not JSON */ }
     throw new Error(res.status === 403 ? 'SERVER_OFF' : (d || 'Cassie is very busy right now. Try again in a minute.'));
