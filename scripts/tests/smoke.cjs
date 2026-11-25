@@ -4611,7 +4611,7 @@ test('privacy.html names every outside service the code calls (a new one fails u
     'ncmh.gov.ph': 'where care.js’s crisis numbers were checked (a note in the code)',
   };
   const SERVICES = [ // [which addresses, the name privacy.html must use]
-    [/^api\.groq\.com$/, 'Groq'], [/^generativelanguage\.googleapis\.com$/, 'Google Gemini'], [/^api\.anthropic\.com$/, 'Anthropic'],
+    [/^api\.groq\.com$/, 'Groq'], [/^generativelanguage\.googleapis\.com$/, 'Google Gemini'], [/^api\.anthropic\.com$/, 'Anthropic'], [/^openrouter\.ai$/, 'OpenRouter'],
     [/^api\.elevenlabs\.io$/, 'ElevenLabs'], [/^image\.pollinations\.ai$/, 'Pollinations'], [/^api\.openalex\.org$/, 'OpenAlex'],
     [/\.wikipedia\.org$/, 'Wikipedia'], [/^api\.worldbank\.org$/, 'World Bank'], [/^huggingface\.co$/, 'Hugging Face'],
     [/^(accounts|www)\.google(apis)?\.com$|^docs\.google\.com$/, 'Google'], [/^appleid\.apple\.com$/, 'Apple'], [/^api\.paymongo\.com$/, 'PayMongo'],
@@ -14963,6 +14963,35 @@ test('one copy of the truth: the extension’s board is the app’s, and the ser
   expect(built === fs.readFileSync(fileAt('server/worker.js'), 'utf8'), 'server/worker.js is out of date: run  cd server && python3 build.py');
 });
 
+test('more AIs on the server (v313): when Claude and Gemini are busy, OpenRouter (its free router, or the owner’s own list) makes the drawing; when Groq and Gemini are busy it answers the words; Workers AI, last, writes a whole drawing (4096 tokens, not cut off at 2048)', async (b) => {
+  const { ctx, page } = await open(b, {});
+  const chat = (body) => page.evaluate(async ([srv, bd]) => { const r = await fetch(srv + '/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ uid: installId(), messages: [{ role: 'system', content: 'You are Cassie, a careful tutor who explains by DRAWING.' }, { role: 'user', content: 'Draw how a leaf makes food' }], ...bd }) }); return [r.headers.get('x-cassie-source'), r.status, await r.text()]; }, [SERVER, body]);
+  try {
+    await serverMode({ claude: 'down', gemini: 'down', openrouter: 'ok', dailyAll: 100, orModels: null });
+    let [src, st, txt] = await chat({ brain: 'claude', q: 1, draw: 1 });
+    let m = await serverMode({});
+    expect(src === 'openrouter' && st === 200 && /OpenRouter answer/.test(txt), 'Claude and Gemini busy: OpenRouter draws: ' + [src, st, txt.slice(0, 160), JSON.stringify(m.orCalls)]);
+    let c = m.orCalls.at(-1);
+    expect(c.model === 'openrouter/free' && !c.models && c.max >= 5000 && c.auth === 'Bearer sk-or-test', 'its free router, with room for a whole drawing: ' + JSON.stringify(c));
+    // the owner's own list: the models in order, OpenRouter moving to the next by itself
+    await serverMode({ orModels: 'acme/one, acme/two' });
+    await chat({ brain: 'claude', q: 1, draw: 1 });
+    c = (await serverMode({})).orCalls.at(-1);
+    expect(JSON.stringify(c.models) === '["acme/one","acme/two"]' && !c.model, 'OPENROUTER_MODELS is sent as its fallback list: ' + JSON.stringify(c));
+    // words: Groq and Gemini busy, OpenRouter answers
+    await serverMode({ orModels: null, groq: 'busy' });
+    [src, st, txt] = await chat({ q: 1, messages: [{ role: 'user', content: 'What is ATP?' }] });
+    expect(src === 'openrouter' && st === 200, 'Groq and Gemini busy: OpenRouter answers the words: ' + [src, st, txt.slice(0, 120)]);
+    // all of them busy: Workers AI, and a drawing gets its full length
+    await serverMode({ openrouter: 'busy' });
+    [src, st] = await chat({ brain: 'claude', q: 1, draw: 1 });
+    m = await serverMode({});
+    expect(src === 'backup' && st === 200 && m.aiMax === 4096, 'last, Workers AI writes the drawing with 4096 tokens: ' + [src, st, m.aiMax]);
+    [src] = await chat({ q: 1, messages: [{ role: 'user', content: 'What is ATP?' }] });
+    m = await serverMode({});
+    expect(src === 'backup' && m.aiMax <= 2048, 'words stay short on Workers AI: ' + [src, m.aiMax]);
+  } finally { await serverMode({ claude: 'off', gemini: 'off', groq: 'ok', openrouter: null, orModels: null, dailyAll: null }); await ctx.close(); }
+});
 test('Claude on the server (v311): a free student\u2019s words come from Groq and their drawings from Claude (her own redo of a drawing never uses the share; Gemini draws when Claude can\u2019t); Plus and Pro keep Claude for words; Groq covers when it fails', async (b) => {
   await serverMode({ claude: 'ok', claudeReply: 'Claude here: plants turn light into food.', claudeCalls: [] });
   try {

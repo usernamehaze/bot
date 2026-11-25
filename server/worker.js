@@ -534,6 +534,24 @@ async function geminiModels(env) {
   } catch (e) { /* use the fallback names */ }
   return gemini.ids.length ? gemini.ids : GEMINI_FALLBACK;
 }
+/* OpenRouter (v313): one key, many AIs. OPENROUTER_MODELS (optional) lists up to 3 model names, tried in order;
+   left out, its free router answers with whichever free model is available (no cost). */
+const OPENROUTER = 'https://openrouter.ai/api/v1';
+async function askOpenRouter(env, messages, maxTokens = 2048, ms = 30000) {
+  if (!env.OPENROUTER_KEY) return { reply: null, detail: '' };
+  const models = String(env.OPENROUTER_MODELS || 'openrouter/free').split(',').map((m) => m.trim()).filter(Boolean).slice(0, 3);
+  const payload = { messages, max_tokens: Math.min(Math.max(maxTokens, 64), 8000), temperature: 0.4, ...(models.length > 1 ? { models } : { model: models[0] }) };
+  try {
+    const r = await fetch(`${OPENROUTER}/chat/completions`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${env.OPENROUTER_KEY}`, 'x-title': 'Cassie' }, body: JSON.stringify(payload), signal: AbortSignal.timeout(ms) });
+    if (!r.ok) { let m = ''; try { m = (await r.json()).error?.message || ''; } catch (e) { /* not JSON */ } return { reply: null, detail: `OpenRouter: ${reasonOf(r.status, m)}` }; }
+    const c = (await r.json()).choices?.[0]?.message?.content;
+    const reply = typeof c === 'string' ? c.trim() : Array.isArray(c) ? c.map((x) => x.text || '').join('').trim() : '';
+    return reply ? { reply, detail: '' } : { reply: null, detail: 'OpenRouter: empty answer' };
+  } catch (e) { return { reply: null, detail: `OpenRouter: ${e.name === 'TimeoutError' ? 'no answer in time' : reasonOf(0, e.message)}` }; }
+}
+// a step that may take too long for a drawing: past its time, the next AI tries (v313)
+const inTime = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(() => r(null), Math.max(1000, ms)))]);
+
 async function askGemini(env, messages, maxTokens = 2048) {
   if (!env.GEMINI_KEY) return { reply: null, detail: '' };
   const system = messages.filter((m) => m.role === 'system').map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n\n');
@@ -769,7 +787,7 @@ function toClaude(messages) {
   while (out.length && out[0].role !== 'user') out.shift();
   return { system, messages: out };
 }
-async function askClaude(env, cleaned, family = 'opus') {
+async function askClaude(env, cleaned, family = 'opus', ms = 120000) {
   const model = await claudeModel(env, family);
   if (!model) return null;
   const { system, messages } = toClaude(cleaned.messages);
@@ -781,10 +799,10 @@ async function askClaude(env, cleaned, family = 'opus') {
   try {
     r = await fetch(`${ANTHROPIC}/messages`, {
       method: 'POST', headers: { ...anthropicHeaders(env), 'anthropic-beta': 'server-side-fallback-2026-07-01' },
-      body: JSON.stringify({ ...base, output_config: { effort }, fallbacks: 'default' }), signal: AbortSignal.timeout(120000),
+      body: JSON.stringify({ ...base, output_config: { effort }, fallbacks: 'default' }), signal: AbortSignal.timeout(ms),
     });
     // a model picked in CLAUDE_MODEL may not take those options: ask it plainly
-    if (r.status === 400) r = await fetch(`${ANTHROPIC}/messages`, { method: 'POST', headers: anthropicHeaders(env), body: JSON.stringify(base), signal: AbortSignal.timeout(120000) });
+    if (r.status === 400) r = await fetch(`${ANTHROPIC}/messages`, { method: 'POST', headers: anthropicHeaders(env), body: JSON.stringify(base), signal: AbortSignal.timeout(ms) });
   } catch (e) { return null; } // no answer in 2 minutes: the backup brain answers
   if (!r.ok) return null;
   const data = await r.json();
@@ -1192,6 +1210,8 @@ async function chat(request, env, ctx) {
   // drawings, where the best brain matters most). draw: 1 is a drawing; draw: 2 is her own check or redraw of that same
   // drawing, which never uses the student's share (a side allowance of three times it, so it can't be used for anything else)
   const draw = body.draw === 1 || body.draw === 2 ? body.draw : 0;
+  // (v313) a drawing has a time budget, inside the app's own wait, so every AI in the line gets its turn
+  const t0 = Date.now(), budget = () => (draw === 2 ? 32000 : 46000) - (Date.now() - t0);
   if (env.ANTHROPIC_KEY && body.brain === 'claude' && uid !== 'anon' && (draw || plan !== 'free')) {
     let family = null;
     for (const [fam, max] of L.claude) {
@@ -1203,7 +1223,7 @@ async function chat(request, env, ctx) {
     }
     if (family) {
       let reply = null;
-      try { reply = await askClaude(env, cleaned, family); } catch (e) { reply = null; }
+      try { reply = await askClaude(env, cleaned, family, draw ? (draw === 2 ? 18000 : 26000) : 120000); } catch (e) { reply = null; }
       if (reply) {
         ctx.waitUntil(countChat(env, today, 'claude'));
         return json({ choices: [{ index: 0, message: { role: 'assistant', content: reply }, finish_reason: 'stop' }] }, 200, { ...h, ...left, 'x-cassie-source': 'claude' });
@@ -1211,11 +1231,19 @@ async function chat(request, env, ctx) {
     }
   }
   // a drawing Claude couldn't make (busy, or today's share used up): Gemini next, which draws better than Groq (v311)
-  if (draw && env.GEMINI_KEY) {
-    const g = await askGemini(env, cleaned.messages, Math.max(+body.max_tokens || 0, 5000));
+  if (draw && env.GEMINI_KEY && budget() > 12000) {
+    const g = (await inTime(askGemini(env, cleaned.messages, Math.max(+body.max_tokens || 0, 5000)), budget() - 9000)) || { reply: null };
     if (g.reply) {
       ctx.waitUntil(countChat(env, today, 'gemini-draw'));
       return json({ choices: [{ index: 0, message: { role: 'assistant', content: g.reply }, finish_reason: 'stop' }] }, 200, { ...h, ...left, 'x-cassie-source': 'gemini' });
+    }
+  }
+  // then OpenRouter (v313): another AI, when the two above are busy
+  if (draw && env.OPENROUTER_KEY && budget() > 10000) {
+    const o = await askOpenRouter(env, cleaned.messages, Math.max(+body.max_tokens || 0, 5000), Math.min(25000, budget() - 7000));
+    if (o.reply) {
+      ctx.waitUntil(countChat(env, today, 'openrouter-draw'));
+      return json({ choices: [{ index: 0, message: { role: 'assistant', content: o.reply }, finish_reason: 'stop' }] }, 200, { ...h, ...left, 'x-cassie-source': 'openrouter' });
     }
   }
 
@@ -1250,13 +1278,21 @@ async function chat(request, env, ctx) {
     }
   }
   // Gemini (your GEMINI_KEY): reads pictures and answers text when Groq couldn't
-  if (env.GEMINI_KEY) {
+  if (env.GEMINI_KEY && !draw) {
     const g = await askGemini(env, cleaned.messages, maxTokens);
     if (g.reply) {
       ctx.waitUntil(countChat(env, today, 'gemini'));
       return json({ choices: [{ index: 0, message: { role: 'assistant', content: g.reply }, finish_reason: 'stop' }] }, 200, { ...h, ...left, 'x-cassie-source': 'gemini' });
     }
     problems.push(g.detail);
+  }
+  if (env.OPENROUTER_KEY && !draw) {
+    const o = await askOpenRouter(env, cleaned.messages, maxTokens, 30000);
+    if (o.reply) {
+      ctx.waitUntil(countChat(env, today, 'openrouter'));
+      return json({ choices: [{ index: 0, message: { role: 'assistant', content: o.reply }, finish_reason: 'stop' }] }, 200, { ...h, ...left, 'x-cassie-source': 'openrouter' });
+    }
+    problems.push(o.detail);
   }
   if (env.AI && cleaned.image) {
     const v = await aiVision(env, cleaned.messages, maxTokens);
@@ -1268,7 +1304,7 @@ async function chat(request, env, ctx) {
   }
   if (env.AI && !cleaned.image) {
     try {
-      const out = await env.AI.run(BACKUP_MODEL, { messages: textOnly(cleaned.messages), max_tokens: Math.min(maxTokens, 2048), temperature });
+      const out = await env.AI.run(BACKUP_MODEL, { messages: textOnly(cleaned.messages), max_tokens: draw ? 4096 : Math.min(maxTokens, 2048), temperature });
       const raw = out && (out.response ?? out.result?.response);
       const reply = raw && typeof raw === 'object' ? JSON.stringify(raw) : (raw || ''); // (a JSON answer, like a drawing, can come back already unpacked: it was sent as "[object Object]")
       if (reply) {
@@ -2040,6 +2076,7 @@ async function runHealth(env) {
     run('Claude: text maths', () => askClaude(env, { messages: textQ }, 'haiku'), (t) => /\b391\b/.test(t));
     run('Claude: read a picture', () => askClaude(env, { messages: picQ }, 'haiku'), (t) => /\b56\b/.test(t));
   }
+  if (env.OPENROUTER_KEY) run('OpenRouter: text maths', async () => { const o = await askOpenRouter(env, textQ, 300, 30000); if (!o.reply) throw new Error(o.detail); return o.reply; }, (t) => /\b391\b/.test(t));
   if (env.AI) run('Workers AI (backup): read a picture', async () => { const v = await aiVision(env, picQ, 300); if (!v.reply) throw new Error(v.detail); return v.reply; }, (t) => /\b56\b/.test(t));
   if (env.AI) run('Workers AI (backup): text maths', async () => { const o = await env.AI.run(BACKUP_MODEL, { messages: textQ, max_tokens: 200 }); return (o && (o.response ?? o.result?.response)) || ''; }, (t) => /\b391\b/.test(t));
   await Promise.all(jobs);

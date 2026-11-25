@@ -111,6 +111,12 @@ export async function startFakeServer(port = 4630) {
       const id = `cs_test_${Date.now()}${mode.paymongoCalls.length}`;
       return Response.json({ data: { id, type: 'checkout_session', attributes: { checkout_url: `https://checkout.paymongo.com/${id}`, reference_number: body.data.attributes.reference_number } } });
     }
+    if (u.startsWith('https://openrouter.ai/')) { // fake OpenRouter (v313): mode.openrouter 'ok' | 'busy'; off unless set
+      const body = JSON.parse(init.body || '{}');
+      mode.orCalls = [...(mode.orCalls || []), { model: body.model, models: body.models, max: body.max_tokens, auth: (init.headers || {}).authorization }].slice(-10);
+      if (mode.openrouter !== 'ok') return Response.json({ error: { code: 429, message: 'Rate limit exceeded: free-models-per-min' } }, { status: 429 });
+      return Response.json({ choices: [{ message: { role: 'assistant', content: mode.orReply || 'OpenRouter answer: plants make food from light.' } }] });
+    }
     if (!u.startsWith('https://api.groq.com/')) return realFetch(url, init);
     if (u.endsWith('/models')) { // mode.groqVision: 'ok' | 'second' (first picture model broken) | 'retired' (none left)
       const vision = mode.groqVision === 'retired' ? [] : mode.groqVision === 'renamed' ? [{ id: 'meta-llama/llama-guard-4-12b' }, { id: 'acme/new-eyes-9b' }] : [{ id: 'meta-llama/llama-4-scout-17b-16e-instruct' }, { id: 'qwen/qwen3-vl-32b' }];
@@ -143,6 +149,7 @@ export async function startFakeServer(port = 4630) {
   const env = {
     DB, ADMIN_TOKEN: 'test-admin-token-0123456789', GROQ_KEY: 'gsk_server_test', get DAILY_LIMIT() { return mode.dailyAll == null ? '5' : String(mode.dailyAll); }, get FREE_DAILY_QUESTIONS() { return mode.freeQuestions == null ? '20' : String(mode.freeQuestions); }, get GOOGLE_CLIENT_ID() { return mode.noGoogle ? undefined : 'test-client-id'; }, get APPLE_SERVICES_ID() { return mode.noApple ? undefined : 'test.apple.services'; },
     get FREE_CLAUDE_LIMIT() { return mode.freeClaude == null ? '3' : String(mode.freeClaude); }, // (real default: 10)
+    get OPENROUTER_KEY() { return mode.openrouter ? 'sk-or-test' : undefined; }, get OPENROUTER_MODELS() { return mode.orModels || undefined; },
     get ANTHROPIC_KEY() { return mode.claude === 'off' ? undefined : 'sk-ant-test'; },
     get PAYMONGO_SECRET_KEY() { return mode.payOn === 'live' ? 'sk_live_fake_paymongo' : mode.payOn ? 'sk_test_fake_paymongo' : undefined; }, // (off unless a test switches it on: true = a test key, 'live' = a live key)
     get PAY_TESTERS() { return mode.payTesters || ''; },
@@ -161,6 +168,7 @@ export async function startFakeServer(port = 4630) {
         return { response: /sum in this picture/.test(text) ? '56' : 'Workers AI read the picture.' };
       }
       if (/flux/.test(model)) { mode.lastImagePrompt = input.prompt; return { image: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=' }; }
+      mode.aiMax = input.max_tokens;
       return { response: /17 × 23/.test(JSON.stringify(input.messages)) ? '391' : 'Backup brain answer: plants use sunlight.' };
     } },
   };
