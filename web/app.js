@@ -2815,7 +2815,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=314'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=315'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2837,7 +2837,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=314'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=315'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -3113,7 +3113,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=314').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=315').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -6932,6 +6932,7 @@ async function handleSend(text, opts = {}) {
   }
   if (!images.length && !docs.length && !opts.mode) {
     liveShowClose(false); // (a new message closes an open "How should I show it?")
+  if (!opts.noDraw && !doc && LIVE_BACK_3D_RE.test(text.trim()) && liveLastDrawn() && canChat()) return liveDrawReply(text, true); // (v315: "make it 3D": the drawing on screen, in 3D)
   if (!opts.noDraw && !doc && liveDrawFollowFits(text)) return liveDrawFollow(text); // (v306: a question about the drawing on screen is answered on it)
   if (!opts.noDraw && liveDrawRequest(text)) return liveShowAsk(text); // (v253: she asks how to show it, then draws it live)
   if (!opts.noDraw && liveHowRequest(text) && canChat()) return liveDrawReply(text, LIVE_3D_RE.test(text)); // (v314: how it works: drawn, moving)
@@ -7428,6 +7429,7 @@ First think how the real object is built: its real parts, which part holds or co
 - parts that are inside a case are placed inside it, and the case is "shell": true so the student can open it
 - real proportions: a part that is small in the real object is small here; a part inside another is smaller than it
 - parts that turn get "spin": true; hot or glowing parts get "glow": true
+- something soft or living (an organ, an animal, a plant, a cell) is built from its real rounded shapes: spheres, capsules and lathes, smooth, in its real colours; a process is built as the real things it happens in, with flows for what moves through them
 ${LIVE_MOTION_3D}
 ${seen}Make it look like the real thing, not like toy blocks: give every part its real colour and "finish":"metal"|"plastic"|"rubber"|"wood" (what it is really made of), and its real profile: a lathe for anything turned or rounded (a nozzle, a bottle, a nose cone, a wheel), a plate for a flat cut shape, a pipe for a hose, wire or tube, a capsule for a rounded body. A plain cylinder or box only where the real part is one.
 {"title","mode":"3d","axis":the model's main length "x"|"y"|"z","intro":one sentence,"summary":one sentence,"next":[2 short questions the student could ask next to go deeper, each about one of its parts],"photo":what a real photo of it shows,"parts":[{"id","label":1 to 3 words,"say":1 or 2 short sentences,"color":"#hex","inside":the id of the part it sits in, or null,"attached":[ids of the parts it touches],"size":how big it really is (its longest side) against the whole object, 0 to 1,"shell","spin","glow","shapes":[...]}]}
@@ -7501,15 +7503,14 @@ function liveDrawFixes(verdict, spec) {
 async function liveDrawFirst(question, want3d, image = null, opts = {}) {
   const m = await liveDrawLoad();
   const proc = !!(m.isProcess && m.isProcess(question)); // (v311: steps in order, drawn as a flow)
-  const soft = want3d && (LIVE_SOFT_RE.test(question) || proc); // (v279: a heart, a leaf, a cycle asked for in 3D is drawn flat, and she says so)
-  if (soft) want3d = false;
+  const soft = false; // (v315: asked for in 3D, it is built in 3D, a heart, a leaf or a cycle too; before, those were drawn flat)
   // (v305) no picture from the student: a free reference picture of the real thing to draw from, when one helps (a few seconds at most)
   let ref = null;
   if (!image && navigator.onLine !== false) {
     const found = await m.findReference(question).catch(() => null);
     if (found) { image = { mimeType: found.mimeType, base64: found.base64 }; ref = found.ref; }
   }
-  const messages = [{ role: 'system', content: liveDrawPrompt(want3d, { picture: !!image, reference: !!ref, flatNote: soft, process: proc ? m.PROCESS_NOTE : '' }) }, { role: 'user', content: question }];
+  const messages = [{ role: 'system', content: liveDrawPrompt(want3d, { picture: !!image, reference: !!ref, flatNote: soft, process: proc && !want3d ? m.PROCESS_NOTE : '' }) }, { role: 'user', content: question }];
   const t0 = Date.now();
   let { text, simple } = await liveDrawCall(messages, !opts.free, image); // (the drawing is the one question it counts as; the other view of it is not another question)
   let spec = m.clean(text);
@@ -7540,11 +7541,11 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=314')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=315')));
 // (v310) Cassie's drawing book: a checked drawing of a common subject (a bicycle, the heart, the solar system...) shows
 // at once, right every time, with no AI and no question used (offline too). Anything else is drawn by the AI.
 let liveBookLib = null;
-const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=314').catch(() => null)));
+const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=315').catch(() => null)));
 async function liveDrawBook(subject, want3d) {
   if (window.CASSIE_NO_BOOK) return null; // (tests of the AI's own drawing turn the book off)
   const bk = await liveBookLoad(), m = await liveDrawLoad();
@@ -7566,23 +7567,21 @@ function liveDrawInto(container, body) {
   liveDrawLoad().then((m) => m.render(box, body, {
     animate,
     simpleNote: 'A simpler drawing: Cassie’s best drawing brain wasn’t free for this one (busy, or today’s share is used up).',
-    onQuiz: (spec) => handleSend(`Quiz me on ${spec.title}`, { noDraw: true }),
     onAsk: (p, spec) => { promptInput.value = `Tell me more about the ${p.label} in ${spec.title}`; promptInput.dispatchEvent(new Event('input')); promptInput.focus(); },
-    canRealistic: realPhotoOk,
-    onRealistic: (spec) => realPhoto(spec),
     onChange: (spec) => liveShowAsk(spec.q || spec.title),
     onNext: animate ? (q) => handleSend(q) : null, // (v307: "Ask next" under a drawing just made)
     // (v314) a machine or a thing: see it both ways, flat and in 3D (something soft or living, or a process, stays flat)
-    canOther: (spec) => spec.mode === '3d' || !(LIVE_SOFT_RE.test(spec.q || spec.title) || (m.isProcess && m.isProcess(spec.q || spec.title))),
+    canOther: (spec) => spec.mode !== '3d', // (v315: a flat drawing can be built in 3D; a 3D model has no "See it flat")
     onOther: (spec) => liveDrawReply(spec.mode === '3d' ? 'Show it flat' : 'Show it in 3D', spec.mode !== '3d', null, { subject: spec.q || spec.title, other: true }),
   })).then((ok) => { box.classList.remove('ld-loading'); if (!ok) box.innerHTML = '<p class="ld-say">This drawing could not be shown.</p>'; liveDrawListen(box); scrollToBottom(); setTimeout(keepMascotClear, 300); })
     .catch(() => { box.classList.remove('ld-loading'); box.innerHTML = '<p class="ld-say">This drawing could not load. Check the connection and open the chat again.</p>'; });
 }
 // (v253) Listen sits in the drawing's own row of small actions, not on a row of its own
+// (v315) a drawing's row is only what it does (Pause, Next step, Pull apart, Draw again...): no Listen under a drawing
 function liveDrawListen(box) {
-  const acts = box.querySelector('.ld-acts'), bubble = box.closest('.bubble');
-  const move = () => { const b = bubble && bubble.querySelector('.listen-btn'); if (!acts || !b || acts.contains(b)) return !!b; const row = b.closest('.listen-row'); b.classList.add('ld-btn'); acts.prepend(b); if (row && !row.children.length) row.remove(); return true; };
-  if (!move()) setTimeout(move, 400);
+  const bubble = box.closest('.bubble');
+  const drop = () => { const b = bubble && bubble.querySelector('.listen-btn'); if (!b) return false; const row = b.closest('.listen-row'); b.remove(); if (row && !row.children.length) row.remove(); return true; };
+  if (!drop()) setTimeout(drop, 400);
 }
 // "How should I show it?": four small choices; the choice is kept for the rest of this chat
 const SHOW_ICON = { draw: '<path d="M4 20l4-1 11-11-3-3L5 16z"/>', '3d': '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/>', photo: '<path d="M4 7.5h3l1.6-2.5h6.8L17 7.5h3a1 1 0 0 1 1 1V18a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8.5a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/>', explain: '<path d="M4 5h16v11H9l-5 4z"/>' };
@@ -7630,6 +7629,18 @@ function liveShowGo(text, k) {
 }
 // (v280) "draw it", "sketch that", "show it in 3D": a drawing of what the chat is about, never a subject she makes up
 const LIVE_BACK_RE = /^(?:(?:please|pls|ok(?:ay)?|now|then|and|can\s+you|could\s+you|pwede|paki)\s+)*(?:draw|sketch|illustrate|diagram|visuali[sz]e|show|build|make|iguhit|ipakita|idrawing)(?:\s+(?:me|us|mo|ko))?(?:\s+(?:it|this|that|these|those|them|this\s+one|that\s+one|ito|iyan|yan|yun|nga))?(?:\s+(?:in\s+3d|in\s+2d|in\s+three[\s-]?d|as\s+a\s+(?:drawing|diagram|model|sketch)|out|again|for\s+me|please|po|naman))*\s*[.!?]*$/i;
+// (v315) "make it 3D", "3D please", "can you turn it into a 3D model": the drawing this chat is on, in 3D
+const LIVE_BACK_3D_RE = /^(?:(?:please|pls|ok(?:ay)?|now|then|and|so|can\s+you|could\s+you|pwede|paki)\s+)*(?:(?:make|turn|convert|change|show|draw|build|do|render|gawin|gawa(?:n|in)?)(?:\s+(?:me|us|mo|ko))?(?:\s+(?:it|this|that|these|those|them|this\s+one|that\s+one|ito|iyan|yan|yun))?\s+(?:(?:in|into|to|as)\s+)?(?:an?\s+)?)?(?:3d|three[\s-]?d)(?:\s+(?:model|version|view|na|naman|please|pls|po))*\s*[.!?]*$/i;
+function liveLastDrawn() {
+  for (let i = state.messages.length - 1; i >= 0; i--) {
+    const m = state.messages[i];
+    if (m.role !== 'assistant') continue;
+    const f = /```cassie-draw\n([\s\S]*?)\n```/.exec(String(m.display || '') + '\n' + String(m.content || '')); // (the drawing is kept in "display"; "content" is her words about it)
+    if (!f) continue;
+    try { const sp = JSON.parse(f[1]); return String(sp.q || sp.title || '').slice(0, 300); } catch (e) { return ''; }
+  }
+  return '';
+}
 function liveDrawAbout(label) {
   if (!LIVE_BACK_RE.test(label) || !state.messages.length) return null;
   const subject = imageSubjectFromChat();
@@ -7652,6 +7663,7 @@ function liveDrawWords(text, again) {
 }
 async function liveDrawReply(text, want3d = LIVE_3D_RE.test(text), image = null, opts = {}) {
   const label = text.trim();
+  if (!image && !opts.subject && LIVE_BACK_3D_RE.test(label)) { const last = liveLastDrawn() || imageSubjectFromChat(); if (last) { opts = { ...opts, subject: last, other: true }; want3d = true; } }
   const about = image || opts.subject ? null : liveDrawAbout(label); // (worked out before her new message is added)
   const subject = opts.subject || (about ? about.subject : label); // (v314: "Show it in 3D" draws the same subject the other way)
   const question = opts.subject || (about ? about.ask : label);
@@ -7663,7 +7675,7 @@ async function liveDrawReply(text, want3d = LIVE_3D_RE.test(text), image = null,
   promptInput.value = ''; autoGrow(); clearFollowups();
   // (v310) her drawing book needs no AI: it draws with no key and with no internet
   let fromBook = image ? null : await liveDrawBook(subject, want3d).catch(() => null);
-  if (fromBook && opts.other && (fromBook.spec.mode === '3d') !== want3d) fromBook = null; // (the book has it one way only: the AI draws the other)
+  if (fromBook && (opts.other || want3d) && (fromBook.spec.mode === '3d') !== want3d) fromBook = null; // (the book has it one way only: the AI draws the other; v315: asked in 3D, it is built in 3D)
   if (!fromBook && !canChat()) { const b = renderMessage('assistant', 'I need a key to draw. Add one in Settings.'); b.classList.add('need-key-msg'); openSettings(); return; }
   mascotReact('image'); setCursorMode('thinking'); botMood('drawing');
   const typing = renderTyping(); setTypingStatus(typing, 'Cassie is sketching…');
@@ -8980,7 +8992,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=314');
+      exploreMod = await import('./explore/cell3d.js?v=315');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -9030,7 +9042,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=314');
+      labsMod = await import('./labs/labs.js?v=315');
       islandRest();
     }
     labsMod.open({
@@ -10992,10 +11004,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=314').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=315').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=314', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=315', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.

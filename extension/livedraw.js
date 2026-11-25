@@ -879,7 +879,7 @@ function shape2d(s, p) {
   const mk = (tag, attrs) => { const e = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); return e; };
   const paint = (e) => {
     const fill = s.fill === true ? p.color : typeof s.fill === 'string' && /^#[0-9a-f]{3,8}$/i.test(s.fill) ? s.fill : null;
-    e.setAttribute('fill', fill || 'none'); if (fill) e.setAttribute('fill-opacity', '.18');
+    e.setAttribute('fill', fill || 'none'); if (fill) e.setAttribute('fill-opacity', s.solid ? '.92' : '.18'); // (v315: solid, for a creature drawn like an illustration)
     e.setAttribute('stroke', typeof s.color === 'string' && /^#[0-9a-f]{3,8}$/i.test(s.color) ? color(s.color, 0) : 'currentColor');
     e.setAttribute('stroke-width', num(s.w, 1, 6, 2)); e.setAttribute('stroke-linecap', 'round'); e.setAttribute('stroke-linejoin', 'round');
     if (s.dash) e.setAttribute('stroke-dasharray', '6 6');

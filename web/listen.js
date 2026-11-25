@@ -57,7 +57,7 @@
   }
   function dress() {
     log.querySelectorAll('.bubble-assistant').forEach((bubble) => {
-      if (bubble.querySelector('.listen-btn') || bubble.querySelector('.typing-dots') || bubble.classList.contains('ld-askbubble')) return; // (not on the How should I show it question)
+      if (bubble.querySelector('.listen-btn') || bubble.querySelector('.typing-dots') || bubble.classList.contains('ld-askbubble') || bubble.querySelector('.ld')) return; // (not on the How should I show it question; v315: not under a drawing either)
       if (words(bubble).trim().length < 2) return;
       const row = bubble.querySelector('.bubble-tools'), acts = bubble.querySelector('.ld-acts');
       const b = button(() => words(bubble));
