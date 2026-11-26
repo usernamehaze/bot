@@ -26,8 +26,8 @@ const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ---------- the spec: what the AI wrote, made safe ----------
-const KINDS2 = ['line', 'arrow', 'rect', 'circle', 'ellipse', 'poly', 'path', 'text', 'vehicle', 'tree', 'flower', 'leaf', 'cloud', 'sun', 'moon', 'rainbow', 'snowflake', 'bolt', 'drops', 'grass', 'rock', 'log', 'mushroom', 'animal', 'appliance']; // (v324: and the nature kit; v327: animals)
-const KINDS3 = ['cylinder', 'tube', 'disc', 'cone', 'torus', 'ring', 'blades', 'sphere', 'box', 'capsule', 'pipe', 'arrow', 'lathe', 'plate', 'tree', 'flower', 'leaf', 'cloud', 'sun', 'moon', 'rainbow', 'rock', 'grass', 'log', 'mushroom', 'ground', 'drops', 'snowflake', 'bolt', 'vehicle', 'animal', 'appliance']; // (v325: and the nature kit in 3D; v326: vehicles; v327: animals)
+const KINDS2 = ['line', 'arrow', 'rect', 'circle', 'ellipse', 'poly', 'path', 'text', 'vehicle', 'tree', 'flower', 'leaf', 'cloud', 'sun', 'moon', 'rainbow', 'snowflake', 'bolt', 'drops', 'grass', 'rock', 'log', 'mushroom', 'animal', 'appliance', 'food']; // (v324: and the nature kit; v327: animals)
+const KINDS3 = ['cylinder', 'tube', 'disc', 'cone', 'torus', 'ring', 'blades', 'sphere', 'box', 'capsule', 'pipe', 'arrow', 'lathe', 'plate', 'tree', 'flower', 'leaf', 'cloud', 'sun', 'moon', 'rainbow', 'rock', 'grass', 'log', 'mushroom', 'ground', 'drops', 'snowflake', 'bolt', 'vehicle', 'animal', 'appliance', 'food']; // (v325: and the nature kit in 3D; v326: vehicles; v327: animals)
 const has = (x, k) => x[k] != null && x[k] !== '';
 // (v320) what a 3D part is really made of, with photographically grounded values from the Blender skills pack
 // (github.com/arjun988/blender-skills, realistic-style/references/pbr-values.md): metals are fully metallic, everything
@@ -632,7 +632,7 @@ export async function render(host, rawSpec, opts = {}) {
   let mv = null; const mvHost = spec.mode === '3d' ? el('div', 'ld-mv') : null;
   const machineOn = async () => {
     if (mv) return mv;
-    let m = null; try { m = await import('./isoview.js?v=328'); } catch (e) { return null; }
+    let m = null; try { m = await import('./isoview.js?v=329'); } catch (e) { return null; }
     mv = m.machine(mvHost, spec, { dark: !lightPage() });
     if (mv) {
       const row = el('div', 'ld-mv-acts');
@@ -986,7 +986,7 @@ function draw2d(stage, spec, { animate, setSay, hint }) {
 // One shape each ({"t":"tree","kind":"oak","x":200,"y":230,"h":160}), drawn the way the owner's guide pictures are: soft,
 // rounded, glossy like clay, every form outlined a shade darker, shaded underneath and lit from the top left. x and y are
 // where it stands on the ground (a cloud, the sun, the moon, a snowflake: its middle); h (or w, r) its size.
-const KIT = ['tree', 'flower', 'leaf', 'cloud', 'sun', 'moon', 'rainbow', 'snowflake', 'bolt', 'drops', 'grass', 'rock', 'log', 'mushroom', 'vehicle', 'animal', 'appliance']; // (v326: and vehicles; v327: animals; v328: appliances)
+const KIT = ['tree', 'flower', 'leaf', 'cloud', 'sun', 'moon', 'rainbow', 'snowflake', 'bolt', 'drops', 'grass', 'rock', 'log', 'mushroom', 'vehicle', 'animal', 'appliance', 'food']; // (v326: and vehicles; v327: animals; v328: appliances; v329: food)
 const KIT_KINDS = {
   tree: ['round', 'oak', 'pine', 'bush', 'palm', 'blossom', 'fruit', 'autumn'],
   flower: ['sunflower', 'daisy', 'tulip', 'rose', 'lily', 'lavender', 'blossom', 'hydrangea'],
@@ -995,6 +995,7 @@ const KIT_KINDS = {
   rock: ['stone', 'mossy'], log: ['log', 'stump'], grass: ['grass', 'flowers'],
   get vehicle() { return VEH_KINDS; },
   get appliance() { return APPL_KINDS; },
+  get food() { return FOOD_KINDS; },
   get animal() { return ANIMAL_KINDS; },
 };
 // the box a kit shape fills (for the checks and the labels): [[x0, y0], [x1, y1]]
@@ -1009,6 +1010,7 @@ function kitBox(sh) {
   if (t === 'vehicle') return vehBox(sh); // (v326)
   if (t === 'animal') return animalBox(sh); // (v327)
   if (t === 'appliance') return applBox(sh); // (v328)
+  if (t === 'food') return foodBox(sh); // (v329)
   if (t === 'tree') return [[x - h * (sh.kind === 'pine' ? 0.32 : 0.46), y - h], [x + h * (sh.kind === 'pine' ? 0.32 : 0.46), y]];
   if (t === 'flower' || t === 'mushroom') return [[x - h * 0.36, y - h], [x + h * 0.36, y]];
   if (t === 'leaf') return [[x - h * 0.42, y - h], [x + h * 0.42, y]];
@@ -2124,6 +2126,7 @@ function shape2d(s, p) {
   if (t === 'text') { const e = mk('text', { x: n('x'), y: n('y'), class: 'ld-word', 'font-size': num(s.size, 8, 22, 12) }); e.textContent = words(s.text ?? s.s, 60); return e; }
   if (t === 'animal') return animalShape(s, mk); // (v327) an animal, whole and moving
   if (t === 'appliance') return applianceShape(s, mk); // (v328) a home appliance, its working parts moving
+  if (t === 'food') return foodShape(s, mk); // (v329) a fruit, a vegetable or a dish, whole or cut open
   if (KIT.includes(t)) return kitShape(s, mk); // (v324) a tree, a flower, a cloud...: drawn whole, in the guide's style
   return null;
 }
@@ -2425,6 +2428,505 @@ const APPLIANCES = [
 export function applianceGuide(asked = '') {
   const q = String(asked || ''), hits = APPLIANCES.filter((a) => a.is.test(q) && !(a.not && a.not.test(q))).sort((a, b) => q.match(b.is)[0].length - q.match(a.is)[0].length).slice(0, 2);
   return hits.map((a) => `About ${a.what} (draw it with the appliance kit, kind "${a.kind}"; its moving parts move on their own): how it looks: ${a.views}. How it works: ${a.works} Its main parts, each in its real place: ${a.parts.join(', ')}.`).join('\n');
+}
+// ---------- (v329) the food kit: fruits, vegetables and dishes, drawn whole and lifelike, or cut open to show inside ----------
+// {"t":"food","kind":"apple","x":200,"y":200,"w":90,"view":"whole|cut|both"}: x its middle, y the table under it, w its width.
+// "cut" shows it sliced through the middle (an apple's core and seeds, an orange's segments, a kiwi's seeds, a peach's pit);
+// "both" puts the whole one beside a cut half. b: how it is drawn; asp: its height for its width; the rest are its real colours.
+const FOOD = {
+  // fruits
+  apple: { b: 'round', sh: 'apple', asp: 0.92, col: '#d42f2a', col2: '#f2a43a', stem: 1, leaf: 1, cut: 'core', flesh: '#f7eed2', grp: 'fruit' },
+  pear: { b: 'round', sh: 'pear', asp: 1.3, col: '#b5c84a', col2: '#e8b84a', stem: 1, leaf: 1, cut: 'core', flesh: '#f6f0d8', grp: 'fruit' },
+  orange: { b: 'round', sh: 'round', asp: 0.96, col: '#f39a1e', tex: 'dimple', leaf: 1, stem: 1, cut: 'segments', flesh: '#f8a531', grp: 'fruit' },
+  lemon: { b: 'round', sh: 'lemon', asp: 0.72, col: '#f6d62e', tex: 'dimple', leaf: 1, cut: 'segments', flesh: '#f8e67a', grp: 'fruit' },
+  lime: { b: 'round', sh: 'round', asp: 0.9, col: '#76b13c', tex: 'dimple', cut: 'segments', flesh: '#c6e384', grp: 'fruit' },
+  peach: { b: 'round', sh: 'round', asp: 0.95, col: '#f6a95e', col2: '#e0504a', crease: 1, stem: 1, leaf: 1, cut: 'pit', flesh: '#f8b866', pit: '#93512e', grp: 'fruit' },
+  mango: { b: 'round', sh: 'mango', asp: 0.66, col: '#f2b134', col2: '#d9452b', col3: '#79a83a', stem: 1, leaf: 1, cut: 'pit', flesh: '#fbb52e', pit: '#e8d7a3', grp: 'fruit' },
+  avocado: { b: 'round', sh: 'pear', asp: 1.25, col: '#3d5a28', tex: 'bumps', cut: 'pit', flesh: '#dbe68f', rim: '#9fc24d', pit: '#7a4a2a', grp: 'fruit' },
+  kiwi: { b: 'round', sh: 'round', asp: 0.78, col: '#8f6c40', tex: 'fuzz', cut: 'kiwi', flesh: '#8cc63f', grp: 'fruit' },
+  pomegranate: { b: 'round', sh: 'round', asp: 0.92, col: '#a3202f', crown: 1, cut: 'arils', flesh: '#f2d8bd', grp: 'fruit' },
+  coconut: { b: 'round', sh: 'round', asp: 0.92, col: '#6e4a2b', tex: 'fiber', cut: 'hollow', flesh: '#fbfaf3', grp: 'fruit' },
+  papaya: { b: 'round', sh: 'mango', asp: 0.58, col: '#eaa23a', col3: '#6f9a3a', cut: 'seeds', flesh: '#f6873a', grp: 'fruit' },
+  watermelon: { b: 'round', sh: 'round', asp: 0.78, col: '#3d8a36', tex: 'stripes', cut: 'melon', flesh: '#f04b4b', grp: 'fruit' },
+  melon: { b: 'round', sh: 'round', asp: 0.9, col: '#d8b779', tex: 'net', cut: 'seeds', flesh: '#f7a24b', seed: '#f3e3b8', grp: 'fruit' },
+  dragonfruit: { b: 'round', sh: 'oval', asp: 0.8, col: '#e0357a', tex: 'scales', cut: 'dots', flesh: '#fbf7f3', grp: 'fruit' },
+  persimmon: { b: 'round', sh: 'squat', asp: 0.78, col: '#f27a1e', crown: 2, cut: 'star', flesh: '#f9963a', grp: 'fruit' },
+  strawberry: { b: 'round', sh: 'heart', asp: 1.1, col: '#e0262d', tex: 'seeds', crown: 3, cut: 'berry', flesh: '#f6a0a0', grp: 'fruit' },
+  tomato: { b: 'round', sh: 'squat', asp: 0.82, col: '#e3332a', crown: 3, cut: 'tomato', flesh: '#f0473a', grp: 'vegetable' },
+  onion: { b: 'round', sh: 'onion', asp: 0.98, col: '#a94069', cut: 'rings', flesh: '#f3dbe6', grp: 'vegetable' },
+  potato: { b: 'round', sh: 'lumpy', asp: 0.66, col: '#d6b36c', tex: 'eyes', cut: 'plain', flesh: '#f4e4a2', grp: 'vegetable' },
+  pumpkin: { b: 'pumpkin', asp: 0.72, col: '#f08a24', cut: 'pumpkin', flesh: '#f8a03c', grp: 'vegetable' },
+  grapes: { b: 'grapes', asp: 1.3, col: '#7b3f8c', grp: 'fruit' },
+  greengrapes: { b: 'grapes', asp: 1.3, col: '#b8d062', grp: 'fruit' },
+  cherry: { b: 'cherries', asp: 1.1, col: '#b3121e', grp: 'fruit' },
+  blueberry: { b: 'berries', asp: 0.7, col: '#3d4f9a', grp: 'fruit' },
+  raspberry: { b: 'drupe', asp: 1.0, col: '#d12d4c', grp: 'fruit' },
+  blackberry: { b: 'drupe', asp: 1.1, col: '#2b1f3a', grp: 'fruit' },
+  banana: { b: 'banana', asp: 0.5, col: '#f4d03f', grp: 'fruit' },
+  pineapple: { b: 'pineapple', asp: 1.9, col: '#d9a33a', grp: 'fruit' },
+  // vegetables
+  carrot: { b: 'carrot', asp: 1.7, col: '#f07f1e', grp: 'vegetable' },
+  cucumber: { b: 'long', asp: 0.28, col: '#3f7d34', tex: 'bumps', cut: 'cucumber', flesh: '#d9ecb0', grp: 'vegetable' },
+  zucchini: { b: 'long', asp: 0.24, col: '#355f28', tex: 'speckle', cut: 'cucumber', flesh: '#eef3cf', grp: 'vegetable' },
+  eggplant: { b: 'long', asp: 0.42, col: '#4a2759', bulb: 1, cut: 'plain', flesh: '#efe6c8', grp: 'vegetable' },
+  sweetpotato: { b: 'long', asp: 0.36, col: '#9b4a52', taper: 1, cut: 'plain', flesh: '#f39a3a', grp: 'vegetable' },
+  chili: { b: 'long', asp: 0.22, col: '#d4202a', taper: 2, grp: 'vegetable' },
+  corn: { b: 'corn', asp: 0.36, col: '#f2c230', grp: 'vegetable' },
+  bellpepper: { b: 'pepper', asp: 1.0, col: '#d9262c', grp: 'vegetable' },
+  yellowpepper: { b: 'pepper', asp: 1.0, col: '#f4c21e', grp: 'vegetable' },
+  greenpepper: { b: 'pepper', asp: 1.0, col: '#3f8f2e', grp: 'vegetable' },
+  cabbage: { b: 'cabbage', asp: 0.9, col: '#8cc152', grp: 'vegetable' },
+  redcabbage: { b: 'cabbage', asp: 0.9, col: '#6b3a7a', grp: 'vegetable' },
+  lettuce: { b: 'lettuce', asp: 0.9, col: '#8bd15a', grp: 'vegetable' },
+  spinach: { b: 'greens', asp: 1.2, col: '#2f6e2c', grp: 'vegetable' },
+  broccoli: { b: 'broccoli', asp: 1.05, col: '#2f7a34', grp: 'vegetable' },
+  cauliflower: { b: 'broccoli', asp: 0.95, col: '#f3ecd8', grp: 'vegetable' },
+  mushroom: { b: 'mushroom', asp: 0.9, col: '#a9774a', grp: 'vegetable' },
+  peas: { b: 'peas', asp: 0.4, col: '#6fb43c', grp: 'vegetable' },
+  garlic: { b: 'garlic', asp: 1.05, col: '#f1ebe4', grp: 'vegetable' },
+  beet: { b: 'root', asp: 1.7, col: '#7a1f3d', grp: 'vegetable' },
+  radish: { b: 'root', asp: 1.9, col: '#d8314f', grp: 'vegetable' },
+  celery: { b: 'celery', asp: 1.9, col: '#a9cf6a', grp: 'vegetable' },
+  // dishes and foods
+  bread: { b: 'loaf', asp: 0.55, col: '#d9933e', grp: 'grain' },
+  toast: { b: 'toast', asp: 1.0, col: '#d89a4a', grp: 'grain' },
+  croissant: { b: 'croissant', asp: 0.55, col: '#d68a35', grp: 'grain' },
+  pancakes: { b: 'pancakes', asp: 0.75, col: '#e0a04c', grp: 'grain' },
+  waffle: { b: 'waffle', asp: 0.4, col: '#e1a24a', grp: 'grain' },
+  rice: { b: 'bowl', fill: 'rice', asp: 0.62, col: '#fbfaf5', hot: 1, grp: 'grain' },
+  noodles: { b: 'bowl', fill: 'noodles', asp: 0.62, col: '#f0c55a', hot: 1, grp: 'grain' },
+  soup: { b: 'bowl', fill: 'soup', asp: 0.55, col: '#c9672e', hot: 1, grp: 'meal' },
+  salad: { b: 'bowl', fill: 'salad', asp: 0.62, col: '#7cc04a', grp: 'vegetable' },
+  sandwich: { b: 'sandwich', asp: 0.75, col: '#f1d6a0', grp: 'meal' },
+  burger: { b: 'burger', asp: 0.82, col: '#d4883a', grp: 'meal' },
+  pizza: { b: 'pizza', asp: 0.85, col: '#f2c14e', grp: 'meal' },
+  taco: { b: 'taco', asp: 0.6, col: '#e8b24a', grp: 'meal' },
+  fries: { b: 'fries', asp: 1.25, col: '#f6c64a', grp: 'meal' },
+  egg: { b: 'egg', asp: 0.55, col: '#fbf8ef', grp: 'protein' },
+  bacon: { b: 'bacon', asp: 0.4, col: '#b8453a', grp: 'protein' },
+  sausage: { b: 'sausage', asp: 0.42, col: '#8a4526', grp: 'protein' },
+  chicken: { b: 'roast', asp: 0.66, col: '#c97a32', grp: 'protein' },
+  drumstick: { b: 'drumstick', asp: 0.55, col: '#c27030', grp: 'protein' },
+  fish: { b: 'salmon', asp: 0.62, col: '#f2865a', grp: 'protein' },
+  steak: { b: 'steak', asp: 0.45, col: '#8a3a2a', grp: 'protein' },
+  cheese: { b: 'cheese', asp: 0.6, col: '#f6c84a', grp: 'dairy' },
+  milk: { b: 'glass', fill: '#fbfbf8', asp: 1.5, grp: 'dairy' },
+  juice: { b: 'glass', fill: '#f7a21e', asp: 1.65, straw: 1, grp: 'fruit' },
+  tea: { b: 'cup', fill: '#a8541e', asp: 0.7, hot: 1, grp: 'drink' },
+  water: { b: 'glass', fill: '#cfe8f7', asp: 1.5, grp: 'drink' },
+};
+const FOOD_KINDS = Object.keys(FOOD);
+const FOOD_NAMES = { greengrapes: 'green grapes', bellpepper: 'red bell pepper', yellowpepper: 'yellow bell pepper', greenpepper: 'green bell pepper', redcabbage: 'red cabbage', sweetpotato: 'sweet potato', dragonfruit: 'dragon fruit' };
+const FOOD_CUT = (A) => !!A.cut;
+function foodBox(sh) {
+  const A = FOOD[String(sh.kind || '').toLowerCase()] || FOOD.apple, x = +sh.x, y = +sh.y, w = Math.max(6, Math.min(400, +sh.w || +sh.size || 90));
+  const both = sh.view === 'both' && FOOD_CUT(A), cut = sh.view === 'cut' && FOOD_CUT(A);
+  const cutH = (q) => (A.b === 'long' ? 0.32 : Math.min(0.96, A.asp * 0.96)) * q;
+  const h = both ? Math.max(w * 0.48 * A.asp, cutH(w * 0.48)) : cut ? cutH(w) : w * A.asp;
+  return [[x - w / 2, y - h], [x + w / 2, y]];
+}
+let foodN = 0;
+function foodShape(s, mk) {
+  const kind = FOOD[String(s.kind || '').toLowerCase()] ? String(s.kind).toLowerCase() : 'apple', A = FOOD[kind];
+  const N = (v, lo, hi, d) => { v = +v; return Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d; };
+  const X = N(s.x ?? s.cx, -40, 440, 200), Y = N(s.y ?? s.cy, -40, 300, 200), W = N(s.w ?? s.size, 6, 400, 90), moving = !s.still;
+  const view = FOOD_CUT(A) && (s.view === 'cut' || s.view === 'both') ? s.view : 'whole';
+  const root = mk('g', { class: 'ld-kit ld-food' });
+  const top = mk('g', s.facing === 'left' ? { transform: `translate(${2 * X},0) scale(-1,1)` } : {}); root.appendChild(top);
+  const defs = mk('defs', {}); top.appendChild(defs);
+  const fx = (n) => n.toFixed(1);
+  const draw = (x, y, w, cut) => { // one item: its middle x, the table y, its width w
+    const id = `ldfd${++foodN}`, R = krand(x * 7 + y * 13 + w * 3 + kind.length * 31);
+    const P = (u, v) => [x + u * w, y - v * w];
+    const sw = Math.max(0.7, w * 0.012);
+    const path = (parent, d, fill, o = {}) => { const e = mk('path', { d, fill: fill || 'none', stroke: o.stroke || 'none', 'stroke-width': o.w || sw, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }); if (o.op != null) e.setAttribute(fill && fill !== 'none' && !String(fill).startsWith('url') ? 'fill-opacity' : (fill && fill !== 'none' ? 'opacity' : 'stroke-opacity'), o.op); parent.appendChild(e); return e; };
+    const circ = (u, v, r) => kc(...P(u, v), r * w), oval = (u, v, rx, ry, rot = 0) => ke(...P(u, v), rx * w, ry * w, rot);
+    const soft = (pts) => ksmooth(pts.map(([u, v]) => P(u, v)));
+    const line = (pts) => 'M' + pts.map(([u, v]) => P(u, v).map(fx).join(',')).join('L');
+    const curve = (pts) => { const q = pts.map(([u, v]) => P(u, v)); let d = `M${fx(q[0][0])},${fx(q[0][1])}`; for (let i = 1; i < q.length - 1; i++) { const mx = (q[i][0] + q[i + 1][0]) / 2, my = (q[i][1] + q[i + 1][1]) / 2; d += `Q${fx(q[i][0])},${fx(q[i][1])} ${fx(i === q.length - 2 ? q[i + 1][0] : mx)},${fx(i === q.length - 2 ? q[i + 1][1] : my)}`; } return d; };
+    const edge = (c, k = 0.42) => kitDark(c, k), lite = (c, k = 0.45) => kitLight(c, k);
+    // a soft round shading: lit at the top left, darker round the far edge
+    const grad = (c, { cx = 0.36, cy = 0.3, r = 0.75, l = 0.32, d = 0.32 } = {}) => {
+      const gid = `${id}g${defs.childNodes.length}`, g = mk('radialGradient', { id: gid, cx, cy, r, fx: cx, fy: cy });
+      [[0, lite(c, l)], [0.55, c], [1, edge(c, d)]].forEach(([o, sc]) => g.appendChild(mk('stop', { offset: o, 'stop-color': sc }))); defs.appendChild(g); return `url(#${gid})`;
+    };
+    const lin = (stops, x1 = 0, y1 = 0, x2 = 0, y2 = 1) => { const gid = `${id}l${defs.childNodes.length}`, g = mk('linearGradient', { id: gid, x1, y1, x2, y2 }); stops.forEach(([o, sc]) => g.appendChild(mk('stop', { offset: o, 'stop-color': sc }))); defs.appendChild(g); return `url(#${gid})`; };
+    const clipTo = (parent, d) => { const cid = `${id}c${defs.childNodes.length}`, cp = mk('clipPath', { id: cid }); cp.appendChild(mk('path', { d })); defs.appendChild(cp); const g = mk('g', { 'clip-path': `url(#${cid})` }); parent.appendChild(g); return g; };
+    const shine = (parent, u, v, rx, ry, rot = -30, op = 0.55) => path(parent, oval(u, v, rx, ry, rot), '#ffffff', { op });
+    const shadow = (u0, u1) => path(g0, oval((u0 + u1) / 2, 0.005, (u1 - u0) * 0.5, Math.max(0.02, (u1 - u0) * 0.07)), '#000000', { op: 0.14 });
+    const steam = (parent, u, v, rise, delay) => { const [ox, oy] = P(u, v); const gg = mk('g', moving ? { class: 'ld-anim ld-a-steam', style: `transform-origin:${fx(ox)}px ${fx(oy)}px;--rise:${fx(-rise * w)}px;animation-delay:${delay}s` } : {}); parent.appendChild(gg); path(gg, curve([[u, v], [u - 0.03, v + rise * 0.3], [u + 0.03, v + rise * 0.6], [u, v + rise]]), 'none', { stroke: '#ffffff', w: sw * 2.4, op: 0.75 }); };
+    const leafAt = (parent, u, v, len, ang, c = '#5c9e35', wd = 1) => { const a = ang * Math.PI / 180, cs = Math.cos(a), sn = Math.sin(a), Q = (p, q) => [u + p * cs - q * sn * wd, v + p * sn + q * cs * wd]; path(parent, soft([Q(0, 0), Q(len * 0.3, len * 0.22), Q(len * 0.75, len * 0.18), Q(len, 0), Q(len * 0.7, -len * 0.18), Q(len * 0.3, -len * 0.2)]), grad(c, { cx: 0.4, cy: 0.35 }), { stroke: edge(c, 0.45) }); path(parent, line([Q(len * 0.05, 0), Q(len * 0.9, 0)]), 'none', { stroke: edge(c, 0.3), w: sw * 0.8 }); };
+    const g0 = mk('g', {}); top.appendChild(g0);
+    const g = g0;
+    const cy = A.asp / 2;
+    // the outline of a round fruit or vegetable, from its shape
+    const outline = (sh, rx, ry, ccx = 0, ccy = cy) => {
+      const pts = [];
+      for (let i = 0; i < 64; i++) {
+        const t = i / 64 * Math.PI * 2, st = Math.sin(t), ct = Math.cos(t); let px = ct * rx, py = st * ry;
+        if (sh === 'apple') { px *= 1 + 0.07 * st; py -= 0.09 * ry * Math.exp(-(((t - Math.PI / 2) / 0.32) ** 2)); py += 0.05 * ry * Math.exp(-(((t - Math.PI * 1.5) / 0.4) ** 2)); }
+        if (sh === 'pear') { const k = (st + 1) / 2; px *= 1 - 0.5 * Math.max(0, st) ** 1.2 + 0.04 * (1 - k); if (st > 0) py *= 1.02; }
+        if (sh === 'lemon') { px += Math.sign(ct) * 0.1 * rx * Math.exp(-((st / 0.22) ** 2)); }
+        if (sh === 'heart') { px *= 1 - 0.62 * Math.max(0, -st) ** 1.4; py *= st < 0 ? 1.08 : 0.92; }
+        if (sh === 'mango') { px *= 1 + 0.08 * ct; py *= 1 - 0.12 * Math.max(0, ct) * Math.max(0, -st); py += 0.06 * ry * ct * (st > 0 ? 1 : 0); }
+        if (sh === 'onion') { if (st > 0) { const q = st ** 3; px *= 1 - 0.75 * q; py *= 1 + 0.32 * q; } }
+        if (sh === 'lumpy') { const n = 1 + 0.05 * Math.sin(t * 3 + 1) + 0.03 * Math.sin(t * 5 + 2); px *= n; py *= n; }
+        pts.push([ccx + px, ccy + py]);
+      }
+      return soft(pts);
+    };
+    const surface = (body, rx, ry, ccx = 0, ccy = cy) => { // its texture, clipped to its outline
+      const cl = clipTo(g, body), dk = edge(A.col, 0.35), lt = lite(A.col, 0.4);
+      if (A.tex === 'dimple') { let d = ''; for (let i = 0; i < 70; i++) d += circ(ccx + (R() - 0.5) * rx * 2, ccy + (R() - 0.5) * ry * 2, 0.006); path(cl, d, dk, { op: 0.35 }); }
+      if (A.tex === 'fuzz') { let d = ''; for (let i = 0; i < 160; i++) { const u = ccx + (R() - 0.5) * rx * 2, v = ccy + (R() - 0.5) * ry * 2; d += line([[u, v], [u + 0.012, v + 0.008]]); } path(cl, d, 'none', { stroke: lt, w: sw * 0.6, op: 0.6 }); }
+      if (A.tex === 'bumps') { let d = ''; for (let i = 0; i < 90; i++) d += circ(ccx + (R() - 0.5) * rx * 2, ccy + (R() - 0.5) * ry * 2, 0.009); path(cl, d, lt, { op: 0.3 }); }
+      if (A.tex === 'speckle') { let d = ''; for (let i = 0; i < 120; i++) d += circ(ccx + (R() - 0.5) * rx * 2, ccy + (R() - 0.5) * ry * 2, 0.005); path(cl, d, lite(A.col, 0.6), { op: 0.5 }); }
+      if (A.tex === 'eyes') { let d = ''; for (let i = 0; i < 7; i++) d += oval(ccx + (R() - 0.5) * rx * 1.5, ccy + (R() - 0.5) * ry * 1.3, 0.018, 0.008, R() * 180); path(cl, d, edge(A.col, 0.4), { op: 0.6 }); }
+      if (A.tex === 'fiber') { let d = ''; for (let i = 0; i < 60; i++) { const u = ccx + (R() - 0.5) * rx * 2, v = ccy + (R() - 0.5) * ry * 2; d += line([[u, v], [u + (R() - 0.5) * 0.08, v + 0.05]]); } path(cl, d, 'none', { stroke: edge(A.col, 0.3), w: sw * 0.8, op: 0.7 }); }
+      if (A.tex === 'stripes') { for (let i = -6; i <= 6; i++) { const u0 = ccx + i * rx / 5; path(cl, curve([[u0, ccy - ry], [u0 + 0.03, ccy - ry * 0.5], [u0 - 0.02, ccy], [u0 + 0.025, ccy + ry * 0.5], [u0, ccy + ry]]), 'none', { stroke: edge(A.col, 0.55), w: w * 0.045, op: 0.85 }); } }
+      if (A.tex === 'net') { let d = ''; for (let i = 0; i < 26; i++) { const u = ccx + (R() - 0.5) * rx * 2.2, v = ccy + (R() - 0.5) * ry * 2.2; d += curve([[u - 0.12, v], [u, v + (R() - 0.5) * 0.06], [u + 0.12, v + (R() - 0.5) * 0.04]]); } path(cl, d, 'none', { stroke: '#efe1bd', w: sw, op: 0.9 }); }
+      if (A.tex === 'scales') { for (let i = 0; i < 9; i++) { const u = ccx + (R() - 0.5) * rx * 1.6, v = ccy + (R() - 0.5) * ry * 1.6; path(cl, soft([[u - 0.04, v - 0.03], [u + 0.06, v + 0.05], [u + 0.02, v - 0.02]]), '#9cc43a', { stroke: '#6f9a2a' }); } }
+      if (A.tex === 'seeds') { for (let i = 0; i < 40; i++) { const u = ccx + (R() - 0.5) * rx * 1.9, v = ccy + (R() - 0.5) * ry * 1.9; path(cl, oval(u, v, 0.009, 0.014), '#f4d24a', { op: 0.95 }); path(cl, oval(u, v + 0.012, 0.012, 0.006), edge(A.col, 0.4), { op: 0.35 }); } }
+      return cl;
+    };
+    const crown = (u, v, n, c = '#4f8a30', sz = 0.12) => { for (let i = 0; i < 5; i++) { const a = -90 + (i - 2) * (n === 2 ? 40 : 34); leafAt(g, u, v, sz * (n === 3 ? 1 : 0.8), -a + 180 - 180, c); } };
+    const sepals = (u, v, sz, c = '#3f8a2e') => { for (let i = 0; i < 6; i++) { const a = i * 60 + 15; leafAt(g, u, v, sz, a, c); } path(g, circ(u, v, sz * 0.18), edge(c, 0.2)); };
+
+    // ---------- round fruits and vegetables
+    if (A.b === 'round' && !cut) {
+      const rx = 0.48, ry = A.asp * 0.48; shadow(-0.42, 0.42);
+      const body = outline(A.sh, rx, ry);
+      path(g, body, grad(A.col, { cx: 0.38, cy: 0.32, r: 0.8 }), { stroke: edge(A.col, 0.5) });
+      if (A.col2) { const cl = clipTo(g, body); path(cl, oval(0.22, cy + 0.05, 0.36, ry * 0.95, 20), A.col2, { op: 0.3 }); path(cl, oval(0.3, cy + 0.08, 0.2, ry * 0.6, 20), A.col2, { op: 0.25 }); path(cl, oval(-0.25, cy + ry * 0.4, 0.2, 0.12), lite(A.col2, 0.5), { op: 0.25 }); }
+      if (A.col3) { const cl = clipTo(g, body); path(cl, oval(-0.42, cy - 0.02, 0.32, ry * 1.1), A.col3, { op: 0.28 }); path(cl, oval(-0.48, cy, 0.18, ry * 0.9), A.col3, { op: 0.3 }); }
+      surface(body, rx, ry);
+      if (A.crease) path(g, curve([[0.02, cy + ry * 0.95], [-0.05, cy + ry * 0.3], [-0.06, cy - ry * 0.3], [0.0, cy - ry * 0.9]]), 'none', { stroke: edge(A.col, 0.3), w: sw * 1.2, op: 0.6 });
+      if (A.sh === 'onion') for (let i = -2; i <= 2; i++) path(g, curve([[i * 0.03, cy + ry * 1.25], [i * 0.12, cy + ry * 0.4], [i * 0.15, cy - ry * 0.4], [i * 0.04, cy - ry * 0.98]]), 'none', { stroke: lite(A.col, 0.4), w: sw * 0.8, op: 0.7 });
+      shine(g, -0.2, cy + ry * 0.45, 0.1, 0.06);
+      const topV = cy + ry * (A.sh === 'apple' ? 0.88 : A.sh === 'onion' ? 1.28 : A.sh === 'pear' ? 1.0 : 1.0);
+      if (A.sh === 'onion') path(g, line([[0, topV - 0.02], [0.01, topV + 0.06]]), 'none', { stroke: '#c9a07a', w: sw * 2.4 });
+      if (A.stem) path(g, curve([[0, topV - 0.03], [0.01, topV + 0.06], [0.05, topV + 0.1]]), 'none', { stroke: '#6b4a2a', w: w * 0.03 });
+      if (A.leaf) leafAt(g, 0.03, topV + 0.06, 0.24, 20);
+      if (A.crown === 1) { path(g, soft([[-0.08, topV - 0.02], [-0.1, topV + 0.06], [-0.04, topV + 0.04], [0, topV + 0.08], [0.04, topV + 0.04], [0.1, topV + 0.06], [0.08, topV - 0.02]]), grad(A.col), { stroke: edge(A.col, 0.5) }); }
+      if (A.crown === 2) sepals(0, topV - 0.01, 0.13, '#5a6e2a');
+      if (A.crown === 3) sepals(0, topV - 0.01, A.sh === 'heart' ? 0.16 : 0.12);
+    } else if ((A.b === 'round' || A.b === 'pumpkin') && cut) {
+      // sliced through the middle: the skin round the edge, the flesh, and what is inside
+      const rx = 0.48, ry = Math.min(0.48, A.asp * 0.48), ccy = ry; shadow(-0.44, 0.44);
+      const sh = ['apple', 'pear', 'heart', 'mango', 'lemon', 'onion'].includes(A.sh) ? A.sh : 'round';
+      const body = outline(sh, rx, ry, 0, ccy);
+      const fl = A.flesh;
+      path(g, body, A.cut === 'hollow' ? '#6e4a2b' : A.cut === 'melon' ? '#3d8a36' : A.col, { stroke: edge(A.col, 0.5) });
+      const inner = outline(sh, rx - (A.cut === 'hollow' ? 0.05 : A.cut === 'melon' ? 0.035 : 0.016), ry - (A.cut === 'hollow' ? 0.05 : A.cut === 'melon' ? 0.035 : 0.016), 0, ccy);
+      if (A.cut === 'segments') { path(g, inner, '#fbf3df'); const cl = clipTo(g, inner); for (let i = 0; i < 10; i++) { const a0 = i * 36 * Math.PI / 180 + 0.06, a1 = (i + 1) * 36 * Math.PI / 180 - 0.06, rr = rx - 0.04; path(cl, soft([[Math.cos(a0) * 0.04, ccy + Math.sin(a0) * 0.04], [Math.cos(a0) * rr, ccy + Math.sin(a0) * rr * ry / rx], [Math.cos((a0 + a1) / 2) * (rr + 0.01), ccy + Math.sin((a0 + a1) / 2) * (rr + 0.01) * ry / rx], [Math.cos(a1) * rr, ccy + Math.sin(a1) * rr * ry / rx], [Math.cos(a1) * 0.04, ccy + Math.sin(a1) * 0.04]]), grad(fl, { cx: 0.5, cy: 0.5, l: 0.2, d: 0.15 }), { stroke: lite(fl, 0.4), w: sw * 0.7 }); } path(g, circ(0, ccy, 0.035), '#fbf3df'); }
+      else if (A.cut === 'melon') { path(g, inner, '#f3f6e2'); const in2 = outline(sh, rx - 0.06, ry - 0.06, 0, ccy); path(g, in2, grad(fl, { cx: 0.5, cy: 0.5, l: 0.15, d: 0.12 })); for (let i = 0; i < 18; i++) { const a = i / 18 * Math.PI * 2, r = 0.22 + (i % 2) * 0.08; path(g, oval(Math.cos(a) * r, ccy + Math.sin(a) * r * ry / rx, 0.012, 0.022, a * 57.3 + 90), '#1d1a18'); } }
+      else {
+        path(g, inner, grad(fl, { cx: 0.5, cy: 0.48, l: 0.18, d: A.cut === 'hollow' ? 0.05 : 0.14 }));
+        if (A.rim) path(g, outline(sh, rx - 0.03, ry - 0.03, 0, ccy), 'none', { stroke: A.rim, w: w * 0.03, op: 0.8 });
+        if (A.cut === 'core') { path(g, soft([[0, ccy + ry * 0.45], [0.07, ccy + 0.08], [0.09, ccy - 0.04], [0.03, ccy - ry * 0.5], [-0.03, ccy - ry * 0.5], [-0.09, ccy - 0.04], [-0.07, ccy + 0.08]]), lite(fl, 0.3), { stroke: kitDark(fl, 0.15) }); [-0.032, 0.032].forEach((u) => path(g, oval(u, ccy, 0.022, 0.038, u > 0 ? 15 : -15), '#4a2a18')); path(g, line([[0, ccy + ry * 0.45], [0, ccy + ry * 0.98]]), 'none', { stroke: kitDark(fl, 0.2), w: sw }); }
+        if (A.cut === 'pit') { const big = kind === 'avocado' ? 0.19 : kind === 'mango' ? 0.3 : 0.17; path(g, oval(0, ccy - (kind === 'avocado' ? 0.07 : 0), big * (kind === 'mango' ? 1.2 : 1), big * (kind === 'mango' ? 0.55 : 1.1)), grad(A.pit, { l: 0.3, d: 0.3 }), { stroke: edge(A.pit, 0.4) }); if (kind === 'peach') for (let i = 0; i < 6; i++) path(g, curve([[-0.1, ccy - 0.12 + i * 0.045], [0, ccy - 0.1 + i * 0.045], [0.1, ccy - 0.12 + i * 0.045]]), 'none', { stroke: edge(A.pit, 0.4), w: sw * 0.8 }); if (kind === 'peach') path(g, circ(0, ccy, 0.2), 'none', { stroke: '#e05a3a', w: w * 0.03, op: 0.4 }); }
+        if (A.cut === 'kiwi') { path(g, oval(0, ccy, 0.11, 0.08), '#f4f6d8'); for (let i = 0; i < 36; i++) { const a = i / 36 * Math.PI * 2; path(g, line([[Math.cos(a) * 0.12, ccy + Math.sin(a) * 0.09], [Math.cos(a) * 0.38, ccy + Math.sin(a) * 0.38 * ry / rx]]), 'none', { stroke: '#c9e58a', w: sw * 0.6, op: 0.7 }); path(g, oval(Math.cos(a) * 0.15, ccy + Math.sin(a) * 0.115, 0.008, 0.014, a * 57.3 + 90), '#1d1a14'); } }
+        if (A.cut === 'arils') { for (let i = 0; i < 70; i++) { const a = R() * Math.PI * 2, r = Math.sqrt(R()) * 0.38; const u = Math.cos(a) * r, v = ccy + Math.sin(a) * r * ry / rx; path(g, circ(u, v, 0.03), grad('#c8102e', { l: 0.45, d: 0.25 })); } }
+        if (A.cut === 'hollow') { path(g, outline(sh, rx - 0.12, ry - 0.12, 0, ccy), '#f4efe3', { stroke: '#e1d9c6' }); }
+        if (A.cut === 'seeds') { path(g, oval(0, ccy, 0.2, 0.16 * ry / rx * 1.2), kind === 'papaya' ? '#e0632a' : '#f1c27a'); for (let i = 0; i < 40; i++) { const a = R() * Math.PI * 2, r = Math.sqrt(R()) * 0.15; path(g, oval(Math.cos(a) * r * 1.2, ccy + Math.sin(a) * r * ry / rx, 0.018, 0.014), kind === 'papaya' ? '#1c1714' : A.seed); } }
+        if (A.cut === 'dots') { let d = ''; for (let i = 0; i < 140; i++) { const a = R() * Math.PI * 2, r = Math.sqrt(R()) * 0.42; d += circ(Math.cos(a) * r, ccy + Math.sin(a) * r * ry / rx, 0.006); } path(g, d, '#1a1614'); }
+        if (A.cut === 'star') { for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; path(g, soft([[0, ccy], [Math.cos(a - 0.12) * 0.12, ccy + Math.sin(a - 0.12) * 0.1], [Math.cos(a) * 0.2, ccy + Math.sin(a) * 0.17], [Math.cos(a + 0.12) * 0.12, ccy + Math.sin(a + 0.12) * 0.1]]), lite(fl, 0.4), { op: 0.8 }); } }
+        if (A.cut === 'berry') { path(g, outline('heart', 0.22, ry * 0.55, 0, ccy + 0.02), '#fbe3e0', { op: 0.9 }); for (let i = 0; i < 14; i++) { const a = i / 14 * Math.PI * 2; path(g, line([[Math.cos(a) * 0.1, ccy + Math.sin(a) * 0.08], [Math.cos(a) * 0.38, ccy + Math.sin(a) * 0.36]]), 'none', { stroke: '#fbe3e0', w: sw * 0.7, op: 0.6 }); } sepals(0, ccy + ry * 0.95, 0.14); }
+        if (A.cut === 'tomato') { [0, 1, 2, 3].forEach((i) => { const a = i * Math.PI / 2 + 0.78; path(g, oval(Math.cos(a) * 0.2, ccy + Math.sin(a) * 0.18, 0.13, 0.1, a * 57.3), '#f6a08a'); for (let j = 0; j < 5; j++) path(g, oval(Math.cos(a) * 0.2 + (R() - 0.5) * 0.1, ccy + Math.sin(a) * 0.18 + (R() - 0.5) * 0.08, 0.012, 0.018), '#f8e07a'); }); path(g, circ(0, ccy, 0.08), lite(fl, 0.3)); }
+        if (A.cut === 'rings') { for (let i = 1; i < 7; i++) path(g, outline('onion', rx - i * 0.065, (ry - i * 0.065), 0, ccy - i * 0.01), 'none', { stroke: '#c56d93', w: sw * 0.9, op: 0.8 }); }
+        if (A.cut === 'plain') { let d = ''; for (let i = 0; i < 20; i++) d += circ((R() - 0.5) * 0.7, ccy + (R() - 0.5) * 0.6 * ry / rx, 0.006); path(g, d, kitDark(fl, 0.1), { op: 0.5 }); }
+        if (A.cut === 'pumpkin') { path(g, oval(0, ccy, 0.22, 0.16), '#f7c46a'); for (let i = 0; i < 16; i++) path(g, oval((R() - 0.5) * 0.3, ccy + (R() - 0.5) * 0.2, 0.025, 0.014, R() * 180), '#f7ecd0', { stroke: '#d9c49a', w: sw * 0.5 }); }
+      }
+      shine(g, -0.22, ccy + ry * 0.5, 0.09, 0.035, -25, 0.35);
+    } else if (A.b === 'long') {
+      if (cut) { // slices
+        shadow(-0.45, 0.45);
+        [-0.28, 0, 0.28].forEach((u, i) => { const v = 0.15 + (i === 1 ? 0.04 : 0); path(g, oval(u, v, 0.15, 0.12), A.col, { stroke: edge(A.col, 0.4) }); path(g, oval(u, v + 0.005, 0.135, 0.105), grad(A.flesh, { cx: 0.5, cy: 0.5, l: 0.15, d: 0.1 })); if (A.cut === 'cucumber') { path(g, oval(u, v + 0.005, 0.07, 0.055), lite(A.flesh, 0.25)); for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2; path(g, oval(u + Math.cos(a) * 0.045, v + 0.005 + Math.sin(a) * 0.035, 0.008, 0.013, a * 57.3), '#f6f9e8', { stroke: '#b9cf8a', w: sw * 0.5 }); } } else { let d = ''; for (let k = 0; k < 10; k++) d += circ(u + (R() - 0.5) * 0.18, v + (R() - 0.5) * 0.14, 0.006); path(g, d, kitDark(A.flesh, 0.25), { op: 0.6 }); } });
+      } else {
+        const L = 0.46, H0 = A.asp / 2, bend = kind === 'chili' ? 0.1 : kind === 'cucumber' || kind === 'zucchini' ? 0.025 : 0.05; shadow(-0.42, 0.42);
+        const rad = (t) => { const e = Math.sin(Math.PI * t); if (A.bulb) return H0 * (0.35 + 0.65 * Math.pow(Math.sin(Math.PI * Math.min(1, t * 0.8 + 0.15)), 0.8)) * (t < 0.12 ? 0.6 + t * 3.3 : 1); if (A.taper === 2) return H0 * (t < 0.15 ? 0.85 : (1 - t) * 1.05) ; if (A.taper) return H0 * Math.pow(e, 0.7); return H0 * Math.pow(e, 0.18); };
+        const ctr = (t) => [-L + 2 * L * t, H0 + bend * Math.sin(Math.PI * t) * 2 - bend];
+        const upper = [], lower = []; for (let i = 0; i <= 40; i++) { const t = i / 40, [u, v] = ctr(t), r = Math.max(0.004, rad(t)); upper.push([u, v + r]); lower.push([u, v - r]); }
+        const body = soft([...upper, ...lower.reverse()]);
+        path(g, body, lin([[0, lite(A.col, 0.35)], [0.45, A.col], [1, edge(A.col, 0.35)]]), { stroke: edge(A.col, 0.5) });
+        surface(body, L, H0, 0, H0);
+        path(g, curve(upper.slice(6, 34).map(([u, v]) => [u, v - H0 * 0.35])), 'none', { stroke: '#ffffff', w: w * A.asp * 0.08, op: 0.35 });
+        if (kind === 'eggplant' || kind === 'chili' || kind === 'zucchini' || kind === 'cucumber') { const [u, v] = ctr(0); const c = '#4f7a2a'; path(g, soft([[u - 0.02, v + rad(0.04) * 1.1], [u + 0.08, v + rad(0.1) * 0.9], [u + 0.06, v], [u + 0.09, v - rad(0.1) * 0.9], [u - 0.02, v - rad(0.04)]]), grad(c), { stroke: edge(c, 0.4) }); path(g, curve([[u, v], [u - 0.06, v + 0.02], [u - 0.09, v + 0.06]]), 'none', { stroke: c, w: w * 0.025 }); }
+        if (kind === 'sweetpotato') { const [u, v] = ctr(1); path(g, line([[u, v], [u + 0.05, v - 0.01]]), 'none', { stroke: edge(A.col, 0.3), w: sw }); }
+      }
+    } else if (A.b === 'banana') {
+      shadow(-0.44, 0.4); const c = A.col;
+      const outer = [[-0.46, 0.38], [-0.3, 0.18], [-0.05, 0.08], [0.2, 0.1], [0.4, 0.22], [0.47, 0.34]], inner = [[0.44, 0.38], [0.3, 0.3], [0.1, 0.24], [-0.12, 0.25], [-0.3, 0.33], [-0.42, 0.45]];
+      path(g, soft([...outer, ...inner]), lin([[0, lite(c, 0.35)], [0.6, c], [1, kitDark(c, 0.2)]]), { stroke: edge(c, 0.45) });
+      path(g, curve([[-0.42, 0.4], [-0.1, 0.17], [0.2, 0.17], [0.43, 0.3]]), 'none', { stroke: kitDark(c, 0.15), w: sw, op: 0.7 });
+      path(g, soft([[0.42, 0.33], [0.5, 0.36], [0.5, 0.42], [0.44, 0.4]]), '#3a2a1a'); path(g, soft([[-0.45, 0.4], [-0.52, 0.48], [-0.5, 0.52], [-0.43, 0.47]]), '#7a8a3a', { stroke: '#4a5a2a' });
+      let d = ''; for (let i = 0; i < 6; i++) d += circ(-0.2 + R() * 0.45, 0.17 + R() * 0.06, 0.008); path(g, d, '#6b4a2a', { op: 0.5 });
+    } else if (A.b === 'grapes' || A.b === 'cherries' || A.b === 'berries' || A.b === 'drupe') {
+      const c = A.col; shadow(-0.4, 0.4);
+      const ball = (u, v, r, cc = c) => { path(g, circ(u, v, r), grad(cc, { cx: 0.35, cy: 0.3, l: 0.4, d: 0.35 }), { stroke: edge(cc, 0.5), w: sw * 0.8 }); shine(g, u - r * 0.35, v + r * 0.4, r * 0.25, r * 0.15, -30, 0.6); };
+      if (A.b === 'grapes') { const rr = 0.085, rows = [[0, 5], [1, 5], [2, 4], [3, 4], [4, 3], [5, 2], [6, 1]]; path(g, curve([[0, 1.18], [0.02, 1.08], [0.0, 1.0]]), 'none', { stroke: '#6b4a2a', w: w * 0.025 }); leafAt(g, 0.02, 1.08, 0.3, 25, '#5c9e35'); rows.forEach(([ri, n]) => { for (let i = 0; i < n; i++) ball((i - (n - 1) / 2) * rr * 1.75 + (ri % 2 ? 0.02 : -0.02), 1.0 - ri * rr * 1.45 - rr, rr); }); }
+      if (A.b === 'cherries') { [[-0.17, 0.2], [0.16, 0.17]].forEach(([u, v]) => { path(g, curve([[u, v + 0.15], [u * 0.5, 0.65], [0.02, 1.0]]), 'none', { stroke: '#5a7a2a', w: w * 0.02 }); }); leafAt(g, 0.02, 0.98, 0.3, -20, '#4f8a30'); ball(-0.17, 0.2, 0.18); ball(0.16, 0.17, 0.17); }
+      if (A.b === 'berries') { [[-0.22, 0.18, 0.17], [0.2, 0.17, 0.16], [0, 0.36, 0.17]].forEach(([u, v, r]) => { ball(u, v, r); const st = [u + r * 0.2, v + r * 0.4]; for (let k = 0; k < 5; k++) { const a = k * 1.256; path(g, line([[st[0], st[1]], [st[0] + Math.cos(a) * r * 0.2, st[1] + Math.sin(a) * r * 0.15]]), 'none', { stroke: '#1f2a52', w: sw }); } }); leafAt(g, 0.2, 0.5, 0.24, 30, '#4f8a30'); }
+      if (A.b === 'drupe') { const rr = 0.055; for (let ri = 0; ri < 8; ri++) { const v = 0.08 + ri * 0.1, half = 0.33 * Math.sin(Math.PI * (0.12 + ri / 8.5)), n = Math.max(1, Math.round(half * 2 / (rr * 1.7))); for (let i = 0; i < n; i++) ball(-half + (i + 0.5) * (half * 2 / n), v + rr, rr); } if (kind === 'raspberry') sepals(0, A.asp - 0.02, 0.11); else path(g, curve([[0, A.asp - 0.02], [0.02, A.asp + 0.06]]), 'none', { stroke: '#5a7a2a', w: w * 0.025 }); }
+    } else if (A.b === 'pineapple') {
+      shadow(-0.38, 0.38); const c = A.col, by = 0.55, ry = 0.5;
+      const body = soft([[-0.36, by], [-0.33, by + ry * 0.6], [-0.2, by + ry * 0.95], [0.2, by + ry * 0.95], [0.33, by + ry * 0.6], [0.36, by], [0.33, by - ry * 0.6], [0.2, by - ry * 0.95], [-0.2, by - ry * 0.95], [-0.33, by - ry * 0.6]]);
+      path(g, body, grad(c, { cx: 0.38, cy: 0.38 }), { stroke: edge(c, 0.5) });
+      const cl = clipTo(g, body); for (let i = -8; i <= 8; i++) { path(cl, line([[i * 0.09 - 0.5, by - 0.6], [i * 0.09 + 0.5, by + 0.6]]), 'none', { stroke: edge(c, 0.4), w: sw * 1.1 }); path(cl, line([[i * 0.09 + 0.5, by - 0.6], [i * 0.09 - 0.5, by + 0.6]]), 'none', { stroke: edge(c, 0.4), w: sw * 1.1 }); }
+      let d = ''; for (let i = -8; i <= 8; i++) for (let j = -8; j <= 8; j++) d += circ(i * 0.09, by + j * 0.09 + (i % 2) * 0.045, 0.01); path(cl, d, '#6b4a1a', { op: 0.7 });
+      for (let i = 0; i < 9; i++) { const a = 90 + (i - 4) * 16, len = 0.5 - Math.abs(i - 4) * 0.06; leafAt(g, (i - 4) * 0.015, by + ry * 0.92, len, a, i % 2 ? '#4f8a30' : '#3f7a2a', 0.3); }
+    } else if (A.b === 'carrot') {
+      shadow(-0.2, 0.25); const c = A.col;
+      for (let i = 0; i < 7; i++) { const a = (i - 3) * 0.17; path(g, curve([[0, 0.95], [Math.sin(a) * 0.25, 1.25], [Math.sin(a) * 0.4, 1.6]]), 'none', { stroke: i % 2 ? '#4f9a35' : '#3f7a2a', w: w * 0.04 }); for (let k = 1; k < 4; k++) { const v = 1.05 + k * 0.15, u = Math.sin(a) * (0.25 + k * 0.05); leafAt(g, u, v, 0.1, 90 + a * 57 + 40, '#5aa83a'); leafAt(g, u, v, 0.1, 90 + a * 57 - 40, '#5aa83a'); } }
+      path(g, soft([[-0.16, 0.98], [0.16, 0.98], [0.13, 0.7], [0.06, 0.3], [0.02, 0.04], [-0.01, 0.04], [-0.07, 0.35], [-0.13, 0.7]]), lin([[0, lite(c, 0.3)], [0.5, c], [1, edge(c, 0.3)]], 0, 0, 1, 0), { stroke: edge(c, 0.45) });
+      for (let i = 0; i < 9; i++) { const v = 0.25 + i * 0.08, hw = 0.04 + i * 0.012; path(g, curve([[-hw, v], [0, v - 0.01], [hw * 0.6, v + 0.005]]), 'none', { stroke: edge(c, 0.3), w: sw * 0.8, op: 0.7 }); }
+    } else if (A.b === 'corn') {
+      shadow(-0.46, 0.46); const c = A.col, cyv = A.asp / 2;
+      [[1, '#8fb84a'], [-1, '#7aa83a']].forEach(([sd, hc]) => path(g, soft([[-0.46, cyv], [-0.2, cyv + sd * 0.13], [0.2, cyv + sd * 0.14], [0.46, cyv + sd * 0.05], [0.1, cyv + sd * 0.05], [-0.3, cyv]]), grad(hc), { stroke: edge(hc, 0.4) }));
+      const cob = soft([[-0.34, cyv], [-0.25, cyv + 0.11], [0.2, cyv + 0.12], [0.42, cyv + 0.04], [0.42, cyv - 0.04], [0.2, cyv - 0.12], [-0.25, cyv - 0.11]]);
+      path(g, cob, grad(c, { cx: 0.4, cy: 0.35 }), { stroke: edge(c, 0.45) }); const cl = clipTo(g, cob);
+      for (let i = 0; i < 22; i++) for (let j = -4; j <= 4; j++) { const u = -0.32 + i * 0.035, v = cyv + j * 0.028 + (i % 2) * 0.014; path(cl, oval(u, v, 0.016, 0.012), grad(c, { l: 0.5, d: 0.2 }), { stroke: edge(c, 0.3), w: sw * 0.5 }); }
+      path(g, soft([[-0.46, cyv], [-0.32, cyv - 0.13], [0.1, cyv - 0.16], [0.3, cyv - 0.1], [0.0, cyv - 0.08], [-0.3, cyv - 0.02]]), grad('#9cc45a'), { stroke: '#6f9a3a' });
+    } else if (A.b === 'pepper') {
+      shadow(-0.4, 0.4); const c = A.col;
+      const body = soft([[-0.36, 0.72], [-0.42, 0.5], [-0.36, 0.2], [-0.2, 0.04], [-0.05, 0.08], [0, 0.03], [0.06, 0.08], [0.2, 0.04], [0.36, 0.2], [0.42, 0.5], [0.36, 0.72], [0.2, 0.82], [0, 0.78], [-0.2, 0.82]]);
+      path(g, body, grad(c, { cx: 0.38, cy: 0.3 }), { stroke: edge(c, 0.5) });
+      [-0.14, 0.14].forEach((u) => path(g, curve([[u, 0.78], [u * 1.3, 0.45], [u * 0.8, 0.1]]), 'none', { stroke: edge(c, 0.3), w: sw * 1.4, op: 0.5 }));
+      shine(g, -0.22, 0.6, 0.06, 0.16, -10, 0.5); shine(g, 0.2, 0.62, 0.04, 0.1, -10, 0.35);
+      path(g, soft([[-0.1, 0.8], [0.1, 0.8], [0.05, 0.86], [-0.05, 0.86]]), '#3f7a2a', { stroke: '#2a5a1a' }); path(g, curve([[0, 0.85], [0.02, 0.95], [0.08, 1.0]]), 'none', { stroke: '#4f8a30', w: w * 0.045 });
+    } else if (A.b === 'pumpkin') {
+      shadow(-0.46, 0.46); const c = A.col, cyv = A.asp * 0.48;
+      [[-0.3, 0.17], [0.3, 0.17], [-0.17, 0.2], [0.17, 0.2], [0, 0.22]].forEach(([u, rw], i) => { path(g, oval(u, cyv, rw, cyv * 0.98), grad(c, { cx: 0.4, cy: 0.35, d: 0.3 }), { stroke: edge(c, 0.45) }); });
+      path(g, curve([[0, cyv * 1.9], [0.02, cyv * 2.15], [0.08, cyv * 2.25]]), 'none', { stroke: '#6b5a2a', w: w * 0.06 }); leafAt(g, 0.06, cyv * 2.1, 0.25, 15, '#5c9e35');
+    } else if (A.b === 'cabbage' || A.b === 'lettuce') {
+      shadow(-0.45, 0.45); const c = A.col, cyv = A.asp * 0.48, lettuce = A.b === 'lettuce';
+      for (let i = 0; i < 7; i++) { const a = i / 7 * Math.PI * 2 + 0.3, u = Math.cos(a) * 0.22, v = cyv + Math.sin(a) * 0.16; const pts = []; for (let k = 0; k < 20; k++) { const t = k / 20 * Math.PI * 2, r = 0.24 * (1 + (lettuce ? 0.08 * Math.sin(t * 9) : 0.02 * Math.sin(t * 3))); pts.push([u + Math.cos(t) * r, v + Math.sin(t) * r * 0.9]); } path(g, soft(pts), grad(kitDark(c, 0.08), { cx: 0.5, cy: 0.4 }), { stroke: edge(c, 0.45) }); path(g, curve([[u, v - 0.18], [u + Math.cos(a) * 0.05, v], [u + Math.cos(a) * 0.12, v + 0.12]]), 'none', { stroke: lite(c, 0.5), w: sw * 1.4, op: 0.8 }); }
+      path(g, circ(0, cyv + 0.02, 0.27), grad(lite(c, 0.15), { cx: 0.42, cy: 0.35 }), { stroke: edge(c, 0.4) });
+      for (let i = 0; i < 5; i++) { const a = -0.8 + i * 0.4; path(g, curve([[0, cyv - 0.15], [Math.sin(a) * 0.12, cyv], [Math.sin(a) * 0.22, cyv + 0.2]]), 'none', { stroke: lite(c, 0.55), w: sw * 1.2, op: 0.8 }); }
+      shine(g, -0.1, cyv + 0.18, 0.08, 0.04);
+    } else if (A.b === 'greens') {
+      shadow(-0.3, 0.3); const c = A.col;
+      for (let i = 0; i < 6; i++) { const a = 90 + (i - 2.5) * 16; path(g, line([[0, 0.05], [Math.cos(a * Math.PI / 180) * 0.4, 0.05 + Math.sin(a * Math.PI / 180) * 0.4]]), 'none', { stroke: '#7aa84a', w: w * 0.025 }); leafAt(g, Math.cos(a * Math.PI / 180) * 0.35, 0.05 + Math.sin(a * Math.PI / 180) * 0.35, 0.55 - Math.abs(i - 2.5) * 0.05, a, c); }
+      path(g, soft([[-0.05, 0.12], [0.05, 0.12], [0.05, 0.18], [-0.05, 0.18]]), '#c9a46a', { stroke: '#8a6a3a' });
+    } else if (A.b === 'broccoli') {
+      shadow(-0.4, 0.4); const c = A.col, white = kind === 'cauliflower';
+      if (white) { for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; leafAt(g, Math.cos(a) * 0.1, 0.35, 0.42, a * 57.3, '#5f9a3a'); } }
+      else path(g, soft([[-0.09, 0.05], [0.09, 0.05], [0.07, 0.4], [0.2, 0.55], [-0.2, 0.55], [-0.07, 0.4]]), grad('#9cc45a', { cx: 0.4, cy: 0.4 }), { stroke: '#6f9a3a' });
+      const puffs = white ? [[-0.25, 0.5, 0.18], [0.25, 0.5, 0.18], [0, 0.55, 0.22], [-0.13, 0.7, 0.17], [0.14, 0.7, 0.17]] : [[-0.27, 0.62, 0.17], [0.27, 0.62, 0.17], [0, 0.68, 0.2], [-0.15, 0.85, 0.17], [0.15, 0.85, 0.17]];
+      puffs.forEach(([u, v, r]) => { path(g, circ(u, v, r), grad(c, { cx: 0.38, cy: 0.32, l: 0.25, d: 0.35 }), { stroke: edge(c, 0.4) }); let d = ''; for (let k = 0; k < 16; k++) { const a = R() * Math.PI * 2, rr = Math.sqrt(R()) * r * 0.85; d += circ(u + Math.cos(a) * rr, v + Math.sin(a) * rr, r * 0.16); } path(g, d, lite(c, 0.25), { op: 0.45 }); });
+    } else if (A.b === 'mushroom') {
+      shadow(-0.42, 0.42); const c = A.col;
+      path(g, soft([[-0.1, 0.03], [0.1, 0.03], [0.12, 0.3], [0.13, 0.45], [-0.13, 0.45], [-0.12, 0.3]]), grad('#f2ead8', { cx: 0.4, cy: 0.5 }), { stroke: '#c9b89a' });
+      path(g, soft([[-0.46, 0.45], [-0.4, 0.68], [-0.2, 0.86], [0.2, 0.86], [0.4, 0.68], [0.46, 0.45], [0.2, 0.4], [-0.2, 0.4]]), grad(c, { cx: 0.38, cy: 0.25 }), { stroke: edge(c, 0.45) });
+      path(g, curve([[-0.42, 0.46], [0, 0.4], [0.42, 0.46]]), 'none', { stroke: '#e9dcc2', w: w * 0.03 }); shine(g, -0.15, 0.74, 0.12, 0.05, -10, 0.4);
+    } else if (A.b === 'peas') {
+      shadow(-0.46, 0.46); const c = A.col;
+      path(g, soft([[-0.47, 0.22], [-0.3, 0.06], [0, 0.03], [0.3, 0.06], [0.47, 0.2], [0.3, 0.16], [0, 0.14], [-0.3, 0.16]]), grad(kitDark(c, 0.1)), { stroke: edge(c, 0.45) });
+      for (let i = 0; i < 6; i++) { const u = -0.3 + i * 0.12; path(g, circ(u, 0.19 - Math.abs(u) * 0.1, 0.07), grad(c, { l: 0.4 }), { stroke: edge(c, 0.4), w: sw * 0.7 }); }
+      path(g, soft([[-0.47, 0.24], [-0.3, 0.3], [0, 0.32], [0.3, 0.3], [0.47, 0.22], [0.3, 0.26], [0, 0.26], [-0.3, 0.26]]), grad(lite(c, 0.1)), { stroke: edge(c, 0.45) });
+      path(g, curve([[0.46, 0.21], [0.52, 0.27], [0.5, 0.33]]), 'none', { stroke: '#5a8a2a', w: w * 0.02 });
+    } else if (A.b === 'garlic') {
+      shadow(-0.4, 0.4); const c = A.col;
+      [-0.22, 0.22, -0.11, 0.11, 0].forEach((u) => path(g, soft([[u, 0.04], [u + 0.16, 0.2], [u + 0.14, 0.55], [u * 0.3, 0.92], [u - 0.14, 0.55], [u - 0.16, 0.2]]), grad(u === 0 ? c : kitDark(c, 0.04), { cx: 0.4, cy: 0.4 }), { stroke: '#b9ad9e' }));
+      for (let i = -2; i <= 2; i++) path(g, curve([[i * 0.08, 0.06], [i * 0.14, 0.4], [i * 0.03, 0.88]]), 'none', { stroke: '#c9a0b8', w: sw * 0.8, op: 0.7 });
+      path(g, line([[0, 0.9], [0.02, 1.02]]), 'none', { stroke: '#c9b89a', w: w * 0.03 });
+    } else if (A.b === 'root') {
+      shadow(-0.3, 0.3); const c = A.col, beet = kind === 'beet';
+      for (let i = 0; i < 5; i++) { const a = 90 + (i - 2) * 22; const a2 = a * Math.PI / 180; path(g, line([[0, 0.55], [Math.cos(a2) * 0.35, 0.55 + Math.sin(a2) * 0.5]]), 'none', { stroke: beet ? '#a8304f' : '#8fbf5a', w: w * 0.025 }); leafAt(g, Math.cos(a2) * 0.3, 0.55 + Math.sin(a2) * 0.42, 0.45, a, beet ? '#4f8a3a' : '#5fa83a'); }
+      path(g, line([[0, 0.12], [0.02, 0.0]]), 'none', { stroke: edge(c, 0.2), w: sw * 1.4 });
+      path(g, soft([[0, 0.08], [0.25, 0.25], [0.3, 0.4], [0.2, 0.56], [-0.2, 0.56], [-0.3, 0.4], [-0.25, 0.25]]), grad(c, { cx: 0.38, cy: 0.3 }), { stroke: edge(c, 0.5) }); shine(g, -0.13, 0.42, 0.07, 0.04);
+      if (!beet) path(g, soft([[-0.2, 0.2], [0, 0.1], [0.2, 0.2], [0.18, 0.12], [0, 0.07], [-0.18, 0.12]]), '#fbeef0', { op: 0.8 });
+    } else if (A.b === 'celery') {
+      shadow(-0.25, 0.25); const c = A.col;
+      for (let i = -3; i <= 3; i++) { const u = i * 0.06; path(g, soft([[u - 0.04, 0.02], [u + 0.04, 0.02], [u + 0.035 + i * 0.01, 1.2], [u - 0.035 + i * 0.01, 1.2]]), lin([[0, lite(c, 0.3)], [0.5, c], [1, edge(c, 0.25)]], 0, 0, 1, 0), { stroke: edge(c, 0.4) }); path(g, line([[u, 0.05], [u + i * 0.008, 1.15]]), 'none', { stroke: lite(c, 0.5), w: sw * 0.7 }); }
+      for (let i = 0; i < 8; i++) leafAt(g, (i - 3.5) * 0.06, 1.2, 0.3, 90 + (i - 3.5) * 20, '#5aa83a');
+    } else if (A.b === 'loaf') {
+      shadow(-0.48, 0.48); const c = A.col;
+      path(g, soft([[-0.48, 0.03], [-0.47, 0.25], [-0.35, 0.45], [0, 0.53], [0.35, 0.45], [0.47, 0.25], [0.48, 0.03]]), grad(c, { cx: 0.4, cy: 0.25, l: 0.25 }), { stroke: edge(c, 0.45) });
+      [-0.28, -0.08, 0.12, 0.32].forEach((u) => path(g, soft([[u - 0.06, 0.38], [u + 0.08, 0.5], [u + 0.09, 0.47], [u - 0.04, 0.35]]), '#f3d39a', { stroke: kitDark('#f3d39a', 0.2) }));
+      shine(g, -0.2, 0.4, 0.15, 0.04, -8, 0.3);
+    } else if (A.b === 'toast') {
+      shadow(-0.45, 0.45); const c = A.col;
+      const sl = soft([[-0.42, 0.03], [0.42, 0.03], [0.43, 0.68], [0.46, 0.82], [0.32, 0.96], [0, 0.94], [-0.32, 0.96], [-0.46, 0.82], [-0.43, 0.68]]);
+      path(g, sl, kitDark(c, 0.25), { stroke: edge(c, 0.5) }); path(g, soft([[-0.36, 0.08], [0.36, 0.08], [0.37, 0.66], [0.39, 0.78], [0.28, 0.89], [0, 0.87], [-0.28, 0.89], [-0.39, 0.78], [-0.37, 0.66]]), grad(c, { cx: 0.5, cy: 0.5, l: 0.3, d: 0.1 }));
+      let d = ''; for (let i = 0; i < 40; i++) d += circ((R() - 0.5) * 0.7, 0.1 + R() * 0.75, 0.008); path(g, d, kitDark(c, 0.2), { op: 0.4 });
+      path(g, soft([[-0.12, 0.42], [0.12, 0.44], [0.13, 0.58], [-0.11, 0.6]]), grad('#f8e08a', { l: 0.4 }), { stroke: '#d9b84a' });
+    } else if (A.b === 'croissant') {
+      shadow(-0.46, 0.46); const c = A.col;
+      [[-0.36, 0.17, 0.12, 0.1, -40], [0.36, 0.17, 0.12, 0.1, 40], [-0.22, 0.26, 0.15, 0.15, -20], [0.22, 0.26, 0.15, 0.15, 20], [0, 0.32, 0.2, 0.2, 0]].forEach(([u, v, rx, ry, rot]) => { path(g, oval(u, v, rx, ry, rot), grad(c, { cx: 0.4, cy: 0.3, l: 0.3, d: 0.35 }), { stroke: edge(c, 0.45) }); path(g, curve([[u - rx * 0.6, v + ry * 0.4], [u, v + ry * 0.8], [u + rx * 0.6, v + ry * 0.4]]), 'none', { stroke: kitDark(c, 0.25), w: sw, op: 0.7 }); });
+      shine(g, -0.05, 0.45, 0.1, 0.04, -10, 0.35);
+    } else if (A.b === 'pancakes' || A.b === 'egg' || A.b === 'steak' || A.b === 'bacon' || A.b === 'sausage' || A.b === 'roast' || A.b === 'drumstick' || A.b === 'salmon' || A.b === 'waffle') {
+      const plate = A.b === 'pancakes' || A.b === 'egg' || A.b === 'steak' || A.b === 'roast';
+      shadow(-0.48, 0.48);
+      if (plate) { path(g, oval(0, 0.07, 0.48, 0.07), '#e9edf0', { stroke: '#b9c1c8' }); path(g, oval(0, 0.08, 0.36, 0.045), '#f8fafb'); }
+      const c = A.col;
+      if (A.b === 'pancakes') { for (let i = 0; i < 5; i++) { const v = 0.1 + i * 0.1; path(g, soft([[-0.34, v], [-0.33, v + 0.06], [0, v + 0.1], [0.33, v + 0.06], [0.34, v], [0, v - 0.04]]), grad(c, { cx: 0.5, cy: 0.3, l: 0.25, d: 0.3 }), { stroke: edge(c, 0.4) }); } path(g, soft([[-0.3, 0.58], [0, 0.66], [0.3, 0.58], [0.31, 0.5], [0.2, 0.42], [0.18, 0.54], [0, 0.6], [-0.22, 0.54], [-0.25, 0.4], [-0.31, 0.5]]), '#b9651a', { op: 0.8 }); path(g, soft([[-0.08, 0.62], [0.08, 0.63], [0.07, 0.72], [-0.07, 0.71]]), '#f8e08a', { stroke: '#d9b84a' }); }
+      if (A.b === 'egg') { path(g, soft([[-0.4, 0.12], [-0.38, 0.28], [-0.15, 0.38], [0.15, 0.36], [0.4, 0.3], [0.42, 0.14], [0.1, 0.08], [-0.2, 0.08]]), grad(c, { l: 0.1, d: 0.1 }), { stroke: '#d9d2c2' }); path(g, oval(0.0, 0.24, 0.13, 0.1), grad('#f6a21e', { cx: 0.38, cy: 0.3, l: 0.45, d: 0.25 }), { stroke: '#d97a12' }); shine(g, -0.04, 0.27, 0.04, 0.025, -20, 0.7); }
+      if (A.b === 'steak') { path(g, soft([[-0.38, 0.1], [-0.4, 0.25], [-0.2, 0.37], [0.2, 0.36], [0.38, 0.24], [0.36, 0.1], [0, 0.06]]), grad(c, { l: 0.2, d: 0.35 }), { stroke: edge(c, 0.45) }); for (let i = 0; i < 4; i++) path(g, line([[-0.3 + i * 0.16, 0.12], [-0.2 + i * 0.16, 0.33]]), 'none', { stroke: '#3a1a12', w: w * 0.02, op: 0.7 }); path(g, curve([[-0.38, 0.24], [-0.2, 0.36], [0.1, 0.36]]), 'none', { stroke: '#f3e3c8', w: w * 0.02 }); }
+      if (A.b === 'bacon') { [0.08, 0.2].forEach((v0, j) => { const wav = (k) => [[-0.46, v0], [-0.3, v0 + 0.06], [-0.15, v0], [0, v0 + 0.06], [0.15, v0], [0.3, v0 + 0.06], [0.46, v0]].map(([u, v]) => [u, v + k]); path(g, soft([...wav(0.1), ...wav(0).reverse()]), lin([[0, '#c8503f'], [0.35, '#f3d6c4'], [0.5, '#b8453a'], [0.75, '#f0c9b4'], [1, '#9a3a2e']]), { stroke: '#7a2a1e' }); }); }
+      if (A.b === 'sausage') { [[0.12, -6], [0.3, 4]].forEach(([v, rot]) => { path(g, oval(0, v, 0.44, 0.09, rot), grad(c, { cx: 0.4, cy: 0.25, l: 0.25, d: 0.35 }), { stroke: edge(c, 0.45) }); shine(g, -0.1, v + 0.04, 0.22, 0.02, rot, 0.4); }); }
+      if (A.b === 'roast') { [-1, 1].forEach((sd) => { path(g, oval(sd * 0.3, 0.2, 0.14, 0.09, sd * -20), grad(c, { l: 0.25, d: 0.35 }), { stroke: edge(c, 0.45) }); path(g, circ(sd * 0.44, 0.27, 0.035), '#f3ead8', { stroke: '#c9b89a' }); }); path(g, soft([[-0.34, 0.15], [-0.36, 0.38], [-0.15, 0.6], [0.15, 0.62], [0.36, 0.4], [0.34, 0.15], [0, 0.1]]), grad(c, { cx: 0.42, cy: 0.25, l: 0.3, d: 0.38 }), { stroke: edge(c, 0.45) }); shine(g, -0.08, 0.5, 0.14, 0.05, -15, 0.45); let d = ''; for (let i = 0; i < 30; i++) d += circ((R() - 0.5) * 0.55, 0.18 + R() * 0.38, 0.006); path(g, d, '#7a3a12', { op: 0.5 }); }
+      if (A.b === 'drumstick') { path(g, soft([[0.12, 0.26], [0.34, 0.3], [0.44, 0.36], [0.47, 0.3], [0.44, 0.24], [0.34, 0.24]]), '#f3ead8', { stroke: '#c9b89a' }); path(g, circ(0.45, 0.36, 0.04), '#f3ead8', { stroke: '#c9b89a' }); path(g, circ(0.46, 0.25, 0.04), '#f3ead8', { stroke: '#c9b89a' }); path(g, soft([[-0.45, 0.2], [-0.4, 0.42], [-0.2, 0.5], [0.05, 0.42], [0.2, 0.3], [0.18, 0.22], [0.0, 0.12], [-0.3, 0.06]]), grad(c, { cx: 0.38, cy: 0.25, l: 0.3, d: 0.38 }), { stroke: edge(c, 0.45) }); shine(g, -0.22, 0.38, 0.12, 0.04, -15, 0.45); }
+      if (A.b === 'salmon') { const out = soft([[-0.4, 0.06], [-0.46, 0.3], [-0.3, 0.55], [0, 0.6], [0.3, 0.55], [0.46, 0.3], [0.4, 0.06], [0.15, 0.04], [0.08, 0.25], [-0.08, 0.25], [-0.15, 0.04]]); path(g, out, '#b9c1c8', { stroke: '#7d8791' }); const inn = soft([[-0.36, 0.09], [-0.41, 0.3], [-0.27, 0.51], [0, 0.55], [0.27, 0.51], [0.41, 0.3], [0.36, 0.09], [0.17, 0.08], [0.1, 0.28], [-0.1, 0.28], [-0.17, 0.08]]); path(g, inn, grad(c, { cx: 0.5, cy: 0.4, l: 0.2, d: 0.15 })); const cl = clipTo(g, inn); for (let i = 0; i < 7; i++) path(cl, curve([[-0.5, 0.1 + i * 0.07], [0, 0.3 + i * 0.05], [0.5, 0.1 + i * 0.07]]), 'none', { stroke: '#fbe3d6', w: sw * 1.4, op: 0.8 }); }
+      if (A.b === 'waffle') { const wd = soft([[-0.46, 0.18], [-0.3, 0.33], [0, 0.38], [0.3, 0.33], [0.46, 0.18], [0.3, 0.04], [0, 0.0], [-0.3, 0.04]]); path(g, wd, grad(c, { l: 0.25, d: 0.3 }), { stroke: edge(c, 0.45) }); const cl = clipTo(g, wd); for (let i = -6; i <= 6; i++) { path(cl, line([[i * 0.08 - 0.15, 0], [i * 0.08 + 0.15, 0.4]]), 'none', { stroke: kitDark(c, 0.3), w: w * 0.012 }); path(cl, line([[i * 0.08 + 0.15, 0], [i * 0.08 - 0.15, 0.4]]), 'none', { stroke: kitDark(c, 0.3), w: w * 0.012 }); } [[-0.15, 0.25, '#e0262d'], [0.1, 0.27, '#3d4f9a'], [0.22, 0.18, '#3d4f9a'], [-0.02, 0.17, '#e0262d']].forEach(([u, v, cc]) => { path(g, circ(u, v, 0.045), grad(cc, { l: 0.4 }), { stroke: edge(cc, 0.4) }); }); }
+    } else if (A.b === 'bowl') {
+      shadow(-0.46, 0.46); const bc = A.fill === 'rice' ? '#3f6fb8' : A.fill === 'salad' ? '#f3f1ec' : '#e8eef2';
+      const rim = 0.42, fill = A.col;
+      path(g, soft([[-0.46, 0.42], [-0.4, 0.2], [-0.2, 0.05], [0.2, 0.05], [0.4, 0.2], [0.46, 0.42]]), grad(bc, { cx: 0.4, cy: 0.3 }), { stroke: edge(bc, 0.4) });
+      path(g, oval(0, rim, 0.46, 0.08), kitDark(bc, 0.1), { stroke: edge(bc, 0.4) });
+      if (A.fill === 'rice') { path(g, soft([[-0.42, 0.43], [-0.3, 0.55], [0, 0.6], [0.3, 0.55], [0.42, 0.43], [0, 0.37]]), grad(fill, { l: 0.05, d: 0.08 }), { stroke: '#d9d4c4' }); let d = ''; for (let i = 0; i < 70; i++) d += oval((R() - 0.5) * 0.74, 0.42 + R() * 0.14, 0.012, 0.006, R() * 180); path(g, d, '#e6e1d2', { op: 0.9 }); }
+      else { path(g, oval(0, rim, 0.42, 0.065), grad(fill, { cx: 0.5, cy: 0.4, l: 0.2, d: 0.15 })); }
+      if (A.fill === 'noodles') { for (let i = 0; i < 9; i++) path(g, curve([[-0.36 + i * 0.07, rim - 0.04], [-0.32 + i * 0.07, rim + 0.03], [-0.36 + i * 0.08, rim + 0.06]]), 'none', { stroke: '#f8dc8a', w: w * 0.015 }); path(g, oval(0.15, rim + 0.03, 0.07, 0.04), '#fbf8ef', { stroke: '#d9d2c2' }); path(g, circ(0.15, rim + 0.03, 0.03), '#f6a21e'); [[-0.2, rim + 0.03], [-0.12, rim + 0.05], [0.0, rim + 0.02]].forEach(([u, v]) => path(g, circ(u, v, 0.016), '#5aa83a')); }
+      if (A.fill === 'soup') { [[-0.2, rim], [0.1, rim + 0.02], [0.25, rim - 0.01], [-0.05, rim - 0.02]].forEach(([u, v], i) => path(g, soft([[u - 0.04, v - 0.02], [u + 0.04, v - 0.02], [u + 0.04, v + 0.03], [u - 0.04, v + 0.03]]), i % 2 ? '#7a3a22' : '#f3c46a', { stroke: '#5a2a1a', w: sw * 0.6 })); path(g, circ(0.0, rim + 0.03, 0.02), '#5aa83a'); }
+      if (A.fill === 'salad') { [[-0.25, rim + 0.04, '#5aa83a'], [0.2, rim + 0.05, '#7cc04a'], [-0.05, rim + 0.07, '#3f8a2e'], [0.32, rim + 0.02, '#8bd15a']].forEach(([u, v, cc]) => leafAt(g, u, v, 0.2, 40 + u * 200, cc)); path(g, circ(0.05, rim + 0.04, 0.05), grad('#e3332a'), { stroke: '#a81d18' }); path(g, oval(-0.15, rim + 0.02, 0.05, 0.03), '#d9ecb0', { stroke: '#3f7d34' }); }
+      if (A.hot) [0, 0.9, 1.8].forEach((dl, i) => steam(g, -0.12 + i * 0.12, A.fill === 'rice' ? 0.62 : 0.5, 0.25, dl));
+    } else if (A.b === 'sandwich') {
+      shadow(-0.46, 0.46);
+      const tri = (v0, c, h) => path(g, soft([[-0.44, v0], [0.44, v0], [0.42, v0 + h], [-0.42, v0 + h]]), c, { stroke: edge(c, 0.35) });
+      tri(0.03, '#e6c48a', 0.12); path(g, soft([[-0.46, 0.15], [-0.3, 0.2], [-0.1, 0.15], [0.1, 0.2], [0.3, 0.15], [0.46, 0.2], [0.44, 0.24], [-0.44, 0.24]]), '#6fbf3a', { stroke: '#3f8a2a' }); tri(0.22, '#f6c84a', 0.05); tri(0.27, '#e3332a', 0.05); tri(0.32, '#e8a09a', 0.06);
+      path(g, soft([[-0.44, 0.38], [0.44, 0.38], [0.4, 0.6], [0.2, 0.72], [-0.2, 0.72], [-0.4, 0.6]]), grad('#e6c48a', { cx: 0.4, cy: 0.3 }), { stroke: '#a8743a' }); path(g, soft([[-0.38, 0.42], [0.38, 0.42], [0.34, 0.58], [0.18, 0.66], [-0.18, 0.66], [-0.34, 0.58]]), '#f6e4bd', { op: 0.8 });
+    } else if (A.b === 'burger') {
+      shadow(-0.46, 0.46); const bun = '#d98c3a';
+      path(g, soft([[-0.42, 0.03], [0.42, 0.03], [0.44, 0.13], [-0.44, 0.13]]), grad(bun, { l: 0.2 }), { stroke: edge(bun, 0.4) });
+      path(g, soft([[-0.46, 0.15], [0.46, 0.15], [0.46, 0.28], [-0.46, 0.28]]), grad('#6b3a1e', { l: 0.2, d: 0.3 }), { stroke: '#3a1a0e' });
+      path(g, soft([[-0.48, 0.27], [0.48, 0.27], [0.4, 0.33], [0.3, 0.23], [0.2, 0.33], [-0.2, 0.33], [-0.3, 0.23], [-0.4, 0.33]]), '#f6c21e', { stroke: '#d99a12' });
+      path(g, soft([[-0.48, 0.34], [-0.36, 0.3], [-0.24, 0.36], [-0.12, 0.3], [0, 0.36], [0.12, 0.3], [0.24, 0.36], [0.36, 0.3], [0.48, 0.34], [0.46, 0.4], [-0.46, 0.4]]), '#6fbf3a', { stroke: '#3f8a2a' });
+      path(g, soft([[-0.45, 0.4], [-0.42, 0.6], [-0.2, 0.8], [0.2, 0.8], [0.42, 0.6], [0.45, 0.4]]), grad(bun, { cx: 0.4, cy: 0.25, l: 0.3, d: 0.3 }), { stroke: edge(bun, 0.45) });
+      for (let i = 0; i < 12; i++) path(g, oval(-0.3 + R() * 0.6, 0.55 + R() * 0.2, 0.018, 0.009, R() * 60 - 30), '#fbf3d8', { stroke: '#d9c49a', w: sw * 0.4 });
+      shine(g, -0.15, 0.68, 0.14, 0.04, -10, 0.35);
+    } else if (A.b === 'pizza') {
+      shadow(-0.46, 0.46); const c = A.col;
+      path(g, soft([[-0.46, 0.8], [0.46, 0.8], [0.4, 0.86], [-0.4, 0.86]]), grad('#c9873a', { l: 0.3 }), { stroke: '#8a5a2a' });
+      path(g, poly3([[-0.45, 0.8], [0.45, 0.8], [0, 0.02]]), grad(c, { cx: 0.5, cy: 0.3, l: 0.25, d: 0.15 }), { stroke: '#c9973a' });
+      [[0, 0.6], [-0.2, 0.66], [0.2, 0.66], [0.05, 0.35], [-0.08, 0.48], [0.12, 0.48]].forEach(([u, v]) => { path(g, circ(u, v, 0.06), grad('#b9231e', { l: 0.3 }), { stroke: '#7a1410' }); });
+      path(g, soft([[-0.1, 0.25], [-0.05, 0.2], [0, 0.28]]), '#3f8a2e');
+    } else if (A.b === 'taco') { // a folded shell from the side, the filling along its top
+      shadow(-0.46, 0.46); const c = A.col;
+      path(g, soft([[-0.44, 0.44], [-0.36, 0.52], [-0.2, 0.47], [-0.05, 0.54], [0.1, 0.47], [0.25, 0.53], [0.4, 0.46], [0.42, 0.38], [-0.42, 0.38]]), grad('#6fbf3a'), { stroke: '#3f8a2a' });
+      [[-0.28, 0.46], [-0.05, 0.47], [0.2, 0.46]].forEach(([u, v]) => path(g, circ(u, v, 0.045), grad('#e3332a', { l: 0.4 }), { stroke: '#a81d18' }));
+      path(g, soft([[-0.4, 0.4], [-0.1, 0.43], [0.2, 0.41], [0.4, 0.4], [0.38, 0.36], [-0.38, 0.36]]), '#7a3a1e', { stroke: '#4a200e' });
+      for (let i = 0; i < 7; i++) path(g, curve([[-0.3 + i * 0.09, 0.44], [-0.27 + i * 0.09, 0.5], [-0.32 + i * 0.09, 0.52]]), 'none', { stroke: '#f6c21e', w: sw * 1.4 });
+      path(g, soft([[-0.46, 0.4], [-0.43, 0.22], [-0.3, 0.08], [0, 0.03], [0.3, 0.08], [0.43, 0.22], [0.46, 0.4], [0.38, 0.37], [0.34, 0.22], [0.2, 0.12], [0, 0.1], [-0.2, 0.12], [-0.34, 0.22], [-0.38, 0.37]]), grad(c, { cx: 0.45, cy: 0.6, l: 0.3, d: 0.3 }), { stroke: edge(c, 0.4) });
+      path(g, soft([[-0.38, 0.37], [-0.34, 0.22], [-0.2, 0.12], [0, 0.1], [0.2, 0.12], [0.34, 0.22], [0.38, 0.37], [0, 0.32]]), kitDark(c, 0.08), { stroke: edge(c, 0.35), op: 0.9 });
+      let d = ''; for (let i = 0; i < 14; i++) d += circ(-0.36 + R() * 0.72, 0.07 + R() * 0.25, 0.01); path(g, d, kitDark(c, 0.25), { op: 0.45 });
+    } else if (A.b === 'fries') {
+      shadow(-0.36, 0.36);
+      for (let i = 0; i < 11; i++) { const u = -0.24 + i * 0.048, h = 0.95 + R() * 0.3, a = (R() - 0.5) * 0.15; path(g, soft([[u - 0.025, 0.5], [u + 0.025, 0.5], [u + 0.025 + a, h], [u - 0.025 + a, h]]), lin([[0, '#f8d76a'], [1, '#e8a830']], 0, 0, 1, 0), { stroke: '#c98a1a', w: sw * 0.7 }); }
+      path(g, soft([[-0.34, 0.75], [0.34, 0.75], [0.26, 0.03], [-0.26, 0.03]]), grad('#d9262c', { cx: 0.4, cy: 0.3 }), { stroke: '#8a1418' }); path(g, curve([[-0.31, 0.72], [0, 0.6], [0.31, 0.72]]), 'none', { stroke: '#fbf3d8', w: sw * 1.4 });
+      path(g, circ(0, 0.38, 0.09), '#f6c21e', { op: 0.9 });
+    } else if (A.b === 'cheese') {
+      shadow(-0.46, 0.46); const c = A.col;
+      path(g, poly3([[-0.46, 0.05], [0.3, 0.05], [0.3, 0.3], [-0.46, 0.3]]), grad(kitDark(c, 0.08), { l: 0.2 }), { stroke: edge(c, 0.4) }); path(g, poly3([[-0.46, 0.3], [0.3, 0.3], [0.46, 0.55]]), grad(lite(c, 0.1)), { stroke: edge(c, 0.4) }); path(g, poly3([[0.3, 0.05], [0.46, 0.3], [0.46, 0.55], [0.3, 0.3]]), kitDark(c, 0.18), { stroke: edge(c, 0.4) });
+      [[-0.3, 0.16, 0.05], [-0.05, 0.2, 0.04], [0.15, 0.12, 0.035], [0.05, 0.38, 0.04]].forEach(([u, v, r]) => path(g, circ(u, v, r), kitDark(c, 0.2), { stroke: edge(c, 0.3), w: sw * 0.6 }));
+    } else if (A.b === 'glass') {
+      shadow(-0.3, 0.3); const f = A.fill;
+      path(g, soft([[-0.3, 1.45], [0.3, 1.45], [0.24, 0.03], [-0.24, 0.03]]), '#e9f1f6', { stroke: '#a9b9c6', op: 0.45 });
+      path(g, soft([[-0.28, 1.2], [0.28, 1.2], [0.23, 0.07], [-0.23, 0.07]]), lin([[0, lite(f, 0.2)], [1, kitDark(f, 0.08)]]), { stroke: kitDark(f, 0.15) }); path(g, oval(0, 1.2, 0.28, 0.04), lite(f, 0.3));
+      path(g, soft([[-0.22, 1.35], [-0.15, 1.35], [-0.12, 0.1], [-0.18, 0.1]]), '#ffffff', { op: 0.35 });
+      if (A.straw) { path(g, line([[0.05, 1.0], [0.18, 1.62]]), 'none', { stroke: '#e3332a', w: w * 0.05 }); path(g, oval(0.3, 1.38, 0.12, 0.08), '#f8e67a', { stroke: '#d9b81a' }); }
+    } else if (A.b === 'cup') {
+      shadow(-0.48, 0.48); path(g, oval(0, 0.05, 0.47, 0.06), '#eef2f5', { stroke: '#b9c1c8' });
+      path(g, curve([[0.3, 0.52], [0.46, 0.5], [0.44, 0.3], [0.25, 0.24]]), 'none', { stroke: '#e3e8ec', w: w * 0.05 });
+      path(g, soft([[-0.33, 0.6], [0.33, 0.6], [0.28, 0.2], [0.18, 0.08], [-0.18, 0.08], [-0.28, 0.2]]), grad('#f8fafb', { cx: 0.4, cy: 0.3, d: 0.15 }), { stroke: '#b9c1c8' });
+      path(g, oval(0, 0.6, 0.33, 0.06), '#e3e8ec', { stroke: '#b9c1c8' }); path(g, oval(0, 0.595, 0.3, 0.048), grad(A.fill, { cx: 0.5, cy: 0.4, l: 0.3 }));
+      if (A.hot) [0, 0.9, 1.8].forEach((dl, i) => steam(g, -0.1 + i * 0.1, 0.65, 0.3, dl));
+    }
+    void lin;
+  };
+  function poly3(pts) { return 'M' + pts.map(([u, v]) => [curX + u * curW, curY - v * curW].map(fx).join(',')).join('L') + 'Z'; }
+  let curX = X, curY = Y, curW = W;
+  if (view === 'both') { curX = X - W / 4; curW = W * 0.48; draw(curX, Y, curW, false); curX = X + W / 4; draw(curX, Y, curW, true); }
+  else { draw(X, Y, W, view === 'cut'); }
+  return root;
+}
+
+// (v329) what Cassie knows about each food the kit can draw: its group (and go, grow or glow), what it gives the body, where it comes from, one fact
+const FOOD_FACTS = [
+  ["apple", /\b(apples?|mansanas)\b/i, "fruit, glow food", "fibre and vitamin C", "grows on apple trees in cool places", "The core holds the seeds; an apple floats because a quarter of it is air"],
+  ["pear", /\b(pears?|peras)\b/i, "fruit, glow food", "fibre and vitamin C", "grows on pear trees", "Pears ripen from the inside out, so they are picked hard"],
+  ["orange", /\b(oranges?|dalandan|kahel)\b/i, "fruit, glow food", "vitamin C", "grows on citrus trees in warm places", "Inside are about 10 segments, each a bundle of juice sacs"],
+  ["lemon", /\b(lemons?)\b/i, "fruit, glow food", "vitamin C and citric acid (sour)", "grows on citrus trees", "Lemon juice is acidic enough to keep a cut apple from turning brown"],
+  ["lime", /\b(limes?|dayap|calamansi|kalamansi)\b/i, "fruit, glow food", "vitamin C", "grows on citrus trees", "Sailors ate limes so they would not get scurvy"],
+  ["peach", /\b(peach(es)?)\b/i, "fruit, glow food", "vitamins A and C", "grows on peach trees", "Its fuzzy skin and single hard pit make it a stone fruit"],
+  ["mango", /\b(mangoes|mangos?|mangga)\b/i, "fruit, glow food", "vitamins A and C", "grows on tall mango trees in the tropics", "The Philippine carabao mango is one of the sweetest in the world"],
+  ["avocado", /\b(avocados?|abukado)\b/i, "fruit, glow food", "healthy fats, fibre and potassium", "grows on avocado trees", "It is a big berry with one seed, and it ripens only after it is picked"],
+  ["kiwi", /\b(kiwis?|kiwifruit)\b/i, "fruit, glow food", "vitamin C (more than an orange)", "grows on vines", "The tiny black seeds are in a ring around a pale core"],
+  ["pomegranate", /\b(pomegranates?)\b/i, "fruit, glow food", "vitamin C and fibre", "grows on small trees in dry places", "One fruit can hold over 600 juicy seeds called arils"],
+  ["coconut", /\b(coconuts?|niyog|buko)\b/i, "fruit, glow food", "healthy fats, water and fibre", "grows on coconut palms by the sea", "A young coconut is full of clear coconut water; the white meat grows as it ripens"],
+  ["papaya", /\b(papayas?|papaya)\b/i, "fruit, glow food", "vitamins A and C", "grows on papaya trees in the tropics", "The black seeds in the middle are edible and peppery"],
+  ["watermelon", /\b(watermelons?|pakwan)\b/i, "fruit, glow food", "water (about 92 percent) and vitamin C", "grows on vines along the ground", "It is a kind of berry with a hard rind"],
+  ["melon", /\b(melons?|cantaloupes?|melon)\b/i, "fruit, glow food", "vitamins A and C", "grows on vines along the ground", "The net pattern on its skin is where it healed tiny cracks as it grew"],
+  ["dragonfruit", /\b(dragon ?fruits?|pitaya)\b/i, "fruit, glow food", "fibre and vitamin C", "grows on a climbing cactus", "Its flowers open only at night"],
+  ["persimmon", /\b(persimmons?)\b/i, "fruit, glow food", "vitamins A and C", "grows on persimmon trees", "Cut across, its flesh shows a star pattern"],
+  ["strawberry", /\b(strawberr(y|ies))\b/i, "fruit, glow food", "vitamin C", "grows on low plants", "The yellow dots on the outside are its seeds, about 200 on each berry"],
+  ["grapes", /\b(grapes?|ubas)\b/i, "fruit, glow food", "vitamins C and K", "grows in bunches on vines", "Raisins are dried grapes"],
+  ["greengrapes", /\b(green grapes?)\b/i, "fruit, glow food", "vitamins C and K", "grows in bunches on vines", "Green and purple grapes are different kinds of the same plant"],
+  ["cherry", /\b(cherr(y|ies)|seresa)\b/i, "fruit, glow food", "vitamin C", "grows on cherry trees", "Each cherry has one hard stone inside"],
+  ["blueberry", /\b(blueberr(y|ies))\b/i, "fruit, glow food", "vitamin C and antioxidants", "grows on bushes", "The dusty white coat on its skin is a natural wax called bloom"],
+  ["raspberry", /\b(raspberr(y|ies))\b/i, "fruit, glow food", "fibre and vitamin C", "grows on thorny canes", "Each berry is a cluster of about 100 tiny fruits, each with a seed"],
+  ["blackberry", /\b(blackberr(y|ies))\b/i, "fruit, glow food", "fibre and vitamin C", "grows on thorny brambles", "Unlike a raspberry, its core comes off with the berry"],
+  ["banana", /\b(bananas?|saging)\b/i, "fruit, go and glow food", "potassium and energy", "grows in bunches on banana plants in the tropics", "A banana plant is a giant herb, not a tree"],
+  ["pineapple", /\b(pineapples?|pinya)\b/i, "fruit, glow food", "vitamin C and bromelain", "grows from the middle of a spiky plant", "It takes about two years to grow one pineapple"],
+  ["tomato", /\b(tomato(es)?|kamatis)\b/i, "vegetable (really a fruit), glow food", "vitamin C and lycopene", "grows on vines", "It is a fruit because it holds seeds, but we cook it like a vegetable"],
+  ["onion", /\b(onions?|sibuyas)\b/i, "vegetable, glow food", "vitamin C", "the bulb grows underground", "Cutting it lets out a gas that makes your eyes water"],
+  ["potato", /\b(potato(es)?|patatas)\b/i, "vegetable, go food", "starch (energy) and potassium", "the tuber grows underground", "The eyes on a potato can sprout into new plants"],
+  ["pumpkin", /\b(pumpkins?|kalabasa|squash)\b/i, "vegetable, glow food", "vitamin A", "grows on vines along the ground", "Its seeds can be roasted and eaten"],
+  ["carrot", /\b(carrots?|karot)\b/i, "vegetable, glow food", "vitamin A (good for the eyes)", "the root grows underground", "Carrots were purple and yellow before orange ones were grown"],
+  ["cucumber", /\b(cucumbers?|pipino)\b/i, "vegetable, glow food", "water (about 96 percent)", "grows on vines", "Pickles are cucumbers kept in salty or sour water"],
+  ["zucchini", /\b(zucchinis?|courgettes?)\b/i, "vegetable, glow food", "vitamin C and water", "grows on bushy plants", "Its big yellow flowers can be eaten too"],
+  ["eggplant", /\b(eggplants?|talong|aubergines?)\b/i, "vegetable, glow food", "fibre", "grows on bushes", "It is related to the tomato and the potato"],
+  ["sweetpotato", /\b(sweet ?potato(es)?|kamote)\b/i, "vegetable, go food", "vitamin A and energy", "the root grows underground", "Its leaves (talbos ng kamote) are eaten as a green vegetable"],
+  ["chili", /\b(chil(i|li|e)s?( peppers?)?|sili)\b/i, "vegetable, glow food", "vitamin C", "grows on small bushes", "The heat comes from capsaicin, mostly in the seeds and the white ribs"],
+  ["corn", /\b(corn|maize|mais)\b/i, "vegetable and grain, go food", "energy (starch) and fibre", "grows as cobs on tall grass plants", "Each kernel is a seed, and each silk thread leads to one kernel"],
+  ["bellpepper", /\b((red )?bell peppers?|capsicums?)\b/i, "vegetable, glow food", "vitamin C", "grows on bushes", "A red bell pepper is a green one left to ripen"],
+  ["yellowpepper", /\b(yellow (bell )?peppers?)\b/i, "vegetable, glow food", "vitamin C", "grows on bushes", "Yellow peppers have more vitamin C than oranges"],
+  ["greenpepper", /\b(green (bell )?peppers?)\b/i, "vegetable, glow food", "vitamin C", "grows on bushes", "Green peppers are picked before they ripen"],
+  ["cabbage", /\b(cabbages?|repolyo)\b/i, "vegetable, glow food", "vitamins C and K", "grows as a tight head of leaves", "A head of cabbage is a bud of tightly wrapped leaves"],
+  ["redcabbage", /\b(red cabbages?|purple cabbages?)\b/i, "vegetable, glow food", "vitamins C and K", "grows as a tight head of leaves", "Its juice changes colour in acids and bases, so it can test them"],
+  ["lettuce", /\b(lettuces?|litsugas)\b/i, "vegetable, glow food", "vitamin K and water", "grows as a loose head of leaves", "Lettuce is about 95 percent water"],
+  ["spinach", /\b(spinach|kangkong|alugbati)\b/i, "vegetable, glow food", "iron and vitamins A and K", "grows as leaves from the ground", "Cooking spinach shrinks it to a tenth of its size"],
+  ["broccoli", /\b(broccoli|brokoli)\b/i, "vegetable, glow food", "vitamins C and K and fibre", "grows as a head of flower buds", "The bumpy head is made of many tiny unopened flowers"],
+  ["cauliflower", /\b(cauliflowers?)\b/i, "vegetable, glow food", "vitamin C", "grows as a white head of flower buds", "Leaves wrap round it and keep it white"],
+  ["mushroom", /\b(mushrooms?|kabute)\b/i, "vegetable (really a fungus), glow food", "vitamin D and B vitamins", "grows from the ground or wood in damp places", "A mushroom is not a plant; it is a fungus"],
+  ["peas", /\b(peas?|pea pods?|gisantes)\b/i, "vegetable, grow food", "protein and fibre", "grows in pods on climbing vines", "Each pod holds about 6 to 9 peas"],
+  ["garlic", /\b(garlic|bawang)\b/i, "vegetable, glow food", "flavour and vitamin B6", "the bulb grows underground", "One bulb is made of about 10 to 20 cloves"],
+  ["beet", /\b(beets?|beetroots?)\b/i, "vegetable, glow food", "folate and iron", "the root grows underground", "Its red juice is used as a natural food colouring"],
+  ["radish", /\b(radish(es)?|labanos)\b/i, "vegetable, glow food", "vitamin C", "the root grows underground", "Radishes can be ready to eat 3 weeks after planting"],
+  ["celery", /\b(celery|kintsay)\b/i, "vegetable, glow food", "water and fibre", "grows as long stalks from the ground", "Each stalk has strings that carry water up the plant"],
+  ["bread", /\b(breads?|loaf|loaves|tinapay|pandesal)\b/i, "grain, go food", "carbohydrates (energy)", "baked from wheat flour, water and yeast", "Yeast makes gas bubbles that make the dough rise"],
+  ["toast", /\b(toast)\b/i, "grain, go food", "carbohydrates (energy)", "bread heated until the outside browns", "The browning is the Maillard reaction, which makes new flavours"],
+  ["croissant", /\b(croissants?)\b/i, "grain, go food", "carbohydrates and fat", "baked from many thin layers of dough and butter", "It has dozens of layers, so it flakes"],
+  ["pancakes", /\b(pancakes?|hotcakes?)\b/i, "grain, go food", "carbohydrates (energy)", "cooked from flour, eggs and milk", "The bubbles on top show it is time to flip it"],
+  ["waffle", /\b(waffles?)\b/i, "grain, go food", "carbohydrates (energy)", "cooked from batter in a waffle iron", "The square pockets hold the syrup"],
+  ["rice", /\b(rice|kanin|bigas)\b/i, "grain, go food", "carbohydrates (energy)", "grows as grains on rice plants in flooded paddies", "Rice feeds more than half the people in the world"],
+  ["noodles", /\b(noodles?|pancit|ramen|mami)\b/i, "grain, go food", "carbohydrates (energy)", "made from wheat or rice flour", "Noodles were made in China over 4,000 years ago"],
+  ["soup", /\b(soups?|sabaw|sinigang|tinola|stew)\b/i, "mixed meal", "water, vegetables and protein", "cooked in a pot of hot water or broth", "A warm soup helps you drink water when you are sick"],
+  ["salad", /\b(salads?)\b/i, "vegetable, glow food", "vitamins and fibre", "raw vegetables mixed together", "Many colours in a salad mean many different vitamins"],
+  ["sandwich", /\b(sandwich(es)?)\b/i, "mixed meal", "carbohydrates, protein and vegetables", "bread with fillings between", "It is named after the Earl of Sandwich"],
+  ["burger", /\b((ham)?burgers?|cheeseburgers?)\b/i, "mixed meal", "protein and carbohydrates", "a meat patty in a bun", "Fast food is fine sometimes, but it has a lot of fat and salt"],
+  ["pizza", /\b(pizzas?)\b/i, "mixed meal", "carbohydrates, protein and fat", "baked flat bread with sauce and cheese", "Pizza began in Naples, Italy"],
+  ["taco", /\b(tacos?)\b/i, "mixed meal", "carbohydrates, protein and vegetables", "a folded corn or flour tortilla with fillings", "Tacos come from Mexico"],
+  ["fries", /\b((french )?fries|chips)\b/i, "grain-like go food (from potatoes)", "carbohydrates and fat", "potatoes cut and fried in oil", "Frying gives energy but a lot of fat, so eat them only now and then"],
+  ["egg", /\b(eggs?|itlog)\b/i, "protein, grow food", "protein and vitamin D", "laid by hens", "The yolk feeds a growing chick; the white protects it"],
+  ["bacon", /\b(bacon)\b/i, "protein, grow food", "protein and fat", "salted and smoked pork", "Bacon is very salty, so it is a treat food"],
+  ["sausage", /\b(sausages?|hotdogs?|longganisa)\b/i, "protein, grow food", "protein and fat", "ground meat in a skin", "Longganisa is the Filipino sausage, sweet or garlicky"],
+  ["chicken", /\b((roast(ed)? )?chickens?|manok|lechon manok)\b/i, "protein, grow food", "protein", "meat from chickens", "Chicken has less fat than red meat"],
+  ["drumstick", /\b(drumsticks?|chicken legs?|fried chicken)\b/i, "protein, grow food", "protein", "the lower leg of a chicken", "The bone in the middle is the chicken's shin bone"],
+  ["fish", /\b(fish|salmon|isda|bangus|tilapia)\b/i, "protein, grow food", "protein and omega 3 fats", "caught in the sea or raised in ponds", "Omega 3 fats in fish help the brain and heart"],
+  ["steak", /\b(steaks?|beef|baka)\b/i, "protein, grow food", "protein and iron", "meat from cattle", "Iron in red meat helps blood carry oxygen"],
+  ["cheese", /\b(cheese|keso)\b/i, "dairy, grow food", "calcium and protein", "made from milk thickened and pressed", "The holes in some cheeses are bubbles of gas from bacteria"],
+  ["milk", /\b(milk|gatas)\b/i, "dairy, grow food", "calcium and protein", "from cows, goats or carabaos", "Calcium in milk builds strong bones and teeth"],
+  ["juice", /\b(juices?|orange juice|katas)\b/i, "fruit drink, glow food", "vitamin C and sugar", "squeezed from fruit", "A whole fruit is better than juice because it keeps the fibre"],
+  ["tea", /\b(tea|tsaa)\b/i, "drink", "water and antioxidants", "brewed from the dried leaves of the tea plant", "After water, tea is the most drunk drink in the world"],
+  ["water", /\b(water|tubig|glass(es)? of water|drinking water)\b/i, "drink", "water: your body is about 60 percent water", "from taps, wells and springs, kept clean", "Drink about 6 to 8 glasses a day, more when it is hot or you play hard"],
+];
+const FOOD_GROUPS = 'Go foods give energy (rice, bread, noodles, potatoes, corn, sweet potatoes, bananas); grow foods build the body (eggs, fish, meat, chicken, milk, cheese, beans and peas); glow foods keep you healthy and fight sickness (fruits and vegetables). A healthy plate is half fruits and vegetables, a quarter go foods (rice) and a quarter grow foods, with a glass of water or milk.';
+export function foodGuide(asked = '') {
+  const q = String(asked || ''), out = [];
+  const hits = FOOD_FACTS.filter((a) => a[1].test(q)).sort((a, b) => q.match(b[1])[0].length - q.match(a[1])[0].length).slice(0, 3);
+  hits.forEach(([kind, , grp, nut, src, fact]) => out.push(`About ${FOOD_NAMES[kind] || kind} (draw it with the food kit, kind "${kind}"${FOOD[kind] && FOOD[kind].cut ? ', and view "cut" or "both" shows it cut open' : ''}): group: ${grp}. It gives: ${nut}. Where it comes from: ${src}. ${fact}.`));
+  if (/\b(food groups?|go,? grow,? (and )?glow|go foods?|grow foods?|glow foods?|healthy (plate|food|diet|eating)|balanced (diet|meal)|pinggang pinoy|nutrients?|nutrition|food pyramid)\b/i.test(q)) out.push(FOOD_GROUPS);
+  return out.join('\n');
 }
 // ---------- a picture of a finished drawing (for Cassie to check her own work) ----------
 export async function snapshot(rawSpec) {
@@ -2846,7 +3348,7 @@ function finishMat(T, colour, finish, { real, matte, glow }) {
 // tree, a flower or a rock stands at y 0; clouds, the sun and the moon float high above; roots grow below it). Surfaces
 // are bent by noise so nothing is a perfect ball: lumpy leafy crowns, rough bark, jagged pine tiers, faceted rocks;
 // every clump a slightly different green, and matte natural materials that catch the light like the real thing.
-const KIT3 = ['tree', 'flower', 'leaf', 'cloud', 'sun', 'moon', 'rainbow', 'rock', 'grass', 'log', 'mushroom', 'ground', 'drops', 'snowflake', 'bolt', 'vehicle', 'animal', 'appliance']; // (v326: and vehicles; v327: animals; v328: appliances)
+const KIT3 = ['tree', 'flower', 'leaf', 'cloud', 'sun', 'moon', 'rainbow', 'rock', 'grass', 'log', 'mushroom', 'ground', 'drops', 'snowflake', 'bolt', 'vehicle', 'animal', 'appliance', 'food']; // (v326: and vehicles; v327: animals; v328: appliances; v329: food)
 const KIT3_KINDS = {
   tree: ['round', 'oak', 'pine', 'bush', 'palm', 'blossom', 'fruit', 'autumn', 'bare'],
   flower: ['sunflower', 'daisy', 'tulip', 'rose', 'lily', 'lavender', 'blossom', 'hydrangea'],
@@ -2855,11 +3357,17 @@ const KIT3_KINDS = {
   get vehicle() { return VEH_KINDS; },
   get animal() { return ANIMAL_KINDS; },
   get appliance() { return APPL_KINDS; },
+  get food() { return FOOD_KINDS; },
 };
 // the box a kit model fills, from where it stands (for the model's checks and the camera)
 function kit3Box(s, pos) {
   const t = String(s.t || '').toLowerCase(), h = Math.abs(n3(s.h ?? s.size, t === 'tree' ? 3 : 1)), w = Math.abs(n3(s.w ?? s.r ?? s.size, 1)), r = Math.abs(n3(s.r ?? s.size, 0.6));
   const [x, y, z] = pos, sq = (a, lo, hi) => [x - a, y + lo, z - a, x + a, y + hi, z + a];
+  if (t === 'food') { // (v329) on the table, its width along x
+    const A = FOOD[String(s.kind)] || FOOD.apple, L = Math.min(8, Math.max(0.05, Math.abs(n3(s.w ?? s.size, 1)))), both = s.view === 'both' && !!A.cut, cut = s.view === 'cut' && !!A.cut;
+    const tall = both ? L * 0.48 * A.asp : cut ? L * (A.b === 'long' ? 0.1 : 0.48) : L * A.asp, deep = L * (A.b === 'long' || A.b === 'banana' || A.b === 'corn' ? 0.3 : 0.5);
+    return [x - L / 2, y, z - deep, x + L / 2, y + tall, z + deep];
+  }
   if (t === 'appliance') { // (v328) standing on the floor, its front toward +z (turned, its depth along x)
     const A = APPL[String(s.kind)] || APPL.fridge, H = Math.min(12, Math.max(0.1, Math.abs(n3(s.h ?? (s.w != null ? Math.abs(n3(s.w, 1)) * A.H / A.W : null) ?? s.size, A.H * 1.2)))), q = H / A.H;
     const turned = ['x', '-x', 'left', 'right'].includes(s.facing), hw = (turned ? A.D : A.W) * q / 2, hd = (turned ? A.W : A.D) * q / 2;
@@ -3596,6 +4104,200 @@ function kit3d(T, s, mat) {
     }
     if (anim.length && !s.still) G.userData.animate = (time) => anim.forEach((f) => f(time));
     G.rotation.y = ({ x: Math.PI / 2, '-x': -Math.PI / 2, '-z': Math.PI, left: -Math.PI / 2, right: Math.PI / 2 })[s.facing] || 0;
+  } else if (t === 'food') { // (v329) a fruit, a vegetable or a dish in 3D, standing on the table (y 0), w its width; "cut" or "both" shows it sliced open
+    const A = FOOD[kind] || FOOD.apple, L = Math.min(8, Math.max(0.05, Math.abs(n3(s.w ?? s.size, 1))));
+    const both = s.view === 'both' && !!A.cut, cutOnly = s.view === 'cut' && !!A.cut;
+    const gloss = (hex, rough = 0.38) => M(hex, rough, { clear: true });
+    const mesh = (geo, m, x = 0, y = 0, z = 0, parent = G) => { const e = new T.Mesh(geo, m); e.position.set(x, y, z); parent.add(e); return e; };
+    const glassy = (hex, op) => { const m = M(hex, 0.05, { clear: true, gl: op }).clone(); m.transparent = true; m.opacity = op; m.depthWrite = false; return m; };
+    const anim = [];
+    // the profile of a round fruit (its right half, bottom to top), the same shapes as the flat drawings
+    const prof = (sh, rx, ry) => { const out = []; for (let i = 0; i <= 40; i++) { const tt = -Math.PI / 2 + Math.PI * i / 40, st = Math.sin(tt), ct = Math.cos(tt); let px = ct * rx, py = st * ry;
+      if (sh === 'apple') { px *= 1 + 0.07 * st; py -= 0.09 * ry * Math.exp(-(((tt - Math.PI / 2) / 0.32) ** 2)); py += 0.05 * ry * Math.exp(-(((tt + Math.PI / 2) / 0.4) ** 2)); if (i === 40) px = 0.02 * rx; }
+      if (sh === 'pear') px *= 1 - 0.5 * Math.max(0, st) ** 1.2;
+      if (sh === 'heart') { px *= 1 - 0.62 * Math.max(0, -st) ** 1.4; py *= st < 0 ? 1.08 : 0.92; }
+      if (sh === 'onion') { if (st > 0) { const q = st ** 3; px *= 1 - 0.75 * q; py *= 1 + 0.32 * q; } }
+      out.push([Math.max(0.0005, px), ry + py]); } return out; };
+    const lathe2 = (pts, m, parent, phiLen = Math.PI * 2, seg = 48) => { const g = new T.LatheGeometry(pts.map(([r, y]) => new T.Vector2(r, y)), seg, 0, phiLen); g.computeVertexNormals(); const e = new T.Mesh(g, m); parent.add(e); return e; };
+    const ribs = (e, n, k) => { const p = e.geometry.attributes.position; for (let i = 0; i < p.count; i++) { const x = p.getX(i), z = p.getZ(i), a = Math.atan2(z, x), f = 1 + k * Math.cos(a * n); p.setX(i, x * f); p.setZ(i, z * f); } e.geometry.computeVertexNormals(); };
+    const bumpy = (e, amp, freq = 9) => { const p = e.geometry.attributes.position, v = new T.Vector3(); for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i); const n = 1 + amp * noise(v.x * freq / L, v.y * freq / L, v.z * freq / L); p.setXYZ(i, v.x * n, v.y, v.z * n); } e.geometry.computeVertexNormals(); };
+    const paintV = (e, fn) => { const p = e.geometry.attributes.position, cs = new Float32Array(p.count * 3), c = new T.Color(); for (let i = 0; i < p.count; i++) { fn(p.getX(i) / L, p.getY(i) / L, p.getZ(i) / L, c); cs[i * 3] = c.r; cs[i * 3 + 1] = c.g; cs[i * 3 + 2] = c.b; } e.geometry.setAttribute('color', new T.BufferAttribute(cs, 3)); const m = e.material.clone(); m.vertexColors = true; m.color = new T.Color('#ffffff'); e.material = m; };
+    const leaf3 = (parent, x, y, z, len, ang, tilt, hex = '#4f8a30', wide = 0.4) => { const e = new T.Mesh(leafGeo(len, len * wide), M(hex, 0.6, { clear: true })); e.material = e.material.clone(); e.material.side = T.DoubleSide; e.position.set(x, y, z); e.rotation.set(tilt, ang, 0, 'YXZ'); parent.add(e); return e; }; // (the blade grows along -z: a positive tilt lifts its tip)
+    const stem3 = (parent, x, y, z, len, r, hex = '#6b4a2a', bend = 0.3) => { const c = new T.CatmullRomCurve3([new T.Vector3(x, y, z), new T.Vector3(x + len * bend * 0.3, y + len * 0.6, z), new T.Vector3(x + len * bend, y + len, z)]); return mesh(new T.TubeGeometry(c, 12, r, 8), M(hex, 0.7), 0, 0, 0, parent); };
+    const sepals3 = (parent, x, y, z, len, hex = '#3f8a2e') => { for (let i = 0; i < 6; i++) leaf3(parent, x, y, z, len, i * Math.PI / 3, -0.3, hex, 0.35); };
+    const steamPuffs = (x, y, z, rise) => { const st = glassy('#ffffff', 0.55); const puffs = [0, 1, 2, 3].map(() => { const p = mesh(new T.SphereGeometry(0.06 * L, 12, 10), st.clone(), x, y, z); p.userData.keepOpacity = 0.55; return p; }); anim.push((tm) => puffs.forEach((p, i) => { const f = (tm * 0.35 + i / 4) % 1; p.position.set(x + Math.sin(f * 6 + i) * 0.04 * L, y + f * rise, z); p.scale.setScalar(0.5 + f * 1.6); p.material.opacity = 0.55 * (1 - f); })); };
+    // the cut face: a flat picture of what is inside, painted the way it really looks
+    const cutTex = () => {
+      if (typeof document === 'undefined') return null; const S = 256, cv = document.createElement('canvas'); cv.width = cv.height = S; const x = cv.getContext('2d'), c = S / 2, rnd = krand(kind.length * 97);
+      const dot = (u, v, r, col) => { x.fillStyle = col; x.beginPath(); x.arc(u, v, r, 0, Math.PI * 2); x.fill(); };
+      const ell = (u, v, rx, ry, rot, col) => { x.fillStyle = col; x.beginPath(); x.ellipse(u, v, rx, ry, rot, 0, Math.PI * 2); x.fill(); };
+      const fl = A.flesh || '#f4e4a2';
+      if (A.b !== 'long') { x.translate(c, c); x.rotate(Math.PI / 2); x.translate(-c, -c); } // (the fruit's height runs along the face's length)
+      x.fillStyle = A.cut === 'hollow' ? '#6e4a2b' : A.cut === 'melon' ? '#3d8a36' : A.col; x.fillRect(0, 0, S, S);
+      const inner = A.cut === 'hollow' ? 0.88 : A.cut === 'melon' ? 0.9 : 0.96;
+      ell(c, c, c * inner, c * inner, 0, A.cut === 'segments' || A.cut === 'melon' ? '#f6f3e2' : fl);
+      if (A.cut === 'melon') ell(c, c, c * 0.84, c * 0.84, 0, fl);
+      const rg = x.createRadialGradient(c * 0.8, c * 0.8, 0, c, c, c); rg.addColorStop(0, 'rgba(255,255,255,0.25)'); rg.addColorStop(1, 'rgba(0,0,0,0.06)');
+      if (A.cut === 'segments') { for (let i = 0; i < 10; i++) { const a0 = i * 0.628 + 0.05, a1 = (i + 1) * 0.628 - 0.05; x.fillStyle = fl; x.beginPath(); x.moveTo(c + Math.cos(a0) * c * 0.08, c + Math.sin(a0) * c * 0.08); x.arc(c, c, c * 0.86, a0, a1); x.closePath(); x.fill(); } dot(c, c, c * 0.07, '#f6f3e2'); }
+      if (A.cut === 'core') { x.fillStyle = kitLight(fl, 0.25); x.strokeStyle = kitDark(fl, 0.3); x.lineWidth = 4; x.beginPath(); x.ellipse(c, c, c * 0.24, c * 0.44, 0, 0, Math.PI * 2); x.fill(); x.stroke(); x.beginPath(); x.moveTo(c, c - c * 0.44); x.lineTo(c, c - c * 0.92); x.moveTo(c, c + c * 0.44); x.lineTo(c, c + c * 0.92); x.stroke(); ell(c - c * 0.08, c, c * 0.07, c * 0.13, -0.2, '#4a2a18'); ell(c + c * 0.08, c, c * 0.07, c * 0.13, 0.2, '#4a2a18'); }
+      if (A.cut === 'pit') { const big = kind === 'mango' ? 0.6 : kind === 'avocado' ? 0.42 : 0.36; if (A.rim) { x.strokeStyle = A.rim; x.lineWidth = c * 0.08; x.beginPath(); x.arc(c, c, c * 0.88, 0, Math.PI * 2); x.stroke(); } ell(c, c, c * big * (kind === 'mango' ? 0.55 : 0.85), c * big, 0, A.pit); }
+      if (A.cut === 'kiwi') { for (let i = 0; i < 60; i++) { const a = i / 60 * Math.PI * 2; x.strokeStyle = 'rgba(220,240,170,0.6)'; x.lineWidth = 2; x.beginPath(); x.moveTo(c + Math.cos(a) * c * 0.25, c + Math.sin(a) * c * 0.25); x.lineTo(c + Math.cos(a) * c * 0.85, c + Math.sin(a) * c * 0.85); x.stroke(); ell(c + Math.cos(a) * c * 0.32, c + Math.sin(a) * c * 0.32, 3, 6, a, '#1d1a14'); } ell(c, c, c * 0.24, c * 0.18, 0, '#f4f6d8'); }
+      if (A.cut === 'arils') for (let i = 0; i < 160; i++) { const a = rnd() * 6.283, r = Math.sqrt(rnd()) * c * 0.8; dot(c + Math.cos(a) * r, c + Math.sin(a) * r, c * 0.06, i % 3 ? '#c8102e' : '#e2364c'); }
+      if (A.cut === 'hollow') ell(c, c, c * 0.62, c * 0.62, 0, '#f4efe3');
+      if (A.cut === 'seeds') { ell(c, c, c * 0.42, c * 0.3, 0, kind === 'papaya' ? '#e0632a' : '#f1c27a'); for (let i = 0; i < 60; i++) { const a = rnd() * 6.283, r = Math.sqrt(rnd()) * c * 0.3; dot(c + Math.cos(a) * r * 1.3, c + Math.sin(a) * r, c * 0.035, kind === 'papaya' ? '#1c1714' : '#f3e3b8'); } }
+      if (A.cut === 'melon') for (let i = 0; i < 22; i++) { const a = i / 22 * 6.283, r = c * (0.4 + (i % 2) * 0.16); ell(c + Math.cos(a) * r, c + Math.sin(a) * r, 4, 8, a + 1.57, '#1d1a18'); }
+      if (A.cut === 'dots') for (let i = 0; i < 300; i++) { const a = rnd() * 6.283, r = Math.sqrt(rnd()) * c * 0.88; dot(c + Math.cos(a) * r, c + Math.sin(a) * r, 1.6, '#1a1614'); }
+      if (A.cut === 'star') for (let i = 0; i < 8; i++) { const a = i / 8 * 6.283; ell(c + Math.cos(a) * c * 0.2, c + Math.sin(a) * c * 0.2, c * 0.2, c * 0.05, a, kitLight(fl, 0.4)); }
+      if (A.cut === 'berry') { ell(c, c, c * 0.42, c * 0.55, 0, '#fbe3e0'); }
+      if (A.cut === 'tomato') { for (let i = 0; i < 4; i++) { const a = i * 1.571 + 0.78; ell(c + Math.cos(a) * c * 0.4, c + Math.sin(a) * c * 0.4, c * 0.26, c * 0.2, a, '#f6a08a'); for (let j = 0; j < 6; j++) dot(c + Math.cos(a) * c * 0.4 + (rnd() - 0.5) * c * 0.2, c + Math.sin(a) * c * 0.4 + (rnd() - 0.5) * c * 0.2, 3, '#f8e07a'); } dot(c, c, c * 0.16, kitLight(fl, 0.3)); }
+      if (A.cut === 'rings') { x.strokeStyle = '#c56d93'; x.lineWidth = 3; for (let i = 1; i < 8; i++) { x.beginPath(); x.ellipse(c, c, c * (0.95 - i * 0.12), c * (0.95 - i * 0.12), 0, 0, Math.PI * 2); x.stroke(); } }
+      if (A.cut === 'pumpkin') { ell(c, c, c * 0.45, c * 0.32, 0, '#f7c46a'); for (let i = 0; i < 20; i++) ell(c + (rnd() - 0.5) * c * 0.6, c + (rnd() - 0.5) * c * 0.4, c * 0.05, c * 0.03, rnd() * 3, '#f7ecd0'); }
+      if (A.cut === 'cucumber') { ell(c, c, c * 0.5, c * 0.5, 0, kitLight(fl, 0.25)); for (let k = 0; k < 6; k++) { const a = k / 6 * 6.283; ell(c + Math.cos(a) * c * 0.3, c + Math.sin(a) * c * 0.3, c * 0.06, c * 0.1, a, '#f6f9e8'); } }
+      if (A.cut === 'plain') for (let i = 0; i < 30; i++) dot(c + (rnd() - 0.5) * c * 1.4, c + (rnd() - 0.5) * c * 1.4, 2, kitDark(fl, 0.15));
+      x.fillStyle = rg; x.fillRect(0, 0, S, S); x.fillStyle = 'rgba(120,80,40,0.08)'; x.fillRect(0, 0, S, S); // (a touch darker: the studio light is bright)
+      const tx = new T.CanvasTexture(cv); if (T.SRGBColorSpace) tx.colorSpace = T.SRGBColorSpace; return tx;
+    };
+    const faceMat = () => { const tx = cutTex(), m = M(A.flesh || '#f4e4a2', 0.85, { face: kind }).clone(); if (tx) { m.map = tx; m.color = new T.Color('#ffffff'); } return m; };
+    const uvBox = (g) => { g.computeBoundingBox(); const b = g.boundingBox, p = g.attributes.position, uv = new Float32Array(p.count * 2); for (let i = 0; i < p.count; i++) { uv[i * 2] = (p.getX(i) - b.min.x) / (b.max.x - b.min.x || 1); uv[i * 2 + 1] = (p.getY(i) - b.min.y) / (b.max.y - b.min.y || 1); } g.setAttribute('uv', new T.BufferAttribute(uv, 2)); return g; };
+
+    const build = (P, w, cut) => { // one item in group P, its width w (in units)
+      const k = w, cy = A.asp / 2;
+      if (A.b === 'round' || A.b === 'pumpkin') {
+        const lying = ['lemon', 'mango', 'oval', 'lumpy'].includes(A.sh), rx = 0.48 * k, ry = A.asp * 0.48 * k;
+        const skin = gloss(A.col, A.tex === 'fuzz' || A.tex === 'fiber' || A.tex === 'net' ? 0.85 : A.tex === 'eyes' ? 0.8 : 0.3);
+        if (!cut) {
+          let body;
+          if (lying) { body = mesh(new T.SphereGeometry(0.48 * k, 48, 32), skin, 0, ry, 0, P); body.scale.set(1, A.asp, A.sh === 'lumpy' ? 0.7 : A.asp * 0.95); if (A.sh === 'lumpy') bumpy(body, 0.06, 6); if (A.sh === 'lemon') [-1, 1].forEach((sd) => { const nb = mesh(new T.SphereGeometry(0.06 * k, 12, 10), skin, sd * 0.49 * k, ry, 0, P); nb.scale.set(1.3, 0.8, 0.8); }); }
+          else { body = lathe2(prof(A.b === 'pumpkin' ? 'round' : A.sh, rx, ry), skin, P); if (A.b === 'pumpkin' || A.sh === 'squat' && kind === 'tomato') ribs(body, A.b === 'pumpkin' ? 10 : 5, A.b === 'pumpkin' ? 0.07 : 0.025); }
+          if (A.col2 || A.col3 || A.tex === 'stripes' || A.tex === 'seeds' || A.tex === 'net' || A.tex === 'scales' || A.tex === 'eyes' || A.tex === 'dimple') { const base = new T.Color(A.col), c2 = new T.Color(A.col2 || A.col), c3 = new T.Color(A.col3 || A.col), dk = new T.Color(kitDark3(A.col)), y1 = new T.Color('#f4d24a'), net = new T.Color('#efe1bd'), gr = new T.Color('#9cc43a');
+            paintV(body, (x, y, z, c) => { c.copy(base); const a = Math.atan2(z, x);
+              if (A.col2) c.lerp(c2, Math.max(0, Math.min(1, (x * 1.6 + 0.2 + noise(x * 6, y * 6, z * 6) * 0.25))) * 0.6);
+              if (A.col3) c.lerp(c3, Math.max(0, Math.min(1, -x * 2.4 - 0.2)) * 0.7);
+              if (A.tex === 'stripes' && Math.sin(a * 14 + Math.sin(y * 18) * 0.9) > 0.1) c.copy(dk);
+              if (A.tex === 'dimple' && noise(x * 60, y * 60, z * 60) > 0.75) c.multiplyScalar(0.9);
+              if (A.tex === 'seeds' && Math.sin(a * 34) * Math.sin(y * 140) > 0.94) c.copy(y1);
+              if (A.tex === 'net' && Math.abs(noise(x * 22, y * 22, z * 22)) < 0.08) c.copy(net);
+              if (A.tex === 'scales' && noise(x * 9, y * 9, z * 9) > 0.7) c.copy(gr);
+              if (A.tex === 'eyes' && noise(x * 14, y * 14, z * 14) > 0.85) c.multiplyScalar(0.7); });
+          }
+          const topY = lying ? 2 * ry : prof(A.sh, rx, ry)[40][1];
+          if (A.stem) stem3(P, 0, topY - 0.03 * k, 0, 0.1 * k, 0.014 * k);
+          if (A.leaf) leaf3(P, 0.01 * k, topY + 0.03 * k, 0, 0.24 * k, 0.6, 0.5, '#5c9e35');
+          if (A.crown === 1) { const cr = mesh(new T.CylinderGeometry(0.06 * k, 0.04 * k, 0.08 * k, 6, 1, true), skin, 0, topY + 0.03 * k, 0, P); cr.material = skin; }
+          if (A.crown === 2 || A.crown === 3) sepals3(P, 0, topY - 0.01 * k, 0, (A.sh === 'heart' ? 0.16 : 0.12) * k, A.crown === 2 ? '#5a6e2a' : '#3f8a2e');
+          if (A.b === 'pumpkin') { stem3(P, 0, topY - 0.02 * k, 0, 0.12 * k, 0.04 * k, '#6b5a2a'); }
+          if (A.sh === 'onion') stem3(P, 0, topY - 0.02 * k, 0, 0.06 * k, 0.01 * k, '#c9a07a', 0);
+        } else { // a half, lying with its cut face up, what is inside painted on it
+          const pr = lying ? Array.from({ length: 41 }, (_, i) => { const tt = -Math.PI / 2 + Math.PI * i / 40; return [Math.max(0.0005, Math.cos(tt) * rx), ry + Math.sin(tt) * Math.min(ry, rx * A.asp)]; }) : prof(A.b === 'pumpkin' ? 'round' : A.sh, rx, ry);
+          const half = lathe2(pr, M(A.cut === 'hollow' ? '#6e4a2b' : A.col, 0.4, { clear: true }), new T.Group(), Math.PI); const hg = half.geometry; hg.rotateZ(-Math.PI / 2); hg.translate(-ry, rx, 0);
+          const shp = new T.Shape(); pr.forEach(([r, y], i) => (i ? shp.lineTo(y - ry, r) : shp.moveTo(y - ry, r))); for (let i = pr.length - 1; i >= 0; i--) shp.lineTo(pr[i][1] - ry, -pr[i][0]);
+          const fg = uvBox(new T.ShapeGeometry(shp, 24)); fg.rotateX(-Math.PI / 2); const face = mesh(fg, faceMat(), 0, rx + 0.001 * k, 0, P); void face;
+          const hm = new T.Mesh(hg, half.material); hm.material = hm.material.clone(); hm.material.side = T.DoubleSide; P.add(hm);
+        }
+      } else if (A.b === 'long') {
+        const len = 0.92 * k, H0 = A.asp / 2 * k, bend = kind === 'chili' ? 0.1 * k : kind === 'sweetpotato' ? 0.03 * k : 0.04 * k;
+        const rad = (tt) => { const e = Math.sin(Math.PI * tt); if (A.bulb) return H0 * (0.35 + 0.65 * Math.pow(Math.sin(Math.PI * Math.min(1, tt * 0.8 + 0.15)), 0.8)); if (A.taper === 2) return H0 * Math.max(0.05, tt < 0.15 ? 0.85 : (1 - tt) * 1.05); if (A.taper) return H0 * Math.max(0.05, Math.pow(e, 0.7)); return H0 * Math.max(0.1, Math.pow(e, 0.18)); };
+        if (!cut) {
+          const pts = []; for (let i = 0; i <= 40; i++) pts.push([Math.max(0.0005, rad(i / 40)), i / 40 * len]);
+          const e = lathe2(pts, gloss(A.col, kind === 'sweetpotato' ? 0.75 : 0.3), P, Math.PI * 2, 32), g = e.geometry; g.rotateZ(-Math.PI / 2); g.translate(-len / 2, 0, 0);
+          const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const x = p.getX(i), tt = (x + len / 2) / len; p.setY(i, p.getY(i) + H0 + bend * (Math.sin(Math.PI * tt) * 2 - 1) * (kind === 'chili' ? -1 : 1)); } g.computeVertexNormals();
+          if (A.tex === 'bumps' || A.tex === 'speckle') { const base = new T.Color(A.col), lt = new T.Color(kitLight3(A.col)); paintV(e, (x, y, z, c) => { c.copy(base); if (noise(x * 50, y * 50, z * 50) > 0.6) c.lerp(lt, 0.5); }); }
+          if (['eggplant', 'chili', 'cucumber', 'zucchini'].includes(kind)) { const cap = mesh(new T.ConeGeometry(rad(0.06) * 1.15, 0.08 * k, 8), M('#4f7a2a', 0.6), -len / 2 + 0.03 * k, H0 + (kind === 'chili' ? bend : -bend), 0, P); cap.rotation.z = Math.PI / 2; stem3(P, -len / 2, H0 + (kind === 'chili' ? bend : -bend), 0, 0.08 * k, 0.015 * k, '#4f7a2a', -1); }
+        } else {
+          [-0.28, 0, 0.28].forEach((u, i) => { const r = 0.14 * k, th = 0.05 * k; const sl = mesh(new T.CylinderGeometry(r, r, th, 40), M(A.col, 0.4, { clear: true }), u * k, th / 2 + (i === 1 ? 0.02 * k : 0), 0, P); const f = mesh(new T.CircleGeometry(r * 0.93, 40), faceMat(), u * k, th + 0.001 * k + (i === 1 ? 0.02 * k : 0), 0, P); f.rotation.x = -Math.PI / 2; void sl; });
+        }
+      } else if (A.b === 'banana') {
+        const c = new T.CatmullRomCurve3([[-0.46, 0.36], [-0.25, 0.16], [0, 0.11], [0.25, 0.15], [0.46, 0.33]].map(([u, v]) => new T.Vector3(u * k, v * k, 0)));
+        const tb = new T.TubeGeometry(c, 60, 0.075 * k, 6, false), p = tb.attributes.position; for (let i = 0; i <= 60; i++) { const f = Math.sin(Math.PI * Math.min(1, Math.max(0, (i / 60 - 0.02) / 0.96))) ** 0.35, ctr = c.getPointAt(i / 60); for (let j = 0; j <= 6; j++) { const idx = i * 7 + j, v = new T.Vector3().fromBufferAttribute(p, idx).sub(ctr).multiplyScalar(Math.max(0.12, f)).add(ctr); p.setXYZ(idx, v.x, v.y, v.z); } } tb.computeVertexNormals();
+        mesh(tb, gloss(A.col, 0.45), 0, 0, 0, P); mesh(new T.SphereGeometry(0.02 * k, 8, 6), M('#3a2a1a', 0.7), 0.46 * k, 0.33 * k, 0, P); stem3(P, -0.46 * k, 0.36 * k, 0, 0.06 * k, 0.018 * k, '#7a8a3a', -0.5);
+      } else if (A.b === 'grapes' || A.b === 'cherries' || A.b === 'berries' || A.b === 'drupe') {
+        const m = gloss(A.col, A.b === 'berries' ? 0.55 : 0.28);
+        if (A.b === 'grapes') { const rr = 0.085 * k; let n = 0; for (let ri = 0; ri < 7; ri++) { const cnt = [5, 5, 4, 4, 3, 2, 1][ri]; for (let i = 0; i < cnt; i++) for (let j = 0; j < (cnt > 2 ? 2 : 1); j++) { const R2 = krand(++n * 13); mesh(new T.SphereGeometry(rr, 16, 12), m, ((i - (cnt - 1) / 2) * 1.75 + (R2() - 0.5) * 0.4) * rr, (1.0 * k - ri * rr * 1.45 - rr), (j - 0.5) * rr * 1.5 + (R2() - 0.5) * rr * 0.4, P); } } stem3(P, 0, 1.0 * k, 0, 0.16 * k, 0.015 * k); leaf3(P, 0.02 * k, 1.08 * k, 0, 0.3 * k, 0.4, 0.3, '#5c9e35', 0.6); }
+        if (A.b === 'cherries') { [[-0.17, 0.18], [0.16, 0.17]].forEach(([u, r]) => { mesh(new T.SphereGeometry(r * k, 24, 18), m, u * k, r * k, 0, P); const cc = new T.CatmullRomCurve3([new T.Vector3(u * k, r * 2 * k, 0), new T.Vector3(u * 0.5 * k, 0.65 * k, 0), new T.Vector3(0.02 * k, 1.0 * k, 0)]); mesh(new T.TubeGeometry(cc, 16, 0.012 * k, 6), M('#5a7a2a', 0.7), 0, 0, 0, P); }); leaf3(P, 0.02 * k, 0.98 * k, 0, 0.3 * k, -0.6, 0.2); }
+        if (A.b === 'berries') [[-0.2, 0.17, 0.1], [0.2, 0.16, -0.05], [0, 0.17, -0.2], [0.02, 0.16, 0.18]].forEach(([u, r, z]) => { mesh(new T.SphereGeometry(r * k, 20, 16), m, u * k, r * k, z * k, P); mesh(new T.TorusGeometry(r * 0.25 * k, r * 0.06 * k, 6, 10), M('#1f2a52', 0.6), u * k, r * 1.95 * k, z * k, P).rotation.x = Math.PI / 2; });
+        if (A.b === 'drupe') { const rr = 0.055 * k; let n = 0; for (let ri = 0; ri < 9; ri++) { const v = 0.05 + ri * 0.1, ring = 0.33 * Math.sin(Math.PI * (0.12 + ri / 9.5)); const cnt = Math.max(1, Math.round(ring * 6.283 * k / (rr * 1.8))); for (let i = 0; i < cnt; i++) { const a = i / cnt * 6.283 + ri * 0.4; mesh(new T.SphereGeometry(rr, 10, 8), m, Math.cos(a) * ring * k, (v + 0.05) * k, Math.sin(a) * ring * k, P); n++; } } if (kind === 'raspberry') sepals3(P, 0, A.asp * k - 0.02 * k, 0, 0.1 * k); }
+      } else if (A.b === 'pineapple') {
+        const body = lathe2(prof('round', 0.36 * k, 0.5 * k).map(([r, y]) => [r, y + 0.05 * k]), M(A.col, 0.75), P);
+        paintV(body, (x, y, z, c) => { const a = Math.atan2(z, x); c.set(A.col); const f = Math.sin(a * 12 + y * 50) * Math.sin(a * 12 - y * 50); if (f > 0.6) c.set('#6b4a1a'); else if (f < -0.5) c.set(kitDark3(A.col)); });
+        for (let i = 0; i < 16; i++) leaf3(P, 0, 1.0 * k, 0, (0.32 + (i % 3) * 0.1) * k, i * 0.785 + (i % 2) * 0.39, 1.3 - (i % 3) * 0.25, i % 2 ? '#4f8a30' : '#3f7a2a', 0.22);
+      } else if (A.b === 'carrot') {
+        const pts = []; for (let i = 0; i <= 30; i++) { const tt = i / 30; pts.push([Math.max(0.001, 0.15 * k * Math.pow(tt, 0.7)), 0.04 * k + tt * 0.94 * k]); } pts.push([0.001, 0.99 * k]);
+        const e = lathe2(pts, M(A.col, 0.6, { clear: true }), P); paintV(e, (x, y, z, c) => { c.set(A.col); if (Math.sin(y * 90) > 0.85) c.set(kitDark3(A.col)); });
+        for (let i = 0; i < 8; i++) { const a = i * 0.8; const cc = new T.CatmullRomCurve3([new T.Vector3(0, 0.97 * k, 0), new T.Vector3(Math.cos(a) * 0.1 * k, 1.3 * k, Math.sin(a) * 0.1 * k), new T.Vector3(Math.cos(a) * 0.25 * k, 1.6 * k, Math.sin(a) * 0.25 * k)]); mesh(new T.TubeGeometry(cc, 10, 0.012 * k, 5), M('#4f9a35', 0.6), 0, 0, 0, P); for (let j = 1; j < 4; j++) { const q = cc.getPointAt(0.3 + j * 0.2); leaf3(P, q.x, q.y, q.z, 0.1 * k, a + 0.5, 0.6, '#5aa83a', 0.5); leaf3(P, q.x, q.y, q.z, 0.1 * k, a - 0.5, 0.6, '#5aa83a', 0.5); } }
+      } else if (A.b === 'corn') {
+        const cobPts = []; for (let i = 0; i <= 24; i++) { const tt = i / 24; cobPts.push([Math.max(0.001, 0.12 * k * Math.pow(Math.sin(Math.PI * (0.08 + tt * 0.84)), 0.4)), tt * 0.78 * k]); }
+        const cob = lathe2(cobPts, M(A.col, 0.4, { clear: true }), new T.Group()); const cg = cob.geometry; cg.rotateZ(-Math.PI / 2); cg.translate(-0.34 * k, 0.18 * k, 0); const ce = mesh(cg, cob.material, 0, 0, 0, P);
+        paintV(ce, (x, y, z, c) => { c.set(A.col); const a = Math.atan2(z, y - 0.18); if (Math.sin(x * 160) > 0.7 || Math.sin(a * 14) > 0.75) c.set(kitDark3(A.col)); });
+        [[1, '#8fb84a'], [-1, '#7aa83a'], [0.4, '#9cc45a']].forEach(([sd, hc]) => { const hk = new T.Mesh(leafGeo(0.95 * k, 0.16 * k, 0.6), M(hc, 0.6, { clear: true })); hk.material = hk.material.clone(); hk.material.side = T.DoubleSide; hk.position.set(-0.46 * k, 0.16 * k, 0); hk.rotation.set(0, Math.PI / 2, sd * 0.25); P.add(hk); });
+      } else if (A.b === 'pepper') {
+        const e = lathe2(prof('round', 0.42 * k, 0.4 * k).map(([r, y], i) => [r * (1 + 0.12 * Math.max(0, (y / k - 0.4))), y]), gloss(A.col, 0.22), P); ribs(e, 4, 0.09);
+        mesh(new T.CylinderGeometry(0.08 * k, 0.1 * k, 0.04 * k, 12), M('#3f7a2a', 0.5), 0, 0.8 * k, 0, P); stem3(P, 0, 0.82 * k, 0, 0.16 * k, 0.025 * k, '#4f8a30', 0.4);
+      } else if (A.b === 'cabbage' || A.b === 'lettuce' || A.b === 'broccoli') {
+        const white = kind === 'cauliflower', c = A.col;
+        if (A.b === 'broccoli') { if (!white) mesh(new T.CylinderGeometry(0.07 * k, 0.09 * k, 0.5 * k, 12), M('#9cc45a', 0.6), 0, 0.25 * k, 0, P); else for (let i = 0; i < 7; i++) leaf3(P, 0, 0.18 * k, 0, 0.42 * k, i * 0.9, 0.55, '#5f9a3a', 0.4);
+          const fm = M(c, 0.9); [[0, white ? 0.42 : 0.68, 0, 0.22], [-0.2, white ? 0.36 : 0.6, 0.06, 0.17], [0.2, white ? 0.36 : 0.6, -0.06, 0.17], [0.05, white ? 0.38 : 0.62, 0.2, 0.16], [-0.05, white ? 0.38 : 0.62, -0.2, 0.16], [0, white ? 0.55 : 0.82, 0, 0.17]].forEach(([x, y, z, r]) => { const e = mesh(lump(r * k, 3, 0.18, [1, 0.85, 1], 4), fm, x * k, y * k, z * k, P); void e; }); }
+        else { const lm = M(c, 0.55, { clear: true }); const core = mesh(lump(0.3 * k, 4, 0.04, [1, 0.92, 1], 2), lm, 0, 0.36 * k, 0, P); paintV(core, (x, y, z, cc) => { cc.set(c); if (Math.abs(Math.sin(Math.atan2(z, x) * 5 + y * 8)) < 0.08) cc.set(kitLight3(c)); }); for (let i = 0; i < 7; i++) { const lf = leaf3(P, Math.cos(i * 0.9) * 0.05 * k, 0.05 * k, Math.sin(i * 0.9) * 0.05 * k, (A.b === 'lettuce' ? 0.48 : 0.42) * k, i * 0.9, 0.7, kitDark3b(c, 0.92), 0.9); if (A.b === 'lettuce') bumpy(lf, 0.05, 30); } }
+      } else if (A.b === 'greens') {
+        for (let i = 0; i < 7; i++) leaf3(P, 0, 0.1 * k, 0, 0.7 * k, i * 0.9, 1.05 + (i % 3) * 0.12, A.col, 0.42);
+        mesh(new T.CylinderGeometry(0.05 * k, 0.05 * k, 0.06 * k, 10), M('#c9a46a', 0.8), 0, 0.12 * k, 0, P);
+      } else if (A.b === 'mushroom') {
+        lathe2([[0.1, 0], [0.11, 0.2], [0.13, 0.44], [0.001, 0.44]].map(([r, y]) => [r * k, y * k]), M('#f2ead8', 0.7), P);
+        lathe2([[0.44, 0.44], [0.46, 0.5], [0.4, 0.66], [0.2, 0.82], [0.001, 0.86]].map(([r, y]) => [r * k, y * k]), gloss(A.col, 0.55), P); const gill = mesh(new T.CircleGeometry(0.44 * k, 40), M('#e9dcc2', 0.8), 0, 0.44 * k, 0, P); gill.rotation.x = Math.PI / 2;
+      } else if (A.b === 'peas') {
+        const pod = mesh(new T.SphereGeometry(0.47 * k, 32, 16, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), M(kitDark3b(A.col, 0.85), 0.5, { clear: true }), 0, 0.17 * k, 0, P); pod.scale.set(1, 0.32, 0.25); pod.material = pod.material.clone(); pod.material.side = T.DoubleSide;
+        for (let i = 0; i < 6; i++) mesh(new T.SphereGeometry(0.065 * k, 16, 12), gloss(A.col, 0.4), (-0.3 + i * 0.12) * k, 0.16 * k, 0, P);
+      } else if (A.b === 'garlic') {
+        const gm = M(A.col, 0.6, { clear: true }); for (let i = 0; i < 7; i++) { const a = i * 0.9, cl = lathe2(prof('onion', 0.16 * k, 0.24 * k), gm, P); cl.position.set(Math.cos(a) * 0.13 * k, 0, Math.sin(a) * 0.13 * k); cl.rotation.z = -Math.cos(a) * 0.25; cl.rotation.x = Math.sin(a) * 0.25; } lathe2(prof('onion', 0.2 * k, 0.32 * k), gm, P); stem3(P, 0, 0.8 * k, 0, 0.16 * k, 0.02 * k, '#c9b89a', 0);
+      } else if (A.b === 'root') {
+        const beet = kind === 'beet', e = lathe2(prof('onion', 0.3 * k, 0.26 * k).map(([r, y]) => [r, 0.56 * k - y + 0.0]).reverse(), gloss(A.col, 0.45), P); void e;
+        mesh(new T.ConeGeometry(0.015 * k, 0.12 * k, 6), M(kitDark3(A.col), 0.6), 0, 0.03 * k, 0, P).rotation.x = Math.PI;
+        for (let i = 0; i < 6; i++) { const a = i * 1.05; const cc = new T.CatmullRomCurve3([new T.Vector3(0, 0.55 * k, 0), new T.Vector3(Math.cos(a) * 0.1 * k, 0.8 * k, Math.sin(a) * 0.1 * k), new T.Vector3(Math.cos(a) * 0.2 * k, 1.0 * k, Math.sin(a) * 0.2 * k)]); mesh(new T.TubeGeometry(cc, 10, 0.015 * k, 5), M(beet ? '#a8304f' : '#8fbf5a', 0.6), 0, 0, 0, P); leaf3(P, Math.cos(a) * 0.2 * k, 1.0 * k, Math.sin(a) * 0.2 * k, 0.45 * k, a, 1.0, beet ? '#4f8a3a' : '#5fa83a', 0.5); }
+      } else if (A.b === 'celery') {
+        for (let i = 0; i < 7; i++) { const a = i * 0.9, r = (i ? 0.07 : 0) * k; const st = mesh(new T.CylinderGeometry(0.035 * k, 0.045 * k, 1.2 * k, 10, 1, false, 0, Math.PI * 1.4), M(A.col, 0.45, { clear: true }), Math.cos(a) * r, 0.6 * k, Math.sin(a) * r, P); st.rotation.y = -a; st.material = st.material.clone(); st.material.side = T.DoubleSide; for (let j = 0; j < 3; j++) leaf3(P, Math.cos(a) * r, 1.2 * k, Math.sin(a) * r, 0.22 * k, a + j * 2, 0.4, '#5aa83a', 0.6); }
+      } else if (A.b === 'loaf') { const e = mesh(lump(0.48 * k, 3, 0.03, [1, 0.55, 0.55], 1.5), M(A.col, 0.6, { clear: true }), 0, 0.2 * k, 0, P); e.scale.y = 1; [-0.25, -0.05, 0.15, 0.32].forEach((u) => { const c = mesh(new T.CapsuleGeometry(0.02 * k, 0.12 * k, 4, 8), M('#f3d39a', 0.8), u * k, 0.44 * k, 0, P); c.rotation.set(Math.PI / 2, 0, 0.5); });
+      } else if (A.b === 'toast') {
+        const sh = new T.Shape(); [[-0.42, 0.03], [0.42, 0.03], [0.43, 0.68], [0.46, 0.82], [0.32, 0.96], [0, 0.94], [-0.32, 0.96], [-0.46, 0.82], [-0.43, 0.68]].forEach(([u, v], i) => (i ? sh.lineTo(u * k, v * k) : sh.moveTo(u * k, v * k)));
+        const tg = new T.ExtrudeGeometry(sh, { depth: 0.12 * k, bevelEnabled: true, bevelSize: 0.02 * k, bevelThickness: 0.02 * k, bevelSegments: 2, curveSegments: 8 }); tg.rotateX(-Math.PI / 2); mesh(tg, M(A.col, 0.75), 0, 0, 0.5 * k, P); mesh(new T.BoxGeometry(0.22 * k, 0.04 * k, 0.18 * k), M('#f8e08a', 0.3, { clear: true }), 0, 0.16 * k, 0, P);
+      } else if (A.b === 'croissant') { const tg = new T.TorusGeometry(0.3 * k, 0.12 * k, 16, 32, Math.PI * 1.2); const p = tg.attributes.position; for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i), a = Math.atan2(y, x), f = 0.5 + 0.5 * Math.sin((a + 0.0) * 1.5); p.setZ(i, p.getZ(i) * (0.4 + f)); } tg.computeVertexNormals(); const e = mesh(tg, M(A.col, 0.45, { clear: true }), 0, 0.12 * k, 0, P); e.rotation.set(-Math.PI / 2, 0, -Math.PI * 0.1);
+      } else if (A.b === 'bowl') {
+        const bc = A.fill === 'rice' ? '#3f6fb8' : A.fill === 'salad' ? '#f3f1ec' : '#e8eef2';
+        const bowl = lathe2([[0.2, 0], [0.22, 0.02], [0.4, 0.2], [0.46, 0.42], [0.44, 0.42], [0.38, 0.22], [0.2, 0.05], [0.001, 0.05]].map(([r, y]) => [r * k, y * k]), M(bc, 0.25, { clear: true }), P); bowl.material = bowl.material.clone(); bowl.material.side = T.DoubleSide;
+        if (A.fill === 'rice') { const r = mesh(lump(0.42 * k, 4, 0.05, [1, 0.45, 1], 12), M('#fbfaf5', 0.8), 0, 0.4 * k, 0, P); void r; }
+        else { const sf = mesh(new T.CylinderGeometry(0.42 * k, 0.4 * k, 0.02 * k, 40), gloss(A.col, 0.2), 0, 0.37 * k, 0, P); void sf;
+          if (A.fill === 'noodles') { for (let i = 0; i < 10; i++) { const cc = new T.CatmullRomCurve3(Array.from({ length: 6 }, (_, j) => new T.Vector3((-0.3 + j * 0.12) * k, (0.39 + Math.sin(j + i) * 0.01) * k, (-0.3 + i * 0.065 + Math.sin(j * 2 + i) * 0.03) * k))); mesh(new T.TubeGeometry(cc, 20, 0.012 * k, 5), M('#f8dc8a', 0.5), 0, 0, 0, P); } const egg = mesh(new T.SphereGeometry(0.07 * k, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2), M('#fbf8ef', 0.4), 0.15 * k, 0.39 * k, 0.1 * k, P); egg.scale.set(1, 0.6, 0.75); mesh(new T.SphereGeometry(0.035 * k, 12, 8), gloss('#f6a21e', 0.3), 0.15 * k, 0.41 * k, 0.1 * k, P); }
+          if (A.fill === 'soup') [[-0.2, 0.05, '#7a3a22'], [0.1, -0.1, '#f3c46a'], [0.2, 0.12, '#7a3a22'], [-0.05, 0.2, '#f3c46a'], [0, -0.22, '#5aa83a']].forEach(([x, z, c]) => mesh(new T.BoxGeometry(0.07 * k, 0.05 * k, 0.07 * k), M(c, 0.6), x * k, 0.39 * k, z * k, P).rotation.set(0.3, x * 4, 0.2));
+          if (A.fill === 'salad') { for (let i = 0; i < 8; i++) leaf3(P, Math.cos(i) * 0.15 * k, 0.4 * k, Math.sin(i) * 0.15 * k, 0.24 * k, i * 0.8, 0.5, ['#5aa83a', '#7cc04a', '#3f8a2e', '#8bd15a'][i % 4], 0.7); [[0.05, 0.05], [-0.15, -0.1], [0.2, -0.12]].forEach(([x, z]) => mesh(new T.SphereGeometry(0.05 * k, 14, 10), gloss('#e3332a', 0.3), x * k, 0.45 * k, z * k, P)); }
+        }
+        if (A.hot) steamPuffs(0, 0.5 * k, 0, 0.5 * k);
+      } else if (A.b === 'sandwich' || A.b === 'burger') {
+        const disc = (r, h, y, c, rough = 0.6) => mesh(new T.CylinderGeometry(r * k, r * k, h * k, 40), M(c, rough, { clear: true }), 0, y * k, 0, P);
+        if (A.b === 'burger') { disc(0.42, 0.1, 0.06, '#d98c3a'); disc(0.45, 0.12, 0.17, '#6b3a1e', 0.8); const ch = mesh(new T.BoxGeometry(0.75 * k, 0.02 * k, 0.75 * k), M('#f6c21e', 0.4, { clear: true }), 0, 0.245 * k, 0, P); ch.rotation.y = 0.4; const lt = disc(0.47, 0.03, 0.27, '#6fbf3a'); bumpy(lt, 0.06, 20); const top = lathe2([[0.44, 0], [0.44, 0.06], [0.38, 0.22], [0.2, 0.33], [0.001, 0.35]].map(([r, y]) => [r * k, y * k]), M('#d98c3a', 0.4, { clear: true }), P); top.position.y = 0.29 * k; for (let i = 0; i < 14; i++) { const a = i * 2.4, r = 0.1 + (i % 4) * 0.06; const sd = mesh(new T.SphereGeometry(0.014 * k, 6, 4), M('#fbf3d8', 0.6), Math.cos(a) * r * k, (0.29 + 0.35 - r * 0.6) * k, Math.sin(a) * r * k, P); sd.scale.set(1.6, 0.6, 1); } }
+        else { const tri = (h, y, c) => { const sh = new T.Shape(); sh.moveTo(-0.44 * k, -0.3 * k); sh.lineTo(0.44 * k, -0.3 * k); sh.lineTo(0, 0.42 * k); sh.lineTo(-0.44 * k, -0.3 * k); const gg = new T.ExtrudeGeometry(sh, { depth: h * k, bevelEnabled: true, bevelSize: 0.015 * k, bevelThickness: 0.01 * k, bevelSegments: 2 }); gg.rotateX(-Math.PI / 2); return mesh(gg, M(c, 0.6, { clear: true }), 0, y * k, 0, P); }; tri(0.1, 0.02, '#e6c48a'); tri(0.03, 0.13, '#6fbf3a'); tri(0.03, 0.17, '#f6c84a'); tri(0.04, 0.21, '#e3332a'); tri(0.05, 0.26, '#e8a09a'); tri(0.1, 0.33, '#e6c48a'); }
+      } else if (A.b === 'pizza') { const sh = new T.Shape(); sh.moveTo(0, -0.45 * k); sh.lineTo(0.42 * k, 0.4 * k); sh.quadraticCurveTo(0, 0.5 * k, -0.42 * k, 0.4 * k); sh.lineTo(0, -0.45 * k); const gg = new T.ExtrudeGeometry(sh, { depth: 0.04 * k, bevelEnabled: true, bevelSize: 0.01 * k, bevelThickness: 0.01 * k, bevelSegments: 2 }); gg.rotateX(-Math.PI / 2); mesh(gg, M(A.col, 0.5, { clear: true }), 0, 0, 0, P); const cr = mesh(new T.CylinderGeometry(0.04 * k, 0.04 * k, 0.86 * k, 12), M('#c9873a', 0.7), 0, 0.05 * k, -0.42 * k, P); cr.rotation.z = Math.PI / 2; [[0, -0.2], [-0.15, -0.3], [0.15, -0.3], [0.03, 0.05], [-0.08, -0.08]].forEach(([x, z]) => mesh(new T.CylinderGeometry(0.055 * k, 0.055 * k, 0.012 * k, 20), M('#b9231e', 0.45, { clear: true }), x * k, 0.065 * k, z * k, P));
+      } else if (A.b === 'taco') { const sh = mesh(new T.CylinderGeometry(0.4 * k, 0.4 * k, 0.32 * k, 32, 1, true, Math.PI / 2, Math.PI), M(A.col, 0.6), 0, 0.4 * k, 0, P); sh.rotation.x = Math.PI / 2; sh.material = sh.material.clone(); sh.material.side = T.DoubleSide; const fill = mesh(lump(0.3 * k, 3, 0.2, [1.2, 0.3, 0.45], 5), M('#6fbf3a', 0.7), 0, 0.42 * k, 0, P); void fill; [[-0.2], [0], [0.2]].forEach(([x]) => mesh(new T.SphereGeometry(0.05 * k, 12, 8), gloss('#e3332a'), x * k, 0.47 * k, 0.02 * k, P));
+      } else if (A.b === 'fries') { const box = mesh(new T.CylinderGeometry(0.34 * k, 0.26 * k, 0.72 * k, 4, 1), gloss('#d9262c', 0.4), 0, 0.39 * k, 0, P); box.rotation.y = Math.PI / 4; box.scale.z = 0.6; for (let i = 0; i < 16; i++) { const R2 = krand(i * 17); const f = mesh(new T.BoxGeometry(0.05 * k, (0.5 + R2() * 0.3) * k, 0.05 * k), M('#f6c64a', 0.6), (-0.2 + (i % 8) * 0.06) * k, (0.75 + R2() * 0.1) * k, (i < 8 ? -0.05 : 0.05) * k, P); f.rotation.z = (R2() - 0.5) * 0.3; }
+      } else if (['pancakes', 'egg', 'steak', 'bacon', 'sausage', 'roast', 'drumstick', 'salmon', 'waffle', 'cheese'].includes(A.b)) {
+        if (['pancakes', 'egg', 'steak', 'roast'].includes(A.b)) { lathe2([[0.001, 0], [0.4, 0], [0.48, 0.05], [0.47, 0.06], [0.38, 0.02], [0.001, 0.02]].map(([r, y]) => [r * k, y * k]), M('#f3f5f7', 0.25, { clear: true }), P); }
+        const flat = (pts, h, y, c, rough = 0.6) => { const sh = new T.Shape(); pts.forEach(([u, v], i) => (i ? sh.lineTo(u * k, v * k) : sh.moveTo(u * k, v * k))); const gg = new T.ExtrudeGeometry(sh, { depth: h * k, bevelEnabled: true, bevelSize: Math.min(0.03, h * 0.4) * k, bevelThickness: Math.min(0.03, h * 0.4) * k, bevelSegments: 3, curveSegments: 12 }); gg.rotateX(-Math.PI / 2); return mesh(gg, M(c, rough, { clear: true }), 0, y * k, 0, P); };
+        if (A.b === 'pancakes') { for (let i = 0; i < 5; i++) mesh(new T.CylinderGeometry(0.34 * k, 0.34 * k, 0.08 * k, 40), M(A.col, 0.55, { clear: true }), 0, (0.07 + i * 0.09) * k, 0, P); mesh(new T.BoxGeometry(0.12 * k, 0.05 * k, 0.12 * k), M('#f8e08a', 0.3, { clear: true }), 0, 0.52 * k, 0, P); const sy = mesh(new T.CylinderGeometry(0.3 * k, 0.3 * k, 0.012 * k, 40), glassy('#b9651a', 0.75), 0, 0.5 * k, 0, P); sy.userData.keepOpacity = 0.75; }
+        if (A.b === 'egg') { flat([[-0.36, 0], [-0.3, 0.2], [0, 0.3], [0.3, 0.22], [0.38, 0], [0.25, -0.22], [-0.1, -0.28], [-0.32, -0.18]], 0.015, 0.02, A.col, 0.35); const yk = mesh(new T.SphereGeometry(0.12 * k, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2), gloss('#f6a21e', 0.2), 0, 0.05 * k, 0, P); yk.scale.y = 0.55; }
+        if (A.b === 'steak') { flat([[-0.38, -0.1], [-0.3, 0.18], [0, 0.26], [0.32, 0.18], [0.38, -0.05], [0.2, -0.24], [-0.2, -0.24]], 0.06, 0.02, A.col, 0.55); }
+        if (A.b === 'bacon') [-0.12, 0.12].forEach((z) => { const gg = new T.BoxGeometry(0.92 * k, 0.015 * k, 0.16 * k, 40, 1, 1), p = gg.attributes.position; for (let i = 0; i < p.count; i++) p.setY(i, p.getY(i) + Math.sin(p.getX(i) / k * 18) * 0.03 * k); gg.computeVertexNormals(); const e = mesh(gg, M('#b8453a', 0.5, { clear: true }), 0, 0.05 * k, z * k, P); paintV(e, (x, y, zz, c) => { c.set(Math.sin((zz - z) * 60) > 0.3 ? '#f3d6c4' : '#b8453a'); }); });
+        if (A.b === 'sausage') [-0.1, 0.12].forEach((z, i) => { const e = mesh(new T.CapsuleGeometry(0.08 * k, 0.72 * k, 8, 16), gloss(A.col, 0.3), 0, 0.08 * k, z * k, P); e.rotation.set(0, i * 0.15, Math.PI / 2); });
+        if (A.b === 'roast') { const b = mesh(lump(0.34 * k, 3, 0.05, [1, 0.75, 0.85], 2), gloss(A.col, 0.4), 0, 0.3 * k, 0, P); void b; [-1, 1].forEach((sd) => { const lg = mesh(lump(0.13 * k, 2, 0.05, [1.3, 0.8, 0.8], 2), gloss(A.col, 0.4), sd * 0.3 * k, 0.2 * k, 0.15 * k, P); lg.rotation.y = sd * 0.5; mesh(new T.SphereGeometry(0.035 * k, 10, 8), M('#f3ead8', 0.6), sd * 0.45 * k, 0.24 * k, 0.2 * k, P); }); }
+        if (A.b === 'drumstick') { const mt = mesh(new T.SphereGeometry(0.22 * k, 24, 16), gloss(A.col, 0.4), -0.15 * k, 0.2 * k, 0, P); mt.scale.set(1.4, 0.95, 0.95); const bn = mesh(new T.CylinderGeometry(0.035 * k, 0.04 * k, 0.32 * k, 10), M('#f3ead8', 0.6), 0.25 * k, 0.24 * k, 0, P); bn.rotation.z = Math.PI / 2 + 0.2; [0.05, -0.05].forEach((z) => mesh(new T.SphereGeometry(0.045 * k, 10, 8), M('#f3ead8', 0.6), 0.42 * k, 0.28 * k, z * k, P)); }
+        if (A.b === 'salmon') { const e = flat([[-0.4, -0.25], [-0.46, 0.05], [-0.3, 0.3], [0, 0.35], [0.3, 0.3], [0.46, 0.05], [0.4, -0.25], [0.15, -0.28], [0.08, -0.02], [-0.08, -0.02], [-0.15, -0.28]], 0.12, 0, A.col, 0.45); paintV(e, (x, y, z, c) => { c.set(A.col); if (Math.sin((z + Math.abs(x) * 0.6) * 40) > 0.8) c.set('#fbe3d6'); if (y > 0.13) c.set(A.col); }); }
+        if (A.b === 'waffle') { const e = mesh(new T.CylinderGeometry(0.45 * k, 0.45 * k, 0.1 * k, 48), M(A.col, 0.55, { clear: true }), 0, 0.05 * k, 0, P); paintV(e, (x, y, z, c) => { c.set(A.col); if (y > 0.04 && (Math.abs(Math.sin(x * 26)) < 0.25 || Math.abs(Math.sin(z * 26)) < 0.25)) c.set(kitDark3(A.col)); }); [[-0.15, 0.1, '#e0262d'], [0.12, -0.08, '#3d4f9a'], [0.2, 0.15, '#3d4f9a'], [0, -0.2, '#e0262d']].forEach(([x, z, c]) => mesh(new T.SphereGeometry(0.05 * k, 12, 10), gloss(c, 0.3), x * k, 0.13 * k, z * k, P)); }
+        if (A.b === 'cheese') { const sh = new T.Shape(); sh.moveTo(-0.46 * k, -0.25 * k); sh.lineTo(0.46 * k, -0.25 * k); sh.lineTo(0.46 * k, 0.25 * k); sh.lineTo(-0.46 * k, -0.25 * k); const gg = new T.ExtrudeGeometry(sh, { depth: 0.32 * k, bevelEnabled: true, bevelSize: 0.01 * k, bevelThickness: 0.01 * k, bevelSegments: 2 }); gg.rotateX(-Math.PI / 2); mesh(gg, M(A.col, 0.5, { clear: true }), 0, 0, 0, P); [[0.3, 0.1], [0.1, 0.2], [0.35, 0.22]].forEach(([x, y]) => { const h = mesh(new T.SphereGeometry(0.05 * k, 12, 10), M(kitDark3(A.col), 0.6), x * k, y * k, 0.25 * k, P); h.scale.z = 0.3; }); }
+      } else if (A.b === 'glass' || A.b === 'cup') {
+        if (A.b === 'glass') { const gl = lathe2([[0.24, 0], [0.3, 1.45], [0.28, 1.45], [0.22, 0.04], [0.001, 0.04]].map(([r, y]) => [r * k, y * k]), glassy('#e3eef5', 0.28), P); gl.userData.keepOpacity = 0.28; gl.material.side = T.DoubleSide; const lq = lathe2([[0.001, 0.05], [0.22, 0.05], [0.28, 1.2], [0.001, 1.2]].map(([r, y]) => [r * k, y * k]), gloss(A.fill, 0.2), P); void lq; if (A.straw) { const sw2 = mesh(new T.CylinderGeometry(0.02 * k, 0.02 * k, 1.2 * k, 10), gloss('#e3332a', 0.3), 0.1 * k, 1.1 * k, 0, P); sw2.rotation.z = -0.2; } }
+        else { lathe2([[0.001, 0], [0.4, 0], [0.47, 0.05], [0.46, 0.06], [0.36, 0.02], [0.001, 0.02]].map(([r, y]) => [r * k, y * k]), M('#f3f5f7', 0.2, { clear: true }), P); const cp = lathe2([[0.16, 0.03], [0.28, 0.18], [0.33, 0.6], [0.31, 0.6], [0.26, 0.2], [0.001, 0.07]].map(([r, y]) => [r * k, y * k]), M('#f8fafb', 0.2, { clear: true }), P); cp.material = cp.material.clone(); cp.material.side = T.DoubleSide; mesh(new T.CylinderGeometry(0.305 * k, 0.29 * k, 0.01 * k, 40), gloss(A.fill, 0.15), 0, 0.55 * k, 0, P); const hd = mesh(new T.TorusGeometry(0.11 * k, 0.025 * k, 10, 24, Math.PI * 1.2), M('#f3f5f7', 0.2, { clear: true }), 0.33 * k, 0.38 * k, 0, P); hd.rotation.z = -Math.PI * 0.6; if (A.hot) steamPuffs(0, 0.65 * k, 0, 0.5 * k); }
+      }
+    };
+    if (both) { const a = new T.Group(), b = new T.Group(); a.position.x = -L * 0.26; b.position.x = L * 0.26; G.add(a, b); build(a, L * 0.48, false); build(b, L * 0.48, true); }
+    else build(G, L, cutOnly);
+    if (anim.length && !s.still) G.userData.animate = (time) => anim.forEach((f) => f(time));
+    G.rotation.y = ({ x: Math.PI / 2, '-x': -Math.PI / 2, '-z': Math.PI, left: Math.PI, right: 0 })[s.facing] || 0;
   }
   return G;
 }
