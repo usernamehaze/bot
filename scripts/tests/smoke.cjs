@@ -1052,6 +1052,26 @@ test('v320 Blender models and real materials: the book’s airplane and bicycle 
   } finally { await ctx.close(); }
 });
 
+test('v325 the nature kit in 3D: a tree, a garden and the weather asked in 3D are built from real-looking kit models, each where it really is (trees and flowers standing on the ground, roots below it in see-through soil, clouds and the sun above), with no problems; the AI is told the kit, where things go, and to be creative', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 860 }, server: false, book: true, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, scale: process.env.SHOTS ? 2 : 1 });
+  const r = await page.evaluate(async () => {
+    const bk = await liveBookLoad(), m = await liveDrawLoad();
+    const book = ['a tree in 3D', 'a garden in 3D', 'the weather in 3D'].map((q) => { const raw = bk.fromBook(q, true), sp = m.clean(raw); return { q, key: raw && raw.book, mode: sp.mode, issues: m.check(sp, q) }; });
+    const p3 = liveDrawPrompt(true), p2 = liveDrawPrompt(false);
+    return { book, prompt: /the 3D nature kit/.test(p3) && /the ground is y 0/.test(p3) && /only:"crown\|branches\|trunk\|roots"/.test(p3) && /Be creative/.test(p2) && /spheres, capsules and lathes/.test(p3) };
+  });
+  for (const x of r.book) expect(x.key && x.mode === '3d' && !x.issues.length, `${x.q}: built in 3D from the book, with no problems: ` + JSON.stringify(x));
+  expect(r.prompt, 'the AI is told the 3D kit, where things go and to be creative');
+  // built: the tree's crown above the ground, its roots below it
+  await page.evaluate(async () => { chatLog.innerHTML = ''; const bk = await liveBookLoad(); liveDrawFresh = false; renderMessage('assistant', '```cassie-draw\n' + JSON.stringify(bk.fromBook('a tree in 3D', true)) + '\n```'); });
+  await page.waitForSelector('#chat-log .ld .ld-stage canvas', { timeout: 20000 });
+  await page.waitForTimeout(1500);
+  if (process.env.SHOTS) { await page.locator('#chat-log .ld').scrollIntoViewIfNeeded(); await page.screenshot({ path: `${process.env.SHOTS}/v325-tree-3d.png` }); }
+  const where = await page.evaluate(async () => { const m = await liveDrawLoad(), bk = await liveBookLoad(), sp = m.clean(bk.fromBook('a tree in 3D', true)); const box = (id) => m.partBox3 ? m.partBox3(sp, id) : null; return { crown: box('leaves'), roots: box('roots') }; });
+  if (where.crown) expect(where.crown[1] > 0 && where.roots[4] <= 0.05, 'the crown is above the ground and the roots below it: ' + JSON.stringify(where));
+  expect(!errors.length, 'page errors: ' + errors.join(' | '));
+  await ctx.close();
+});
 test('v324 the nature kit: a tree, a flower, a leaf, a cloud, the sun, rain, snow, a rainbow, grass, rocks, logs and mushrooms come ready drawn in the guide pictures\' soft, shaded style; the book draws a tree, a flower, a garden and the weather with them, every textbook part named; the AI is told about them; a kit shape is not taken for a lone shape', async (b) => {
   const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 860 }, server: false, book: true, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, scale: process.env.SHOTS ? 2 : 1 });
   const r = await page.evaluate(async () => {

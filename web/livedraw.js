@@ -27,7 +27,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ---------- the spec: what the AI wrote, made safe ----------
 const KINDS2 = ['line', 'arrow', 'rect', 'circle', 'ellipse', 'poly', 'path', 'text', 'tree', 'flower', 'leaf', 'cloud', 'sun', 'moon', 'rainbow', 'snowflake', 'bolt', 'drops', 'grass', 'rock', 'log', 'mushroom']; // (v324: and the nature kit)
-const KINDS3 = ['cylinder', 'tube', 'disc', 'cone', 'torus', 'ring', 'blades', 'sphere', 'box', 'capsule', 'pipe', 'arrow', 'lathe', 'plate'];
+const KINDS3 = ['cylinder', 'tube', 'disc', 'cone', 'torus', 'ring', 'blades', 'sphere', 'box', 'capsule', 'pipe', 'arrow', 'lathe', 'plate', 'tree', 'flower', 'leaf', 'cloud', 'sun', 'moon', 'rainbow', 'rock', 'grass', 'log', 'mushroom', 'ground', 'drops', 'snowflake', 'bolt']; // (v325: and the nature kit in 3D)
 const has = (x, k) => x[k] != null && x[k] !== '';
 // (v320) what a 3D part is really made of, with photographically grounded values from the Blender skills pack
 // (github.com/arjun988/blender-skills, realistic-style/references/pbr-values.md): metals are fully metallic, everything
@@ -263,6 +263,8 @@ function wrongWay(p) {
   if (up && !down && arrows.every((dy) => dy > 0)) return `"${p.label || p.id}" says it goes up, but its arrows point down; turn them round so their heads are higher than their tails (y2 smaller than y1)`;
   return '';
 }
+// (v325) the box a part of a 3D model fills [x0, y0, z0, x1, y1, z1] (to check where things are)
+export function partBox3(spec, id) { const p = spec && spec.parts.find((q) => q.id === id); const bs = p ? p.shapes.map(box3).filter(Boolean) : []; return bs.length ? join3(bs) : null; }
 export function check(spec, asked = '') {
   const out = [];
   if (spec && spec.mode === '3d') return check3d(spec);
@@ -321,6 +323,7 @@ function box3(s) {
   const t = String(s.t || s.type || '').toLowerCase(), axis = ['x', 'y', 'z'].includes(s.axis) ? s.axis : 'x';
   const pos = Array.isArray(s.pos) ? [0, 1, 2].map((k) => n3(s.pos[k], 0)) : [0, 0, 0];
   const r = Math.abs(n3(s.r, .5)), len = Math.abs(n3(s.len ?? s.h, 1));
+  if (KIT3.includes(t)) return kit3Box(s, pos); // (v325)
   let along = 0, across = 0, half = null;
   if (t === 'cylinder' || t === 'tube') { along = len / 2; across = Math.max(r, Math.abs(n3(s.r2, r))); }
   else if (t === 'disc') { along = Math.abs(n3(s.thick ?? s.len, .08)) / 2; across = r; }
@@ -366,7 +369,8 @@ export function check3d(spec) {
   for (const x of ok) {
     const others = ok.filter((y) => y !== x);
     // nothing floats: every part touches or sits in another part
-    if (others.length && Math.min(...others.map((y) => gap3(x.b, y.b))) > L * .08) out.push(`${name(x)} floats apart from the rest; in the real object it touches or sits inside the part it connects to, so move it there`);
+    const sky = x.p.shapes.every((sh) => /^(cloud|sun|moon|rainbow|snowflake|bolt|drops)$/.test(String(sh.t || '').toLowerCase())); // (v325: the sky's things float, as they really do)
+    if (!sky && others.length && Math.min(...others.map((y) => gap3(x.b, y.b))) > L * .08) out.push(`${name(x)} floats apart from the rest; in the real object it touches or sits inside the part it connects to, so move it there`);
     // inside what she said it is inside
     const home = x.p.inside && byId(x.p.inside);
     if (home && home !== x) { const pad = L * .04, b = x.b, h = home.b; if (b[0] < h[0] - pad || b[1] < h[1] - pad || b[2] < h[2] - pad || b[3] > h[3] + pad || b[4] > h[4] + pad || b[5] > h[5] + pad) out.push(`${name(x)} should sit inside ${name(home)} (your plan says so) but it sticks out of it; make it smaller or move it in`); }
@@ -588,7 +592,7 @@ export async function render(host, rawSpec, opts = {}) {
   let mv = null; const mvHost = spec.mode === '3d' ? el('div', 'ld-mv') : null;
   const machineOn = async () => {
     if (mv) return mv;
-    let m = null; try { m = await import('./isoview.js?v=324'); } catch (e) { return null; }
+    let m = null; try { m = await import('./isoview.js?v=325'); } catch (e) { return null; }
     mv = m.machine(mvHost, spec, { dark: !lightPage() });
     if (mv) {
       const row = el('div', 'ld-mv-acts');
@@ -1471,7 +1475,7 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
   const legend3 = el('p', 'ld-legend', spec.parts.filter((p) => p.label).map((p) => `${spec.parts.indexOf(p) + 1}\u00a0${p.label.replace(/ /g, '\u00a0')}`).join('   ')); legend3.hidden = true; stage.after(legend3);
   let exploded = false, opened = false, picked = null, raf = 0, last = performance.now(), visible = true, calloutAz = null, calloutApart = false;
   const shells = groups.filter((g) => g.userData.part.shell);
-  const fade = (g, o) => g.traverse((m) => { if (m.material) { m.material.opacity = o; m.material.depthWrite = o > .6; } });
+  const fade = (g, o) => g.traverse((m) => { if (m.material) { const k = m.userData.keepOpacity || 1; m.material.opacity = o * k; m.material.depthWrite = o > .6 && k >= 1; } });
   const hintText = 'Drag to turn it. Pinch to zoom. Tap a part';
   hint.textContent = hintText;
   let focused = false, aimTo = null; // (moved in on a part by a follow-up: showing it all again stands back)
@@ -1664,13 +1668,228 @@ function finishMat(T, colour, finish, { real, matte, glow }) {
   if (f && f[2] && T.MeshPhysicalMaterial) { const m = new T.MeshPhysicalMaterial({ ...base, ...f[2] }); if (f[2].transmission) { m.opacity = 1; m.depthWrite = false; } return m; }
   return new T.MeshStandardMaterial(base);
 }
+// ---------- (v325) the nature kit in 3D: real-looking trees, flowers, leaves, clouds, the sun, rocks, grass and the ground ----------
+// Each one is a whole model, built where it stands: "pos" is the point on the ground under it (the ground is y = 0, so a
+// tree, a flower or a rock stands at y 0; clouds, the sun and the moon float high above; roots grow below it). Surfaces
+// are bent by noise so nothing is a perfect ball: lumpy leafy crowns, rough bark, jagged pine tiers, faceted rocks;
+// every clump a slightly different green, and matte natural materials that catch the light like the real thing.
+const KIT3 = ['tree', 'flower', 'leaf', 'cloud', 'sun', 'moon', 'rainbow', 'rock', 'grass', 'log', 'mushroom', 'ground', 'drops', 'snowflake', 'bolt'];
+const KIT3_KINDS = {
+  tree: ['round', 'oak', 'pine', 'bush', 'palm', 'blossom', 'fruit', 'autumn', 'bare'],
+  flower: ['sunflower', 'daisy', 'tulip', 'rose', 'lily', 'lavender', 'blossom', 'hydrangea'],
+  leaf: ['oval', 'maple', 'heart'], cloud: ['white', 'grey', 'rain', 'storm', 'snow'],
+  rock: ['stone', 'mossy'], log: ['log', 'stump'], grass: ['grass', 'flowers'], ground: ['grass', 'soil', 'sand', 'snow'],
+};
+// the box a kit model fills, from where it stands (for the model's checks and the camera)
+function kit3Box(s, pos) {
+  const t = String(s.t || '').toLowerCase(), h = Math.abs(n3(s.h ?? s.size, t === 'tree' ? 3 : 1)), w = Math.abs(n3(s.w ?? s.r ?? s.size, 1)), r = Math.abs(n3(s.r ?? s.size, 0.6));
+  const [x, y, z] = pos, sq = (a, lo, hi) => [x - a, y + lo, z - a, x + a, y + hi, z + a];
+  if (t === 'tree' && s.only) return ({ roots: sq(h * 0.45, -h * 0.32, 0), trunk: sq(h * 0.12, 0, h * 0.56), branches: sq(h * 0.34, h * 0.3, h * 0.85), crown: sq(h * 0.42, h * 0.45, h) })[s.only] || sq(h * 0.42, 0, h); // (one part of a tree: where that part is)
+  if (t === 'tree') return sq(h * (s.kind === 'pine' ? 0.3 : 0.42), 0, h);
+  if (t === 'flower' || t === 'mushroom') return sq(h * 0.3, 0, h);
+  if (t === 'grass') return sq(w * 0.5, 0, w * 0.5);
+  if (t === 'leaf') return sq(h * 0.35, 0, h);
+  if (t === 'cloud') return [x - w * 0.55, y - w * 0.2, z - w * 0.3, x + w * 0.55, y + w * 0.3, z + w * 0.3];
+  if (t === 'sun' || t === 'moon' || t === 'snowflake') return sq(r * 1.3, -r * 1.3, r * 1.3);
+  if (t === 'rainbow') return [x - r, y, z - 0.2, x + r, y + r, z + 0.2];
+  if (t === 'rock') return sq(w * 0.5, 0, w * 0.6);
+  if (t === 'log') return s.kind === 'stump' ? sq(w * 0.5, 0, w * 0.45) : [x - w * 0.5, y, z - w * 0.2, x + w * 0.5, y + w * 0.4, z + w * 0.2];
+  if (t === 'ground') return [x - w, y - (s.kind === 'soil' ? w * 0.5 : 0.08), z - w, x + w, y, z + w];
+  if (t === 'drops') return [x - w * 0.5, y - w * 0.6, z - w * 0.3, x + w * 0.5, y, z + w * 0.3];
+  if (t === 'bolt') return sq(h * 0.25, -h / 2, h / 2);
+  return sq(0.5, 0, 1);
+}
+function kit3d(T, s, mat) {
+  const t = String(s.t || '').toLowerCase(), list = KIT3_KINDS[t], kind = list ? (list.includes(String(s.kind || '').toLowerCase()) ? String(s.kind).toLowerCase() : list[0]) : '';
+  const pos = Array.isArray(s.pos) ? s.pos : [0, 0, 0];
+  let seed = Math.abs(Math.round((+pos[0] || 0) * 97 + (+pos[2] || 0) * 61 + (+pos[1] || 0) * 13)) % 2147483646 + 1;
+  const R = () => (seed = (seed * 48271) % 2147483647) / 2147483647, J = (a) => (R() - 0.5) * 2 * a;
+  const own = typeof s.fill === 'string' && /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(s.fill) ? s.fill : null;
+  const G = new T.Group();
+  // a natural material: the part's own material, given a real colour, matte, no glass or metal
+  const mats = new Map();
+  const M = (hex, rough = 0.82, extra = {}) => {
+    const k = hex + rough + JSON.stringify(extra); if (mats.has(k)) return mats.get(k);
+    const m = mat.clone(); m.color = new T.Color(hex); m.metalness = 0; m.roughness = rough;
+    for (const q of ['transmission', 'clearcoat', 'sheen']) if (q in m) m[q] = 0;
+    if (m.emissive) { m.emissive = new T.Color(extra.glow || '#000000'); m.emissiveIntensity = extra.glow ? (extra.gi || 0.9) : 0; }
+    if (extra.clear) { m.clearcoat = 0.6; m.clearcoatRoughness = 0.25; }
+    mats.set(k, m); return m;
+  };
+  const shade = (hex, k) => { const c = new T.Color(hex); const hsl = {}; c.getHSL(hsl); c.setHSL(hsl.h + J(0.015), Math.min(1, hsl.s * (1 + J(0.12))), Math.max(0, Math.min(1, hsl.l * (1 + k)))); return '#' + c.getHexString(); };
+  const noise = (x, y, z) => Math.sin(x * 2.1 + y * 1.3) * Math.sin(y * 2.7 + z * 1.9) * Math.sin(z * 2.3 + x * 1.7) + 0.5 * Math.sin(x * 5.3 + z * 4.1) * Math.sin(y * 4.7 + x * 3.9);
+  // a lump: an icosphere pushed in and out by noise (a clump of leaves, a cloud puff, a rock)
+  const lump = (r, detail, amp, scale = [1, 1, 1], freq = 1.6) => {
+    const seg = [8, 12, 18, 26, 34][Math.min(4, detail)], g = new T.SphereGeometry(r, seg, Math.round(seg * 0.7)), p = g.attributes.position, v = new T.Vector3(), o = R() * 10; // (smooth: shared points, soft shading)
+    for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i); const n = v.clone().normalize(); const d = 1 + amp * noise(n.x * freq + o, n.y * freq + o * 0.7, n.z * freq + o * 1.3); v.copy(n).multiplyScalar(r * d); v.x *= scale[0]; v.y *= scale[1]; v.z *= scale[2]; p.setXYZ(i, v.x, v.y, v.z); }
+    g.computeVertexNormals(); return g;
+  };
+  const add = (geo, m, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) => { const e = new T.Mesh(geo, m); e.position.set(x, y, z); e.rotation.set(rx, ry, rz); G.add(e); return e; };
+  const tube = (pts, r, m, r2 = null) => { // a tube through points, its radius narrowing from r to r2 (a branch, a stem, a root)
+    const curve = new T.CatmullRomCurve3(pts.map((q) => new T.Vector3(...q))), g = new T.TubeGeometry(curve, Math.max(12, pts.length * 10), r, 10, false);
+    if (r2 != null) { const p = g.attributes.position, segs = g.parameters.tubularSegments, rad = g.parameters.radialSegments + 1, c = new T.Vector3(), v = new T.Vector3();
+      for (let i = 0; i <= segs; i++) { const u = i / segs, k = (r + (r2 - r) * u) / r; curve.getPointAt(u, c); for (let j = 0; j < rad; j++) { const idx = i * rad + j; v.fromBufferAttribute(p, idx).sub(c).multiplyScalar(k).add(c); p.setXYZ(idx, v.x, v.y, v.z); } } g.computeVertexNormals(); }
+    return add(g, m);
+  };
+  const lathe = (prof, m, segs = 28, rough = 0) => { // a turned shape; rough: bark-like bumps round it
+    const g = new T.LatheGeometry(prof.map(([r, y]) => new T.Vector2(Math.max(0.001, r), y)), segs);
+    if (rough) { const p = g.attributes.position, v = new T.Vector3(); for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i); const a = Math.atan2(v.z, v.x), k = 1 + rough * (Math.sin(a * 9 + v.y * 3) * 0.6 + Math.sin(a * 23 + v.y * 11) * 0.4); p.setXYZ(i, v.x * k, v.y, v.z * k); } g.computeVertexNormals(); }
+    return add(g, m);
+  };
+  const leafGeo = (len, wide, fold = 0.25) => { // a leaf blade: pointed, folded a little along its midrib, curling down at the tip
+    const sh = new T.Shape(); sh.moveTo(0, 0); sh.quadraticCurveTo(wide, len * 0.35, 0, len); sh.quadraticCurveTo(-wide, len * 0.35, 0, 0);
+    const g = new T.ShapeGeometry(sh, 10), p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i); p.setZ(i, Math.abs(x) * fold - (y / len) ** 2 * len * 0.18); }
+    g.computeVertexNormals(); g.rotateX(-Math.PI / 2); return g; // (lies along +z, face up)
+  };
+  const H = Math.abs(n3(s.h ?? s.size, t === 'tree' ? 3 : t === 'flower' ? 1 : 1)), W = Math.abs(n3(s.w ?? s.r ?? s.size, t === 'ground' ? 3 : 1)), Rr = Math.abs(n3(s.r ?? s.size, 0.6));
+
+  if (t === 'tree') {
+    const bark = M(kind === 'bare' ? '#6e5a4a' : '#6b4a30', 0.92), h = Math.min(12, Math.max(0.4, H));
+    const leafCol = own || { blossom: '#f2a7c3', autumn: '#d9822b', pine: '#2f6b3f', fruit: '#4a8f35', bare: '#6b4a30' }[kind] || '#4f8f36';
+    if (kind === 'pine') {
+      lathe([[h * 0.07, 0], [h * 0.05, h * 0.05], [h * 0.035, h * 0.3], [h * 0.02, h * 0.95], [0, h]], bark, 18, 0.05);
+      for (let k = 0; k < 6; k++) { // stacked tiers, each a ragged cone, smaller to the top
+        const y0 = h * (0.2 + k * 0.13), rad = h * (0.3 - k * 0.042), th = h * 0.3, g = new T.ConeGeometry(rad, th, 30, 5, true), p = g.attributes.position, v = new T.Vector3();
+        for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i); const a = Math.atan2(v.z, v.x), edge = (th / 2 - v.y) / th, j = 1 + edge * (0.18 * Math.sin(a * 7 + k) + 0.1 * Math.sin(a * 17)); p.setXYZ(i, v.x * j, v.y - edge * edge * th * 0.12, v.z * j); }
+        g.computeVertexNormals();
+        add(g, M(shade(leafCol, (k % 2 ? 0.06 : -0.05)), 0.9), J(0.02), y0 + th / 2, J(0.02), 0, R() * 6, 0);
+      }
+    } else if (kind === 'palm') {
+      const top = [h * 0.18, h * 0.9, 0];
+      tube([[0, 0, 0], [h * 0.02, h * 0.35, 0], [h * 0.1, h * 0.68, 0], top], h * 0.045, bark, h * 0.03);
+      for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2 + R() * 0.3, e = add(leafGeo(h * 0.42, h * 0.07, 0.5), M(shade('#3e8a3c', J(0.08)), 0.75), top[0], top[1], top[2]); e.rotation.set(0.35 + R() * 0.25, a, 0, 'YXZ'); }
+      for (let k = 0; k < 3; k++) add(new T.SphereGeometry(h * 0.035, 16, 12), M('#7a5a2e', 0.6), top[0] + J(h * 0.04), top[1] - h * 0.04, J(h * 0.04));
+    } else {
+      // the trunk, flaring into its roots at the ground, then branches that fork up into the crown
+      const tall = kind === 'bush' ? 0.12 : kind === 'bare' ? 0.65 : 0.5, only = String(s.only || ''), want = (k) => !only || only === k;
+      if (only === 'roots' || s.roots) for (let k = 0; k < 7; k++) { const a = k / 7 * Math.PI * 2 + R() * 0.4, d = h * (0.22 + R() * 0.12); tube([[0, -h * 0.01, 0], [Math.cos(a) * d * 0.4, -h * (0.08 + R() * 0.04), Math.sin(a) * d * 0.4], [Math.cos(a) * d, -h * (0.14 + R() * 0.1), Math.sin(a) * d], [Math.cos(a + 0.3) * d * 1.3, -h * (0.22 + R() * 0.08), Math.sin(a + 0.3) * d * 1.3]], h * 0.022, bark, h * 0.004); } // (v325: the roots, spreading under the ground)
+      if (only === 'roots') return G;
+      if (want('trunk')) lathe([[h * 0.095, 0], [h * 0.065, h * 0.03], [h * 0.05, h * 0.12], [h * 0.042, h * tall * 0.7], [h * 0.035, h * tall], [h * 0.02, h * (tall + 0.06)]], bark, 20, 0.06);
+      for (let k = 0; k < (want('trunk') ? 4 : 0); k++) { const a = k / 4 * Math.PI * 2 + 0.4; tube([[0, h * 0.02, 0], [Math.cos(a) * h * 0.08, h * 0.005, Math.sin(a) * h * 0.08], [Math.cos(a) * h * 0.15, -h * 0.01, Math.sin(a) * h * 0.15]], h * 0.025, bark, h * 0.006); } // (root flares at the foot)
+      const ends = [];
+      const nb = kind === 'bare' ? 6 : 5;
+      for (let k = 0; k < nb; k++) {
+        const a = k / nb * Math.PI * 2 + R() * 0.5, y0 = h * (tall * 0.75 + R() * 0.12), reach = h * (kind === 'bush' ? 0.22 : 0.3), up = h * (kind === 'bush' ? 0.15 : 0.32);
+        const end = [Math.cos(a) * reach, y0 + up, Math.sin(a) * reach];
+        if (want('branches')) tube([[0, y0, 0], [Math.cos(a) * reach * 0.45, y0 + up * 0.55, Math.sin(a) * reach * 0.45], end], h * 0.022, bark, h * 0.008);
+        ends.push(end);
+        if (kind === 'bare') tube([end, [end[0] * 1.25 + J(h * 0.05), end[1] + h * 0.12, end[2] * 1.25 + J(h * 0.05)]], h * 0.008, bark, h * 0.003);
+      }
+      if (kind !== 'bare' && want('crown')) {
+        const cy = h * (kind === 'bush' ? 0.32 : tall + 0.24), cr = h * (kind === 'bush' ? 0.36 : kind === 'oak' ? 0.36 : 0.3);
+        const clumps = [[0, cy + cr * 0.35, 0, cr * 0.62], ...ends.map((e) => [e[0], e[1] + cr * 0.1, e[2], cr * (0.48 + R() * 0.12)])];
+        for (let k = 0; k < 5; k++) { const a = R() * Math.PI * 2; clumps.push([Math.cos(a) * cr * 0.55, cy + J(cr * 0.3), Math.sin(a) * cr * 0.55, cr * (0.42 + R() * 0.12)]); }
+        clumps.forEach(([x, y, z, r], k) => add(lump(r, 3, 0.22, [1, kind === 'bush' ? 0.8 : 0.88, 1], 2.4), M(shade(leafCol, (y - cy) / cr * 0.12 + J(0.06)), 0.86), x, y, z, 0, R() * 6, 0));
+        if (kind === 'fruit' || kind === 'blossom') for (let k = 0; k < (kind === 'fruit' ? 16 : 40); k++) {
+          const c = clumps[k % clumps.length], a = R() * Math.PI * 2, b = (R() - 0.3) * Math.PI * 0.8, rr = c[3] * 0.95;
+          add(new T.SphereGeometry(kind === 'fruit' ? h * 0.028 : h * 0.012, 12, 10), kind === 'fruit' ? M('#d8402e', 0.4, { clear: true }) : M('#fff0f6', 0.7), c[0] + Math.cos(a) * Math.cos(b) * rr, c[1] + Math.sin(b) * rr, c[2] + Math.sin(a) * Math.cos(b) * rr);
+        }
+      }
+    }
+  } else if (t === 'flower') {
+    const h = Math.min(4, Math.max(0.1, H)), top = h * 0.82, green = M('#4f8a3a', 0.7);
+    if (kind === 'lavender') {
+      for (let k = 0; k < 3; k++) { const dx = (k - 1) * h * 0.08, tip = [dx * 1.6, h, J(h * 0.05)]; tube([[dx * 0.3, 0, 0], [dx, h * 0.5, 0], tip], h * 0.008, green);
+        for (let j = 0; j < 12; j++) add(lump(h * 0.022, 1, 0.1), M(shade('#8e72cf', J(0.1)), 0.7), tip[0] + J(h * 0.012), tip[1] - j * h * 0.025, tip[2] + J(h * 0.012)); }
+    } else {
+      tube([[0, 0, 0], [J(h * 0.04), h * 0.45, J(h * 0.04)], [0, top, 0]], h * 0.014, green, h * 0.01);
+      [0.6, 2.6].forEach((a, k) => { const e = add(leafGeo(h * 0.3, h * 0.07), M(shade('#5c9a44', J(0.06)), 0.7), 0, h * (0.2 + k * 0.12), 0); e.rotation.set(-0.5, a, 0, 'YXZ'); });
+      const head = new T.Group(); head.position.set(0, top, 0); head.rotation.x = -0.35; G.add(head);
+      const put = (geo, m, x, y, z, rx = 0, ry = 0, rz = 0) => { const e = new T.Mesh(geo, m); e.position.set(x, y, z); e.rotation.set(rx, ry, rz, 'YXZ'); head.add(e); return e; };
+      const hr = h * 0.16;
+      if (kind === 'sunflower' || kind === 'daisy' || kind === 'blossom') {
+        const n = kind === 'sunflower' ? 18 : kind === 'daisy' ? 20 : 5, pc = own || (kind === 'sunflower' ? '#f2c12e' : kind === 'daisy' ? '#f8f3ea' : '#f5a3c0');
+        for (let k = 0; k < n; k++) { const a = k / n * Math.PI * 2, e = put(new T.SphereGeometry(1, 14, 8), M(shade(pc, J(0.05)), 0.6), Math.cos(a) * hr * 0.75, 0, Math.sin(a) * hr * 0.75); e.scale.set(hr * 0.5, hr * 0.05, hr * (kind === 'blossom' ? 0.42 : 0.16)); e.rotation.set(0.15, -a, 0, 'YXZ'); }
+        put(lump(hr * (kind === 'sunflower' ? 0.5 : 0.3), 2, 0.08, [1, 0.35, 1], 6), M(kind === 'sunflower' ? '#5a3a1e' : '#f0b92c', 0.9), 0, hr * 0.03, 0);
+      } else if (kind === 'tulip') {
+        for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2, e = put(new T.SphereGeometry(1, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.6), M(shade(own || '#e8578a', J(0.05)), 0.5, { clear: true }), Math.cos(a) * hr * 0.18, hr * 0.15, Math.sin(a) * hr * 0.18); e.scale.set(hr * 0.42, hr * 1.1, hr * 0.32); e.rotation.set(Math.PI, -a, 0.12, 'YXZ'); e.position.y = hr * 1.1; }
+      } else if (kind === 'rose') {
+        for (let ring = 0; ring < 4; ring++) for (let k = 0; k < 5 + ring; k++) { const a = k / (5 + ring) * Math.PI * 2 + ring, rr = hr * (0.15 + ring * 0.2), e = put(new T.SphereGeometry(1, 14, 10, 0, Math.PI, 0, Math.PI), M(shade(own || '#d8355a', ring * 0.05), 0.55), Math.cos(a) * rr, hr * (0.45 - ring * 0.1), Math.sin(a) * rr); e.scale.set(hr * (0.3 + ring * 0.06), hr * (0.45 - ring * 0.05), hr * 0.12); e.rotation.set(-0.2 - ring * 0.25, -a + Math.PI / 2, 0, 'YXZ'); }
+      } else if (kind === 'lily') {
+        for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2, e = put(leafGeo(hr * 1.3, hr * 0.38, 0.4), M(shade(own || '#f6dde6', J(0.04)), 0.6), 0, 0, 0); e.rotation.set(-0.9, a, 0, 'YXZ'); }
+        for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2 + 0.5, tip = [Math.cos(a) * hr * 0.4, hr * 0.7, Math.sin(a) * hr * 0.4]; const st = new T.Mesh(new T.TubeGeometry(new T.LineCurve3(new T.Vector3(0, 0, 0), new T.Vector3(...tip)), 4, hr * 0.02, 6), M('#e0c06a', 0.6)); head.add(st); put(new T.CapsuleGeometry(hr * 0.04, hr * 0.1, 4, 8), M('#c8552a', 0.7), ...tip, 0, a, Math.PI / 2); }
+      } else if (kind === 'hydrangea') {
+        for (let k = 0; k < 46; k++) { const a = k * 2.4, b = Math.acos(1 - (k + 0.5) / 46 * 1.4), rr = hr * 1.1; put(lump(hr * 0.16, 1, 0.15), M(shade(own || '#a993e6', J(0.12)), 0.6), Math.sin(b) * Math.cos(a) * rr, Math.cos(b) * rr * 0.8, Math.sin(b) * Math.sin(a) * rr); }
+      }
+    }
+  } else if (t === 'leaf') {
+    const h = Math.min(4, Math.max(0.1, H)), c = own || (kind === 'maple' ? '#d9542a' : '#4f9a3a');
+    if (kind === 'maple') {
+      const sh = new T.Shape(); for (let k = 0; k <= 60; k++) { const a = k / 60 * Math.PI * 2, lobes = 0.55 + 0.45 * Math.max(0, Math.cos(a * 5)) ** 0.5, r = h * 0.48 * lobes * (a > Math.PI * 1.25 && a < Math.PI * 1.75 ? 0.4 : 1); const x = Math.cos(a + Math.PI / 2) * r, y = Math.sin(a + Math.PI / 2) * r + h * 0.5; if (k) sh.lineTo(x, y); else sh.moveTo(x, y); }
+      const g = new T.ShapeGeometry(sh, 2); g.rotateX(-Math.PI / 2 + 0.4); add(g, M(c, 0.7));
+    } else { const e = add(leafGeo(h, h * (kind === 'heart' ? 0.5 : 0.32), 0.35), M(c, 0.6, { clear: true })); e.rotation.x = 1.1; }
+    tube([[0, 0, 0], [0, h * 0.12, h * 0.05]], h * 0.012, M(kitDark3(c), 0.7));
+  } else if (t === 'cloud') {
+    const w = Math.min(14, Math.max(0.3, W)), col = own || (kind === 'storm' ? '#7d8799' : kind === 'grey' ? '#c2c8d2' : '#f6f8fb');
+    const m = M(col, 1, { glow: kind === 'storm' ? null : '#ffffff', gi: 0.12 });
+    [[-0.32, 0, 0, 0.26], [-0.08, 0.1, 0.04, 0.34], [0.2, 0.06, -0.03, 0.3], [0.4, -0.02, 0.02, 0.2], [0.02, -0.04, 0.12, 0.27], [-0.18, -0.05, -0.12, 0.24]].forEach(([x, y, z, r]) => add(lump(w * r, 3, 0.12, [1, 0.82, 0.85], 2), m, x * w, y * w, z * w));
+    if (kind === 'rain' || kind === 'storm') for (let k = 0; k < 9; k++) { const d = add(new T.SphereGeometry(w * 0.025, 12, 10), M('#4a9fe0', 0.15, { clear: true }), J(w * 0.4), -w * (0.25 + R() * 0.45), J(w * 0.2)); d.scale.y = 1.6; }
+    if (kind === 'snow') for (let k = 0; k < 9; k++) { const f = new T.Group(); for (let j = 0; j < 3; j++) { const b = new T.Mesh(new T.BoxGeometry(w * 0.06, w * 0.008, w * 0.008), M('#ffffff', 0.4, { glow: '#ffffff', gi: 0.3 })); b.rotation.z = j * Math.PI / 3; f.add(b); } f.position.set(J(w * 0.4), -w * (0.25 + R() * 0.45), J(w * 0.2)); f.rotation.y = R() * 3; G.add(f); }
+    if (kind === 'storm') { const sh = new T.Shape(), b = w * 0.35; [[0.08, 0], [-0.1, -0.45], [0.02, -0.45], [-0.06, -0.9], [0.14, -0.35], [0.03, -0.35], [0.12, 0]].forEach(([x, y], k) => (k ? sh.lineTo(x * b, y * b) : sh.moveTo(x * b, y * b))); add(new T.ExtrudeGeometry(sh, { depth: w * 0.02, bevelEnabled: false }), M('#ffd23a', 0.4, { glow: '#ffc21a', gi: 0.9 }), 0, -w * 0.12, w * 0.1); }
+  } else if (t === 'sun') {
+    const r = Math.min(6, Math.max(0.1, Rr));
+    add(new T.SphereGeometry(r, 40, 28), M(own || '#ffcf3d', 0.5, { glow: '#ffb21a', gi: 1.1 }), 0, 0, 0);
+    [1.25, 1.55].forEach((k, i) => { const m = new T.MeshBasicMaterial({ color: new T.Color('#ffd25e'), transparent: true, opacity: i ? 0.1 : 0.2, depthWrite: false }); add(new T.SphereGeometry(r * k, 32, 20), m); });
+  } else if (t === 'moon') {
+    const r = Math.min(6, Math.max(0.1, Rr)), g = lump(r, 4, 0.03, [1, 1, 1], 5);
+    add(g, M(own || '#e9e2c8', 0.95, { glow: '#fff3c4', gi: 0.25 }));
+  } else if (t === 'rainbow') {
+    const r = Math.min(10, Math.max(0.3, Rr)), band = r * 0.07;
+    ['#e8453c', '#f28c2e', '#f5d03c', '#5cbf5a', '#3f8fdb', '#5b5fc7', '#8a5cc8'].forEach((c, k) => add(new T.TorusGeometry(r - k * band, band * 0.5, 10, 64, Math.PI), M(c, 0.5, { glow: c, gi: 0.35 })));
+  } else if (t === 'rock') {
+    const w = Math.min(8, Math.max(0.1, W)), col = own || '#8f8c84', g = new T.IcosahedronGeometry(w * 0.5, 1); { const p = g.attributes.position, v = new T.Vector3(); for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i); const n = v.clone().normalize(), d = 1 + 0.28 * noise(n.x * 1.4 + 3, n.y * 1.4, n.z * 1.4); v.copy(n).multiplyScalar(w * 0.5 * d); p.setXYZ(i, v.x, v.y * 0.72, v.z * 0.85); } g.computeVertexNormals(); } // (stone keeps its facets)
+    g.translate(0, w * 0.25, 0); const e = add(g, M(col, 0.95)); e.rotation.y = R() * 6;
+    const pp = g.attributes.position; for (let i = 0; i < pp.count; i++) if (pp.getY(i) < 0) pp.setY(i, 0); g.computeVertexNormals(); // (it sits flat on the ground)
+    if (kind === 'mossy') { const m = lump(w * 0.42, 2, 0.2, [1.05, 0.35, 0.9], 3); add(m, M('#6f9e3a', 1), 0, w * 0.5, 0); }
+  } else if (t === 'grass') {
+    const w = Math.min(6, Math.max(0.1, W));
+    for (let k = 0; k < 34; k++) { const a = R() * Math.PI * 2, d = Math.sqrt(R()) * w * 0.45, hh = w * (0.25 + R() * 0.25), e = add(new T.ConeGeometry(w * 0.018, hh, 4), M(shade('#5a9a3a', J(0.15)), 0.8), Math.cos(a) * d, hh / 2, Math.sin(a) * d); e.rotation.set(J(0.35), R() * 3, J(0.35)); }
+    if (kind === 'flowers') for (let k = 0; k < 5; k++) { const c = ['#f26b8a', '#ffd45c', '#ffffff', '#b18ce6', '#ff8a3c'][k], x = J(w * 0.35), z = J(w * 0.35), y = w * (0.3 + R() * 0.15); add(new T.SphereGeometry(w * 0.035, 10, 8), M(c, 0.6), x, y, z); }
+  } else if (t === 'log') {
+    const w = Math.min(8, Math.max(0.1, W)), bark = M('#6b4a30', 0.95), wood = M('#d7ad74', 0.85);
+    if (kind === 'stump') {
+      lathe([[w * 0.42, 0], [w * 0.3, w * 0.06], [w * 0.27, w * 0.2], [w * 0.26, w * 0.4], [0, w * 0.4]], bark, 24, 0.07);
+      const top = add(new T.CircleGeometry(w * 0.255, 32), wood, 0, w * 0.401, 0, -Math.PI / 2);
+      [0.7, 0.45, 0.2].forEach((k) => add(new T.RingGeometry(w * 0.255 * k - w * 0.005, w * 0.255 * k, 32), M('#a77d4c', 0.9), 0, w * 0.403, 0, -Math.PI / 2));
+      top.receiveShadow = true;
+    } else {
+      const r = w * 0.17, e = lathe([[0, -w / 2], [r, -w / 2], [r * 1.02, 0], [r, w / 2], [0, w / 2]], bark, 24, 0.06); e.rotation.z = Math.PI / 2; e.position.y = r;
+      [-1, 1].forEach((sd) => { add(new T.CircleGeometry(r * 0.96, 28), wood, sd * (w / 2 + 0.002), r, 0, 0, sd * Math.PI / 2); [0.65, 0.35].forEach((k) => add(new T.RingGeometry(r * k - w * 0.004, r * k, 28), M('#a77d4c', 0.9), sd * (w / 2 + 0.004), r, 0, 0, sd * Math.PI / 2)); });
+    }
+  } else if (t === 'mushroom') {
+    const h = Math.min(3, Math.max(0.05, H));
+    lathe([[h * 0.1, 0], [h * 0.08, h * 0.3], [h * 0.07, h * 0.55], [0, h * 0.56]], M('#efe3cf', 0.8), 20);
+    lathe([[h * 0.42, h * 0.5], [h * 0.4, h * 0.62], [h * 0.3, h * 0.82], [h * 0.15, h * 0.95], [0, h], [0, h * 0.5]], M(own || '#c9442f', 0.5, { clear: true }), 32);
+    for (let k = 0; k < 9; k++) { const a = R() * Math.PI * 2, b = 0.35 + R() * 0.8, e = add(new T.SphereGeometry(h * 0.045, 10, 8), M('#fbf6ec', 0.7), Math.cos(a) * Math.sin(b) * h * 0.38, h * 0.52 + Math.cos(b) * h * 0.46, Math.sin(a) * Math.sin(b) * h * 0.38); e.scale.y = 0.4; }
+  } else if (t === 'ground') { // a round patch of ground; "soil": a slice of it, the soil below shown see-through so roots show
+    const w = Math.min(16, Math.max(0.3, W)), top = { soil: '#5f9a3e', sand: '#e3cf9a', snow: '#f3f6fa' }[kind] || '#5f9a3e';
+    const g = new T.CircleGeometry(w, 48), p = g.attributes.position; for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i), d = Math.hypot(x, y) / w; p.setZ(i, (1 - d) * w * 0.02 * noise(x * 1.3, y * 1.3, 0.5)); } g.computeVertexNormals();
+    const e = add(g, M(top, 0.95), 0, 0, 0, -Math.PI / 2); e.receiveShadow = true;
+    if (kind === 'soil') { const d = w * 0.5, sm = M('#7a5436', 1); sm.transparent = true; sm.opacity = 0.38; sm.depthWrite = false; const c = add(new T.CylinderGeometry(w, w * 0.98, d, 48, 1, true), sm, 0, -d / 2, 0); c.userData.keepOpacity = 0.38; const b = add(new T.CircleGeometry(w * 0.98, 48), sm, 0, -d, 0, Math.PI / 2); b.userData.keepOpacity = 0.38; }
+  } else if (t === 'drops') {
+    const w = Math.min(6, Math.max(0.1, W));
+    for (let k = 0; k < 8; k++) { const d = add(new T.SphereGeometry(w * 0.04, 12, 10), M('#4a9fe0', 0.15, { clear: true }), J(w * 0.45), -R() * w * 0.6, J(w * 0.25)); d.scale.y = 1.6; }
+  } else if (t === 'snowflake') {
+    const r = Math.min(4, Math.max(0.05, Rr)), m = M('#dcefff', 0.3, { glow: '#bfe2ff', gi: 0.4 });
+    for (let j = 0; j < 3; j++) { const b = add(new T.BoxGeometry(r * 2, r * 0.08, r * 0.08), m); b.rotation.z = j * Math.PI / 3; }
+  } else if (t === 'bolt') {
+    const h = Math.min(6, Math.max(0.1, H)), sh = new T.Shape();
+    [[0.08, 0.5], [-0.12, 0.02], [0.02, 0.02], [-0.08, -0.5], [0.16, 0.06], [0.03, 0.06], [0.14, 0.5]].forEach(([x, y], k) => (k ? sh.lineTo(x * h, y * h) : sh.moveTo(x * h, y * h)));
+    add(new T.ExtrudeGeometry(sh, { depth: h * 0.05, bevelEnabled: true, bevelSize: h * 0.01, bevelThickness: h * 0.01, bevelSegments: 2 }), M('#ffd23a', 0.4, { glow: '#ffc21a', gi: 1 }));
+  }
+  return G;
+}
+function kitDark3(hex) { let h = hex.replace('#', ''); if (h.length === 3) h = h.split('').map((c) => c + c).join(''); return '#' + h.match(/../g).map((x) => Math.round(parseInt(x, 16) * 0.65).toString(16).padStart(2, '0')).join(''); }
+
 function shape3d(T, s, mat, along, v3, AX) {
   const t = String(s.t || s.type || '').toLowerCase();
   const axis = ['x', 'y', 'z'].includes(s.axis) ? s.axis : 'x';
   const r = num(s.r, .02, 8, .5), len = num(s.len ?? s.h, .02, 20, 1);
   let m = null;
   const own = s.color && /^#[0-9a-f]{3,8}$/i.test(s.color) ? Object.assign(mat.clone(), { color: new T.Color(s.color) }) : mat;
-  if (t === 'cylinder' || t === 'tube' || t === 'disc') {
+  if (KIT3.includes(t)) m = kit3d(T, s, own); // (v325) a tree, a flower, a cloud...: a whole real-looking model
+  else if (t === 'cylinder' || t === 'tube' || t === 'disc') {
     const r2 = num(s.r2, .02, 8, r), h = t === 'disc' ? num(s.thick ?? s.len, .01, 2, .08) : len;
     const open = !!s.open, arc = s.cut ? Math.PI * 1.4 : Math.PI * 2;
     m = along(new T.Mesh(new T.CylinderGeometry(r2, r, h, 48, 1, open, s.cut ? Math.PI * .2 : 0, arc), own), axis);
