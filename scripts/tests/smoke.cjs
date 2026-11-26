@@ -1175,6 +1175,7 @@ test('v316 the drawing book, grown by the team (app): an AI drawing that passed 
   // an approved drawing: shown at once, like the book, with no AI
   await page.evaluate((sp) => { localStorage.setItem('cassie.teamDrawings', JSON.stringify({ at: Date.now(), list: [{ subject: 'geyser', mode: '2d', spec: { ...sp, title: 'How a geyser erupts' } }] })); chatLog.innerHTML = ''; state.messages = []; }, good);
   drawCalls.length = 0;
+  await page.evaluate(() => openDrawIt()); // (v322: drawings are made in Draw It; a chat answers in words)
   await page.fill('#prompt-input', 'how does a geyser work?'); await page.click('#send-btn');
   await page.waitForFunction(() => /How a geyser erupts/.test((document.querySelector('#chat-log .ld-title') || {}).textContent || ''), null, { timeout: 20000 });
   expect(!drawCalls.length, 'the approved drawing is shown with no AI: ' + drawCalls.length);
@@ -7394,7 +7395,7 @@ test('keep your work: after a first real study moment a signed-out student sees 
   await ctx.close();
 });
 
-test('tab bar on a phone: each of the 5 tabs at least 48px wide and 44px tall, none overlapping, all on screen (320, 360, 390 wide)', async (b) => {
+test('tab bar on a phone: each of the 6 tabs at least 48px wide and 44px tall, none overlapping, all on screen (320, 360, 390 wide)', async (b) => {
   for (const width of [320, 360, 390]) {
     for (const tab of ['home', 'games']) { // (the open tab shows its name: the widest it gets)
       const { ctx, page } = await open(b, { device: 'iPhone 13', viewport: { width, height: 760 }, server: false, state: { groqKey: 'gsk_test', tab } });
@@ -7402,7 +7403,7 @@ test('tab bar on a phone: each of the 5 tabs at least 48px wide and 44px tall, n
       await page.waitForTimeout(400);
       const r = await page.$$eval('.tabbar .tab', (ts) => ts.map((t) => { const q = t.getBoundingClientRect(); return [q.left, q.right, q.width, q.height]; }));
       const overlap = r.some((a, i) => i && a[0] < r[i - 1][1] - 0.5), off = r.some((a) => a[0] < 0 || a[1] > innerWidthOf(width));
-      expect(r.length === 5 && r.every((a) => a[2] >= 48 && a[3] >= 44) && !overlap && !off, /* (v274: no Cards tab) */ `${width} (${tab} open): ` + JSON.stringify(r.map((a) => [Math.round(a[0]), Math.round(a[2]), Math.round(a[3])])));
+      expect(r.length === 6 && r.every((a) => a[2] >= 48 && a[3] >= 44) && !overlap && !off, /* (v274: no Cards tab) */ `${width} (${tab} open): ` + JSON.stringify(r.map((a) => [Math.round(a[0]), Math.round(a[2]), Math.round(a[3])])));
       await ctx.close();
     }
   }
@@ -7818,6 +7819,7 @@ test('v315 drawings: the book dragon is a solid illustrated animal; "make it 3D"
   const d = await page.evaluate(async () => { const bk = await liveBookLoad(), m = await liveDrawLoad(); const sp = m.clean(bk.fromBook('draw a dragon')); return { n: sp.parts.length, labels: sp.parts.map((p) => p.label).join(','), solid: sp.parts.filter((p) => p.shapes.some((x) => x.solid)).length, issues: m.check(sp, 'draw a dragon') }; });
   expect(d.n === 9 && /Horns/.test(d.labels) && /Spines/.test(d.labels) && d.solid >= 8 && !d.issues.length, 'the dragon: 9 parts (horns and spines too), solid like an illustration, and it passes every check: ' + JSON.stringify(d));
   // a book drawing, then "make it 3D": the same bicycle, in 3D, from the book
+  await page.evaluate(() => openDrawIt()); // (v322: drawings are made in Draw It; a chat answers in words)
   await page.fill('#prompt-input', 'how does a bicycle work'); await page.click('#send-btn');
   await page.waitForSelector('#chat-log .ld .ld-motion', { timeout: 40001 });
   const row = await page.evaluate(() => [...document.querySelectorAll('#chat-log .ld .ld-acts button')].filter((x) => !x.hidden).map((x) => x.textContent.trim()));
@@ -7887,6 +7889,7 @@ test('v314 moving drawings: blood flows round the heart, lungs and body (blue to
   // "how does a bicycle work": drawn at once (no "How should I show it?"), wheels turning; See it in 3D builds it from the book, with no AI
   await page.evaluate(() => { chatLog.innerHTML = ''; state.messages = []; });
   sys.length = 0;
+  await page.evaluate(() => openDrawIt()); // (v322: drawings are made in Draw It; a chat answers in words)
   await page.fill('#prompt-input', 'how does a bicycle work'); await page.click('#send-btn');
   await page.waitForSelector('#chat-log .ld .ld-motion', { timeout: 40000 }); // (once it has drawn itself)
   expect(!(await page.$('.ld-pop')) && (await page.textContent('#chat-log .ld-other')).trim() === 'See it in 3D' && !!(await page.$('#chat-log .ld-motion')), 'drawn at once, moving, with See it in 3D');
@@ -14926,7 +14929,7 @@ test('phone app: Home and the floating tab bar (Home, Chat, Labs, Games, You)', 
   await page.goto(APP);
   await page.waitForSelector('#home:not([hidden])');
   expect(/Hello, Test/.test(await page.locator('#home .hub-hi').innerText()), 'Home greets you by name');
-  expect(await page.locator('#home .hub-card').count() === 2 && await page.locator('#tabbar .tab').count() === 5, 'two big cards and five tabs (v274: Flashcards is in the side menu)');
+  expect(await page.locator('#home .hub-card').count() === 2 && await page.locator('#tabbar .tab').count() === 6, 'two big cards and six tabs (v274: Flashcards is in the side menu; v322: Draw)');
   expect(await page.locator('.tab.on').getAttribute('data-tab') === 'home' && !(await page.locator('#prompt-input').isVisible()), 'Home is open and the chat is out of the way');
   await page.click('.tab[data-tab="labs"]');
   await page.waitForSelector(LABS_READY);

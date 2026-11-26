@@ -2836,7 +2836,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=321'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=322'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2858,7 +2858,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=321'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=322'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -3134,7 +3134,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=321').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=322').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -3735,7 +3735,7 @@ function deskChrome() {
   document.body.classList.toggle('desk-on', sideWide.matches && empty && !deskInChat());
   const drawing = isDrawChat();
   document.querySelectorAll('#side-nav [data-page]').forEach((b) => { const pg = b.dataset.page, on = (pg === deskPage && empty && pg !== 'chat') || (pg === 'chats' && ((!empty && !drawing) || (deskPage === 'chat' && empty))) || (pg === 'draw' && drawing && (!empty || deskPage === 'draw')); b.classList.toggle('on', on); if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
-  const ph = drawing ? 'What should Cassie draw? e.g. the heart in 3D' : 'Ask Cassie a question…';
+  const ph = drawing ? 'What should Cassie draw?' : 'Ask Cassie a question…';
   if (promptInput.placeholder !== ph && /^(Ask Cassie a question…|What should Cassie draw\?.*)$/.test(promptInput.placeholder)) promptInput.placeholder = ph;
   routeSync();
   const so = document.querySelector('.side-nav [data-page="signout"]'); if (so) so.hidden = !(accountsOn() && authToken());
@@ -4928,6 +4928,12 @@ function openExamSheet(pre = null) {
 }
 
 function renderHome() {
+  if (!sideWide.matches && isDrawChat()) { // (v322) a phone's Draw tab: what to draw, and the drawings made before
+    const w = document.createElement('div'); w.className = 'home home-desk home-draw';
+    w.appendChild(deskDrawStart()); chatLog.appendChild(w);
+    chatPinned = false; requestAnimationFrame(() => { chatLog.scrollTop = 0; chatPinned = false; }); // (read from the top)
+    return;
+  }
   if (sideWide.matches) { // computers: the study dashboard, or the page picked in the sidebar (phones: Home is its own tab)
     const w = document.createElement('div'); w.className = 'home home-desk';
     w.appendChild((DESK_PAGES[deskPage] || DESK_PAGES.home)());
@@ -7674,11 +7680,11 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=321')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=322')));
 // (v310) Cassie's drawing book: a checked drawing of a common subject (a bicycle, the heart, the solar system...) shows
 // at once, right every time, with no AI and no question used (offline too). Anything else is drawn by the AI.
 let liveBookLib = null;
-const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=321').catch(() => null)));
+const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=322').catch(() => null)));
 // (v316) the drawing book, grown by the team: AI drawings that passed every check go to Cassie's server with
 // only their subject's few words; the owner approves the good ones on the dashboard, and the app keeps a copy of
 // every approved drawing, so they show at once (offline too) like the hand-checked ones
@@ -9231,7 +9237,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=321');
+      exploreMod = await import('./explore/cell3d.js?v=322');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -9281,7 +9287,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=321');
+      labsMod = await import('./labs/labs.js?v=322');
       islandRest();
     }
     labsMod.open({
@@ -11246,10 +11252,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=321').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=322').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=321', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=322', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
