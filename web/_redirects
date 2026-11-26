@@ -1,0 +1,3 @@
+# Cloudflare Pages rewrites (v322): every address under /app is the app itself, so each page has its own
+# address (askcassie.study/app/chats, /app/draw, /app/chat/<id> ...); the address stays as typed (200, not a redirect).
+/app/*  /app  200

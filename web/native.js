@@ -23,6 +23,7 @@
     if (root.classList.contains('labs-open')) return $('.labs') && $('.labs').dataset.section === 'games' ? 'games' : 'labs';
     if (root.classList.contains('fc-open')) return 'cards';
     if (settings && !settings.hidden) return 'you';
+    if (base === 'chat' && window.isDrawChat && window.isDrawChat()) return 'draw'; // (v322: a Draw It chat)
     return base;
   };
   function closeOthers(keep) {
@@ -32,6 +33,12 @@
   }
   function go(t) {
     if (t === 'home') forceFill = true; // (Home tapped: always fresh)
+    if (t === 'draw') { // (v322) Draw It: a drawing chat of its own, on the chat screen
+      closeOthers('draw');
+      if (!(window.isDrawChat && window.isDrawChat())) { if (window.openDrawIt) window.openDrawIt(); }
+      base = 'chat'; state.tab = 'chat'; save(); sync(); return;
+    }
+    if (t === 'chat' && window.isDrawChat && window.isDrawChat()) { if (window.createNewChat) window.createNewChat(); } // (Chat from Draw It: a chat)
     if (t === 'home' || t === 'chat') {
       closeOthers(t);
       if (t === base && t === 'home') home.scrollTo({ top: 0, behavior: 'smooth' }); // tap Home again: back to the top

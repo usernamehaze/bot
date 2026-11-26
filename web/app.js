@@ -80,12 +80,13 @@ if (!GROQ_MODELS.includes(state.groqModel)) {
 }
 
 /* ---------- conversations (multiple saved chats) ---------- */
-function makeChat() {
+function makeChat(kind) {
   return {
     id: 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
     title: '',
     messages: [],
     updatedAt: Date.now(),
+    ...(kind === 'draw' ? { kind: 'draw' } : {}), // (v322: a Draw It chat: drawings and 3D models live there, apart from the chats)
   };
 }
 function deriveTitle(msgs) {
@@ -353,7 +354,6 @@ const levelSelect = document.getElementById('level-select');
 const citationSelect = document.getElementById('citation-select');
 const textsizeSelect = document.getElementById('textsize-select');
 const easyreadToggle = document.getElementById('easyread-toggle');
-const everyModelToggle = document.getElementById('every-model-toggle'); // (v319)
 const appEl = document.getElementById('app');
 function applyReading() {
   if (!appEl) return;
@@ -2135,12 +2135,12 @@ function giveCare(lang, aiWords) {
 function replyHome(typing) {
   const msgs = state.messages, id = state.currentId;
   return {
-    here: () => state.messages === msgs && (!sideWide.matches || deskPage === 'chat' || !chatLog.querySelector('.home-desk')), // (still this chat, on the chat page)
+    here: () => state.messages === msgs && (!sideWide.matches || deskInChat() || !chatLog.querySelector('.home-desk')), // (still this chat, on the chat page)
     away(msg) {
       if (msg) msgs.push(msg);
       const c = (state.chats || []).find((x) => x.id === id); if (c) c.updatedAt = Date.now();
       save();
-      if (state.messages === msgs && (!sideWide.matches || deskPage === 'chat')) renderHistory(); // (back in that chat already: show it)
+      if (state.messages === msgs && (!sideWide.matches || deskInChat())) renderHistory(); // (back in that chat already: show it)
     },
   };
 }
@@ -3732,8 +3732,12 @@ function goHome() { deskGo('home'); }
 function deskChrome() {
   const empty = !state.messages.length;
   // (the dashboard pages have no ask box; a chat, new or not, does)
-  document.body.classList.toggle('desk-on', sideWide.matches && empty && deskPage !== 'chat');
-  document.querySelectorAll('#side-nav [data-page]').forEach((b) => { const on = (b.dataset.page === deskPage && empty) || (b.dataset.page === 'chats' && (!empty || deskPage === 'chat')); b.classList.toggle('on', on); if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
+  document.body.classList.toggle('desk-on', sideWide.matches && empty && !deskInChat());
+  const drawing = isDrawChat();
+  document.querySelectorAll('#side-nav [data-page]').forEach((b) => { const pg = b.dataset.page, on = (pg === deskPage && empty && pg !== 'chat') || (pg === 'chats' && ((!empty && !drawing) || (deskPage === 'chat' && empty))) || (pg === 'draw' && drawing && (!empty || deskPage === 'draw')); b.classList.toggle('on', on); if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
+  const ph = drawing ? 'What should Cassie draw? e.g. the heart in 3D' : 'Ask Cassie a question…';
+  if (promptInput.placeholder !== ph && /^(Ask Cassie a question…|What should Cassie draw\?.*)$/.test(promptInput.placeholder)) promptInput.placeholder = ph;
+  routeSync();
   const so = document.querySelector('.side-nav [data-page="signout"]'); if (so) so.hidden = !(accountsOn() && authToken());
   const badge = document.querySelector('#side-nav [data-page="plan"] .side-badge'), n = dueToday();
   if (badge) { const t = n ? String(n) : ''; if (badge.textContent !== t) badge.textContent = t; badge.hidden = !n; document.querySelector('#side-nav [data-page="plan"]').setAttribute('aria-label', n ? `Study plan: ${n} ${n === 1 ? 'task' : 'tasks'} today` : 'Study plan'); }
@@ -3769,7 +3773,7 @@ let topHits = [], topAt = 0;
 function topSearchHits(q) {
   q = q.trim().toLowerCase();
   if (!q) return [];
-  const pages = [['Home', () => deskGo('home')], ['Chats', () => deskGo('chats')], ['Study plan', () => deskGo('plan')], ['Calendar', () => deskGo('calendar')], ['Progress', () => deskGo('progress')], ['New chat', () => deskGo('chat')], ['Settings', () => openSettings('all')], ['Memory', () => document.getElementById('memory-btn').click()], ['Learn', () => document.getElementById('labs-btn').click()], ['Games', () => document.getElementById('games-btn').click()], ['Board', () => document.getElementById('board-btn').click()]]
+  const pages = [['Home', () => deskGo('home')], ['Chats', () => deskGo('chats')], ['Study plan', () => deskGo('plan')], ['Calendar', () => deskGo('calendar')], ['Progress', () => deskGo('progress')], ['New chat', () => deskGo('chat')], ['Draw It', () => deskGo('draw')], ['Settings', () => openSettings('all')], ['Memory', () => document.getElementById('memory-btn').click()], ['Learn', () => document.getElementById('labs-btn').click()], ['Games', () => document.getElementById('games-btn').click()], ['Board', () => document.getElementById('board-btn').click()]]
     .map(([t, go]) => ({ t, kind: 'Page', go }));
   const tools = HOME_EXAMPLES.map((ex) => ({ t: ex.label, kind: 'Tool', go: () => { if (state.messages.length || deskPage !== 'chat') deskGo('chat'); runTool(ex); } }));
   const chats = state.chats.filter((c) => c.messages && c.messages.length).map((c) => ({ t: c.title || deriveTitle(c.messages) || 'Chat', kind: 'Chat', go: () => selectChat(c.id) }));
@@ -3838,8 +3842,100 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !topRemi
 const DESK_KEY = 'cassie.deskPage';
 var deskPage = 'home';
 try { deskPage = sessionStorage.getItem(DESK_KEY) || 'home'; } catch (e) { /* this visit only */ }
-const DESK_PAGES = { home: () => deskHome(), chat: () => deskChatStart(), chats: () => deskChats(), plan: () => deskPlan(), lessons: () => deskLessons(), calendar: () => deskCalendar(), progress: () => deskProgress() };
+const DESK_PAGES = { home: () => deskHome(), chat: () => deskChatStart(), chats: () => deskChats(), plan: () => deskPlan(), lessons: () => deskLessons(), calendar: () => deskCalendar(), progress: () => deskProgress(), draw: () => deskDrawStart() };
 function setDeskPage(page) { deskPage = DESK_PAGES[page] ? page : 'home'; try { sessionStorage.setItem(DESK_KEY, deskPage); } catch (e) { /* ignore */ } }
+/* (v322) Draw It: drawings and 3D models have their own place, below Chats. In a chat Cassie answers in words (no
+   model is built under every answer); in Draw It whatever is asked is drawn, and a 3D model is built when it is asked
+   for. "Draw a heart" typed in a chat opens a new Draw It chat and is drawn there. */
+function isDrawChat(c = curChat()) { return !!(c && c.kind === 'draw'); }
+function chatPageOf() { return isDrawChat() ? 'draw' : 'chat'; }
+function deskInChat() { return deskPage === 'chat' || deskPage === 'draw'; } // (a chat, new or not: the ask box shows)
+function drawIcon(three) { return three ? '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/>' : '<path d="M4 20l4-1 11-11-3-3L5 16z"/>'; }
+function openDrawIt() {
+  setDeskPage('draw');
+  const cur = curChat();
+  if (cur && cur.messages.length === 0) { cur.kind = 'draw'; state.messages = cur.messages; } // (the blank chat on screen becomes the drawing one)
+  else {
+    const blank = state.chats.find((c) => c.kind === 'draw' && !c.messages.length);
+    const c = blank || makeChat('draw');
+    if (!blank) state.chats.push(c);
+    state.currentId = c.id; state.messages = c.messages;
+  }
+  resetQuizUi(); save(); renderHistory(); renderChatList(); closeSidebar(); deskChrome();
+  promptInput.focus();
+}
+function drawIdeas() { return [['The human heart in 3D', 'show me the human heart in 3D'], ['How a volcano erupts', 'how does a volcano erupt'], ['Layers of the skin in 3D', 'show me the layers of the skin in 3D'], ['How a bicycle works', 'how does a bicycle work'], ['The water cycle', 'the water cycle'], ['The lungs in 3D', 'show me the lungs in 3D']]; }
+function deskDrawStart() {
+  const DRAW_IDEAS = drawIdeas(), el = document.createElement('div');
+  el.className = 'desk desk-chat desk-draw';
+  el.innerHTML = `<div class="dk-chat-hi"><h1 class="dk-title">What should I draw?</h1><p class="dk-sub">Ask for anything. Cassie draws it step by step with every part named, or builds it in 3D when you say 3D.</p>
+    <div class="dk-ideas-row">${DRAW_IDEAS.map((d, i) => `<button type="button" class="dk-chip dk-idea" data-i="${i}"><svg class="ic-line" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${drawIcon(/3D/.test(d[0]))}</svg><span></span></button>`).join('')}</div>
+    <div class="dk-draw-recent" hidden><h2 class="dk-draw-h">Your drawings</h2><div class="dk-ideas-row dk-draw-list"></div></div></div>`;
+  el.querySelectorAll('.dk-idea').forEach((b) => { b.querySelector('span').textContent = DRAW_IDEAS[+b.dataset.i][0]; b.addEventListener('click', () => handleSend(DRAW_IDEAS[+b.dataset.i][1])); });
+  const done = state.chats.filter((c) => c.kind === 'draw' && c.messages && c.messages.length).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 8);
+  if (done.length) {
+    const box = el.querySelector('.dk-draw-recent'), list = el.querySelector('.dk-draw-list'); box.hidden = false;
+    done.forEach((c) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'dk-chip'; b.textContent = c.title || deriveTitle(c.messages) || 'Drawing'; b.addEventListener('click', () => { selectChat(c.id); setDeskPage('draw'); deskChrome(); }); list.appendChild(b); });
+  }
+  return el;
+}
+/* (v322) Every page has its own address, so a tab says where it is and Back and Forward work: askcassie.study/app
+   is Home; /app/chats, /app/study-plan, /app/lessons, /app/calendar, /app/progress, /app/draw; a chat is /app/chat/<id>
+   and a drawing chat /app/draw/<id>; /app/settings, /app/learn, /app/games, /app/board, /app/memory while one is open.
+   (Cloudflare Pages serves app.html for every /app/... address: _redirects; app.html's <base href="/"> keeps its files
+   where they are.) Only on those addresses: app.html opened by name (old links, the tests) keeps its own. */
+function routeOn() { return /^\/app(\/|$)/.test(location.pathname); }
+function routeTable() { return { home: '', chat: 'chat', chats: 'chats', plan: 'study-plan', lessons: 'lessons', calendar: 'calendar', progress: 'progress', draw: 'draw' }; }
+function routeOverlay() {
+  const R = document.documentElement, mem = document.getElementById('memory-panel');
+  if (typeof settingsPanel !== 'undefined' && settingsPanel && !settingsPanel.hidden) return 'settings';
+  if (R.classList.contains('board-open')) return 'board';
+  if (R.classList.contains('labs-open')) { const l = document.querySelector('.labs'); return l && l.dataset.section === 'games' ? 'games' : 'learn'; }
+  if (mem && !mem.hidden) return 'memory';
+  return '';
+}
+function routeNow() {
+  const ov = routeOverlay(); if (ov) return '/app/' + ov;
+  const c = curChat(), R = document.documentElement;
+  const onChat = sideWide.matches ? (state.messages.length > 0 || deskInChat()) : R.classList.contains('tab-chat');
+  if (onChat && c && state.messages.length) return `/app/${c.kind === 'draw' ? 'draw' : 'chat'}/${c.id}`;
+  if (!sideWide.matches) return onChat ? (isDrawChat() ? '/app/draw' : '/app/chat') : '/app';
+  const r = routeTable()[deskPage]; return '/app' + (r ? '/' + r : '');
+}
+let routeBusy = false, routeQueued = false, routeReady = false; // (ready once the address the app was opened at is read)
+function routeSync() {
+  if (!routeOn() || routeBusy || !routeReady) return;
+  let p; try { p = routeNow(); } catch (e) { return; }
+  if (p === location.pathname) return;
+  try { history.pushState({ cassie: p }, '', p + location.search + location.hash); } catch (e) { /* ignore */ }
+}
+function routeLater() { if (!routeQueued) { routeQueued = true; requestAnimationFrame(() => { routeQueued = false; routeSync(); }); } }
+// an address to its page (opening the app at it, or Back and Forward)
+function routeOpen(path) {
+  const seg = path.replace(/^\/app\/?/, '').split('/').filter(Boolean), first = seg[0] || '';
+  const table = routeTable(), page = Object.keys(table).find((k) => table[k] === first);
+  routeBusy = true;
+  try {
+    const ov = routeOverlay();
+    if (ov && ov !== ({ learn: 'learn', games: 'games', settings: 'settings', board: 'board', memory: 'memory' })[first]) {
+      if (ov === 'settings') closeSettings(); else if (ov === 'memory') closeMemory();
+      else if (ov === 'board') { if (window.CassieSketch && window.CassieSketch.close) window.CassieSketch.close(); }
+      else { const x = document.querySelector('.labs .labs-x'); if (x) x.click(); }
+    }
+    if ((first === 'chat' || first === 'draw') && seg[1] && state.chats.some((c) => c.id === seg[1] && c.messages.length)) {
+      if (!sideWide.matches) { const t = document.querySelector('#tabbar [data-tab="chat"]'); if (t && !document.documentElement.classList.contains('tab-chat')) t.click(); }
+      selectChat(seg[1]);
+    } else if (first === 'settings') { if (settingsPanel.hidden) openSettings('profile'); }
+    else if (first === 'learn' || first === 'games' || first === 'board' || first === 'memory') {
+      if (routeOverlay() !== first) { const b = document.getElementById({ learn: 'labs-btn', games: 'games-btn', board: 'board-btn', memory: 'memory-btn' }[first]); if (b) b.click(); }
+    } else if (page) {
+      if (sideWide.matches) deskGo(page);
+      else { const t = document.querySelector(`#tabbar [data-tab="${page === 'home' ? 'home' : page === 'draw' ? 'draw' : 'chat'}"]`); if (t) t.click(); else if (page === 'draw') openDrawIt(); }
+    }
+  } catch (e) { /* the page stays as it is */ }
+  routeBusy = false;
+  try { history.replaceState({ cassie: 1 }, '', routeNow() + location.search + location.hash); } catch (e) { /* ignore */ }
+}
 // a new chat on a computer: a hello, a few ideas, and the ask box under it
 function deskChatStart() {
   const el = document.createElement('div');
@@ -3856,7 +3952,7 @@ let deskChatsFilter = 'all';
 function deskChats() {
   const el = document.createElement('div');
   el.className = 'desk desk-chats';
-  const all = state.chats.filter((c) => c.messages && c.messages.length).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  const all = state.chats.filter((c) => c.messages && c.messages.length && c.kind !== 'draw').sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)); // (v322: drawings are in Draw It)
   const week = Date.now() - 7 * 864e5;
   const FILTERS = [['all', 'All'], ['week', 'This week'], ['files', 'With files'], ['older', 'Older']];
   const keep = (c) => deskChatsFilter === 'all' || (deskChatsFilter === 'week' && (c.updatedAt || 0) >= week) || (deskChatsFilter === 'older' && (c.updatedAt || 0) < week) || (deskChatsFilter === 'files' && c.messages.some((m) => m.display && /\(attached:/.test(m.display)));
@@ -4319,11 +4415,12 @@ function deskCalendar() {
 }
 function deskGo(page) {
   deskCloseOthers();
-  if (state.messages.length) createNewChat();
+  if (page === 'draw') { openDrawIt(); return; } // (v322: Draw It is a drawing chat of its own)
+  if (state.messages.length || isDrawChat()) createNewChat();
   setDeskPage(page);
   renderHistory();
   deskChrome(); // (now, so the ask box is back before it's focused)
-  if (deskPage === 'chat') promptInput.focus(); else promptInput.blur();
+  if (deskInChat()) promptInput.focus(); else promptInput.blur();
 }
 // a page's header: the title, one grey line, and its main buttons
 function deskHeader(title, sub, buttons = '') {
@@ -6946,7 +7043,7 @@ async function handleSend(text, opts = {}) {
   if (!doc && !image && !many && activeDoc && activeDoc.chatId === state.currentId && DOC_FOLLOWUP_RE.test(text)) doc = activeDoc.doc;
   // (v279) one photo and "draw this", "sketch it", "show it in 3D": she draws the very thing in the photo, live
   if (image && !doc && !opts.mode && !opts.noDraw && text.trim() && liveDrawRequest(text) && canChat() && !(window.CassieCare && window.CassieCare.check(text))) {
-    liveShowClose(false); clearFollowups(); if (!state.messages.length) setDeskPage('chat');
+    liveShowClose(false); clearFollowups(); if (!state.messages.length) setDeskPage(chatPageOf());
     const sent = image; clearAttach();
     track('feature', 'photo-draw');
     return liveDrawReply(text, LIVE_3D_RE.test(text), sent);
@@ -6955,8 +7052,12 @@ async function handleSend(text, opts = {}) {
     liveShowClose(false); // (a new message closes an open "How should I show it?")
   if (!opts.noDraw && !doc && LIVE_BACK_3D_RE.test(text.trim()) && liveLastDrawn() && canChat()) return liveDrawReply(text, true); // (v315: "make it 3D": the drawing on screen, in 3D)
   if (!opts.noDraw && !doc && liveDrawFollowFits(text)) return liveDrawFollow(text); // (v306: a question about the drawing on screen is answered on it)
+  // (v322) "draw a heart", "make a 3D of a car" typed in a chat: a new Draw It chat opens and it is drawn there
+  if (!opts.noDraw && !doc && !isDrawChat() && liveDrawRequest(text) && !(window.CassieCare && window.CassieCare.check(text))) { promptInput.value = ''; autoGrow(); openDrawIt(); return handleSend(text, opts); }
   if (!opts.noDraw && liveDrawRequest(text)) return liveShowAsk(text); // (v253: she asks how to show it, then draws it live)
-  if (!opts.noDraw && liveHowRequest(text) && canChat()) return liveDrawReply(text, LIVE_3D_RE.test(text)); // (v314: how it works: drawn, moving)
+  // (v322) in Draw It everything asked is drawn (how it works: drawn, moving; a thing: drawn with its parts named);
+  // in a chat, "how does it work" is answered in words
+  if (!opts.noDraw && isDrawChat() && canChat() && !LIVE_MATH_RE.test(text) && !(window.CassieCare && window.CassieCare.check(text))) return liveDrawReply(text, LIVE_3D_RE.test(text));
     const pic = imageRequest(text);
     if (pic) return handleImageRequest(text, pic.subject);
   }
@@ -6982,7 +7083,7 @@ async function handleSend(text, opts = {}) {
 
   clearFollowups();
   // if the home screen is showing, clear it before the first message (a computer's next empty chat is Home again)
-  if (!state.messages.length) { chatLog.innerHTML = ''; setDeskPage('chat'); }
+  if (!state.messages.length) { chatLog.innerHTML = ''; setDeskPage(chatPageOf()); }
   // A document is read separately; history only keeps a short note + excerpt,
   // so later questions don't blow past the free per-minute limits.
   let modelContent = sendText;
@@ -7087,7 +7188,6 @@ async function handleSend(text, opts = {}) {
       : '';
     const want = window.CassieExport ? (window.CassieExport.wantedFormat(sendText) || (wantsStudyFile(sendText) && looksLikeContent(reply) ? 'docx' : '')) : '';
     addTextDownload(bubble, reply, { title, want });
-    if (!doc && !image && !many && !bubble.querySelector('.cassie-board')) answerModel(sendText, reply, answerMsg).catch(() => {}); // (v319: and a 3D model of it)
     if (doc && doc.text && !doc.combined) { // open the file itself to read it and highlight any part
       const rb = document.createElement('button');
       rb.type = 'button'; rb.className = 'attach-read reader-open-btn'; rb.textContent = `Read & highlight ${doc.name.length > 28 ? doc.name.slice(0, 28) + '…' : doc.name}`;
@@ -7619,41 +7719,6 @@ async function liveDrawSuggest(question, spec, first) {
     const r = await fetch(SERVER + '/drawings/suggest', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ uid: installId(), subject, mode: sp.mode, spec: keep, png: png && png.length <= 290000 ? png : '' }), signal: waitAtMost(15000) });
     if (r.ok) { sent.push(key); try { localStorage.setItem('cassie.suggested', JSON.stringify(sent.slice(-200))); } catch (e) { /* full */ } }
   } catch (e) { /* tried again next time it is drawn */ }
-}
-/* (v319) A 3D model with every answer. After Cassie answers in words she builds what she said, in 3D (an idea as a
-   machine whose working is the answer: LIVE_ANATOMY), right under it, while the student reads. It is not another
-   question. Off in Settings ("A 3D model with every answer"), in Lite mode, on low data, offline, in a quiz, in
-   Heart-to-heart and for a greeting; a student at risk gets care, never a model. It is saved to the chat it was asked in. */
-const MODEL_SKIP = /^\s*(?:hi+|hello|hey|yo|thanks?|thank\s+you|ty|ok(?:ay)?|okie|sure|yes|no|nope|bye|good\s*(?:morning|afternoon|evening|night)|salamat|kumusta|musta|ingat|sige|oo|hindi|lol|haha+|nice|cool|wow|great|got\s+it)\b[\s!.?]*$/i;
-function answerModelFits(question) {
-  const q = String(question || '').trim(), net = navigator.connection || {};
-  if (state.everyModel === false || q.length < 3 || MODEL_SKIP.test(q) || quizMode || counselorMode || isOffline() || !canChat()) return false;
-  if (document.documentElement.classList.contains('lite') || net.saveData || /^(slow-2g|2g)$/.test(String(net.effectiveType || ''))) return false;
-  return !(window.CassieCare && window.CassieCare.check(q));
-}
-async function answerModel(question, reply, answerMsg) {
-  if (!answerModelFits(question)) return;
-  const typing = renderTyping(), home = replyHome(typing), msgs = state.messages;
-  typing.classList.add('am-wait'); setTypingStatus(typing, 'Building it in 3D…');
-  const put = (msg) => { const k = msgs.indexOf(answerMsg); msgs.splice(k >= 0 ? k + 1 : msgs.length, 0, msg); }; // (right under its answer, whatever was asked since)
-  let first = null;
-  try {
-    const ask = `${question.slice(0, 600)}\n\n(What I answered, to build as a 3D model that shows it: ${String(reply).replace(/\s+/g, ' ').slice(0, 900)})`;
-    first = await Promise.race([liveDrawFirst(ask, true, null, { free: true }), new Promise((r) => setTimeout(() => r(null), window.CASSIE_DRAW_MS || 75000))]);
-  } catch (e) { first = null; }
-  if (!first || !first.spec) { typing.remove(); return; } // (her words stand on their own)
-  first.spec.q = question.slice(0, 300);
-  const fenced = '```cassie-draw\n' + JSON.stringify(first.spec) + '\n```';
-  const msg = { role: 'assistant', content: `[I built a 3D model of my answer: ${first.spec.title}. Parts: ${first.spec.parts.map((p) => p.label).join(', ')}.]`, display: fenced, model: true };
-  const here = home.here() && typing.isConnected;
-  put(msg);
-  if (!here) { typing.remove(); home.away(null); return; } // (saved to its chat; shown there when they go back)
-  save();
-  liveDrawFresh = true;
-  const bubble = renderMessage('assistant', fenced);
-  const row = bubble && (bubble.closest('.msg') || bubble);
-  if (row) typing.replaceWith(row); else typing.remove();
-  track('feature', 'answer-model');
 }
 async function liveDrawBook(subject, want3d) {
   if (window.CASSIE_NO_BOOK) return null; // (tests of the AI's own drawing turn the book off)
@@ -8532,7 +8597,7 @@ async function startRoom(code, title) {
   const R = { code, title, since: 0, queue: [], timer: 0, stopped: false, fails: 0, members: [] };
   roomLive = R;
   R.stop = () => { R.stopped = true; clearTimeout(R.timer); document.removeEventListener('visibilitychange', R.wake); if (roomLive === R) roomLive = null; };
-  const link = `${location.origin}${location.pathname}?room=${code}`;
+  const link = `${location.origin}${routeOn() ? '/app' : location.pathname}?room=${code}`;
   await window.CassieSketch.open({
     title: `${title} · ${code}`,
     dark: false, // everyone sees the same page
@@ -9522,7 +9587,6 @@ function openSettings(page = 'profile') { // (v295: Settings opens on You; the f
   if (citationSelect) citationSelect.value = state.citationStyle || 'APA';
   if (textsizeSelect) textsizeSelect.value = state.textSize || 'normal';
   if (easyreadToggle) easyreadToggle.checked = !!state.easyRead;
-  if (everyModelToggle) everyModelToggle.checked = state.everyModel !== false;
   // A first-time user hasn't added a key yet, so open the "API keys" section
   // for them (that's where they need to paste it). Once a key is saved, keep
   // every section collapsed so the screen stays calm.
@@ -9641,7 +9705,6 @@ function commitSettings() {
   if (citationSelect) state.citationStyle = citationSelect.value;
   if (textsizeSelect) state.textSize = textsizeSelect.value;
   if (easyreadToggle) state.easyRead = easyreadToggle.checked;
-  if (everyModelToggle) state.everyModel = everyModelToggle.checked;
   save();
   updateModelPill();
   applyReading();
@@ -10099,7 +10162,7 @@ function renderChatList() {
   chats.forEach((c) => {
     const item = document.createElement('div');
     item.className = 'chat-item' + (c.id === state.currentId ? ' active' : '');
-    item.innerHTML = '<svg class="ci-icon" viewBox="0 0 24 24"><path d="M4 4h16a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H8l-4 4V5a1 1 0 0 1 1-1z"/></svg>';
+    item.innerHTML = c.kind === 'draw' ? `<svg class="ci-icon" viewBox="0 0 24 24" aria-label="Drawing">${drawIcon(false)}</svg>` : '<svg class="ci-icon" viewBox="0 0 24 24"><path d="M4 4h16a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H8l-4 4V5a1 1 0 0 1 1-1z"/></svg>';
     const title = document.createElement('span');
     title.className = 'ci-title';
     title.textContent = c.title || deriveTitle(c.messages) || 'New chat';
@@ -10123,16 +10186,19 @@ function selectChat(id) {
     if (!c) return;
     state.currentId = id;
     state.messages = c.messages;
+    if (deskInChat() || c.messages.length) setDeskPage(chatPageOf()); // (v322: its page, and its address)
     resetQuizUi();
     save();
     renderHistory();
   }
   closeSidebar();
+  deskChrome();
 }
 function createNewChat() {
   setDeskPage('chat'); // (a computer: a new chat is a blank chat with the ask box; Home is in the sidebar)
   const cur = curChat();
   if (cur && cur.messages.length === 0) {
+    delete cur.kind; // (a blank Draw It chat becomes a plain one)
     state.messages = cur.messages; // reuse the current blank chat instead of stacking empties
   } else {
     const c = makeChat();
@@ -12059,7 +12125,7 @@ function setPendingSignin(p) {
   for (const store of [sessionStorage, localStorage]) { try { if (p) store.setItem(SIGNIN_KEY, JSON.stringify(p)); else store.removeItem(SIGNIN_KEY); } catch (e) { /* none */ } }
 }
 // where Google sends the student back: this page, without anything after it (register it in Google Cloud)
-function googleReturnURL() { const u = new URL('app.html', location.href); u.search = ''; u.hash = ''; return u.href; }
+function googleReturnURL() { const u = new URL('app.html', document.baseURI); u.search = ''; u.hash = ''; return u.href; }
 function signinStart(provider, cfg) {
   const n = b64url(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(24))));
   setPendingSignin({ p: provider, n, at: Date.now() });
@@ -12887,6 +12953,17 @@ requestAnimationFrame(() => {
   followMouseNow();
 });
 receiveShare();
+// (v322) the address: open the page it names; then it follows the page (Back and Forward too)
+if (routeOn()) {
+  setTimeout(() => {
+    routeReady = true;
+    if (/^\/app\/./.test(location.pathname)) routeOpen(location.pathname); else { try { history.replaceState({ cassie: 1 }, '', routeNow() + location.search + location.hash); } catch (e) { /* ignore */ } }
+    addEventListener('popstate', () => routeOpen(location.pathname));
+    new MutationObserver(routeLater).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    new MutationObserver(routeLater).observe(document.body, { attributes: true, attributeFilter: ['hidden'], subtree: true });
+    new MutationObserver(routeLater).observe(chatLog, { childList: true });
+  }, 0);
+}
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {

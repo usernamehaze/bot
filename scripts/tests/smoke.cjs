@@ -1052,7 +1052,7 @@ test('v320 Blender models and real materials: the book’s airplane and bicycle 
   } finally { await ctx.close(); }
 });
 
-test('v319 a 3D model with every answer (the Anatomy way: an idea is a machine): after her words she builds it in 3D right under them, saved with the chat; Machine view draws the same model with Anatomy’s kit (no WebGL needed), turns and comes apart; not for a greeting, and off in Settings', async (b) => {
+test('v322 Draw It: a chat answers in words (no 3D model under every answer); drawings and 3D models are in Draw It, its own chats below Chats, where Machine view still draws a model with Anatomy’s kit; "draw a jet engine" typed in a chat opens a Draw It chat', async (b) => {
   const noun = fs.readFileSync(fileAt('tests/fixtures/live/noun3d.json'), 'utf8'), jet = fs.readFileSync(fileAt('tests/fixtures/live/jet3d.json'), 'utf8');
   const asks = [];
   const fake = (body) => { const all = JSON.stringify(body.messages || []); if (/here by building a 3D model/.test(all)) { asks.push(all); return { text: /jet/i.test(all) ? jet : noun }; } if (/You check drawings/.test(all)) return { text: '{}' }; return { text: /jet/i.test(all) ? 'A jet engine sucks air in at the front, squeezes it, burns fuel in it, and the hot gas spins a turbine and pushes out the back.' : 'A **noun** is a word that names a person, a place, a thing or an idea. In "Maria went to Manila with her book", the nouns are Maria, Manila and book.' }; };
@@ -1061,13 +1061,25 @@ test('v319 a 3D model with every answer (the Anatomy way: an idea is a machine):
     const { ctx, page, errors } = await open(b, { ...dev, server: false, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: fake });
     try {
       if (name === 'desktop') await page.evaluate(() => deskGo('chat'));
+      // a chat: her words, and nothing built under them
       await page.fill('#prompt-input', 'what is a noun?'); await page.click('#send-btn');
+      await page.waitForFunction(() => /names a person/.test(document.querySelector('#chat-log').textContent), null, { timeout: 30000 });
+      await page.waitForTimeout(2500);
+      const words = await page.evaluate(() => ({ models: document.querySelectorAll('#chat-log .ld').length, saved: state.messages.filter((m) => m.model).length, draw: isDrawChat() }));
+      expect(words.models === 0 && words.saved === 0 && !words.draw && !asks.length, name + ': a chat answers in words, no 3D model under it: ' + JSON.stringify({ ...words, asks: asks.length }));
+      expect(!(await page.evaluate(() => !!document.getElementById('every-model-toggle'))), name + ': the old "3D model with every answer" setting is gone');
+      // Draw It: its own chat, where it is built in 3D
+      if (name === 'desktop') { await page.click('#side-nav [data-page="draw"]'); await page.waitForSelector('#chat-log .desk-draw'); }
+      else { await page.click('#tabbar [data-tab="draw"]'); }
+      const opened = await page.evaluate(() => ({ draw: isDrawChat(), empty: !state.messages.length, tab: (document.querySelector('#tabbar .on') || {}).dataset?.tab || '', nav: (document.querySelector('#side-nav .on') || {}).dataset?.page || '' }));
+      expect(opened.draw && opened.empty && (name === 'desktop' ? opened.nav === 'draw' : opened.tab === 'draw'), name + ': Draw It opens a drawing chat of its own: ' + JSON.stringify(opened));
+      await page.fill('#prompt-input', 'what is a noun? show it in 3D'); await page.click('#send-btn');
       await page.waitForFunction(() => /The noun sorter/.test((document.querySelector('#chat-log .ld-title') || {}).textContent || ''), null, { timeout: 30000 });
-      const got = await page.evaluate(() => { const m = state.messages; const a = m.findIndex((x) => x.role === 'assistant' && /names a person/.test(x.content)); return { a, model: m[a + 1] && m[a + 1].model, order: [...chatLog.querySelectorAll('.bubble-assistant')].map((x) => (x.querySelector('.ld') ? 'model' : /names a person/.test(x.textContent) ? 'words' : '')).filter(Boolean).join(',') }; });
-      expect(got.a >= 0 && got.model && got.order === 'words,model', name + ': her words, then the 3D model of them, saved with the chat: ' + JSON.stringify(got));
-      expect(asks.length >= 1 && /invent a real, well made physical machine/.test(asks[0]) && /What I answered, to build as a 3D model/.test(asks[0]) && /names a person/.test(asks[0]), name + ': she is asked to build her answer, an idea as a machine');
+      expect(asks.length >= 1, name + ': in Draw It it is built in 3D');
+      const lists = await page.evaluate(() => ({ drawChats: state.chats.filter((c) => c.kind === 'draw' && c.messages.length).length, plain: state.chats.filter((c) => !c.kind && c.messages.length).length }));
+      expect(lists.drawChats === 1 && lists.plain === 1, name + ': the chat and the drawing are kept apart: ' + JSON.stringify(lists));
       await page.waitForFunction(() => document.querySelector('#chat-log .ld .ld-live.off'), null, { timeout: 30000 }).catch(() => {});
-      if (process.env.SHOTS) { await page.locator('#chat-log .ld').last().scrollIntoViewIfNeeded(); await page.waitForTimeout(1200); await page.screenshot({ path: `${process.env.SHOTS}/v319-${name}-answer-3d.png` }); }
+      if (process.env.SHOTS) { await page.locator('#chat-log .ld').last().scrollIntoViewIfNeeded(); await page.waitForTimeout(1200); await page.screenshot({ path: `${process.env.SHOTS}/v322-${name}-draw-it.png` }); }
       // Machine view: the same model, drawn with Anatomy's kit
       await page.click('#chat-log .ld .ld-mv-btn');
       await page.waitForSelector('#chat-log .ld .iv svg .iv-part', { timeout: 10000 });
@@ -1075,28 +1087,24 @@ test('v319 a 3D model with every answer (the Anatomy way: an idea is a machine):
       expect(mv.parts === 9 && mv.solids >= 25 && !mv.canvas, name + ': Machine view draws every part with Anatomy solids, in place of the 3D view: ' + JSON.stringify(mv));
       await page.evaluate(() => document.querySelector('#chat-log .ld .iv [data-part="4"]').dispatchEvent(new MouseEvent('click', { bubbles: true })));
       expect(/Reading gate/.test(await page.textContent('#chat-log .ld .iv-read')), name + ': a tapped part is lit and says what it means');
-      if (process.env.SHOTS) { await page.locator('#chat-log .ld .iv').scrollIntoViewIfNeeded(); await page.waitForTimeout(300); await page.screenshot({ path: `${process.env.SHOTS}/v319-${name}-machine-view.png` }); }
       const before = await page.evaluate(() => document.querySelector('#chat-log .ld .iv svg').innerHTML.length);
       await page.click('#chat-log .ld .ld-mv-acts .ld-btn >> text=Turn it');
       await page.click('#chat-log .ld .ld-mv-acts .ld-btn >> text=Pull apart');
       const after = await page.evaluate(() => ({ len: document.querySelector('#chat-log .ld .iv svg').innerHTML.length, back: [...document.querySelectorAll('#chat-log .ld .ld-mv-acts .ld-btn')].map((x) => x.textContent).join() }));
       expect(after.len !== before && /Put it back/.test(after.back), name + ': it turns and comes apart: ' + JSON.stringify(after));
-      if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/v319-${name}-machine-apart.png` });
       if (name === 'desktop') {
-        // a machine question: the 3D model of the real thing
-        await page.fill('#prompt-input', 'what does a jet engine do?'); await page.click('#send-btn');
+        // the Chats page lists the chat, not the drawing; Draw It lists the drawing
+        await page.click('#side-nav [data-page="chats"]'); await page.waitForSelector('#chat-log .desk-chats');
+        const cards = await page.evaluate(() => [...document.querySelectorAll('#chat-log .dk-chat-card b')].map((x) => x.textContent));
+        expect(cards.length === 1 && /noun/.test(cards[0]) && !/3D/.test(cards[0]), 'Chats lists the chat only: ' + JSON.stringify(cards));
+        await page.click('#side-nav [data-page="draw"]'); await page.waitForSelector('#chat-log .desk-draw');
+        const mine = await page.evaluate(() => [...document.querySelectorAll('#chat-log .dk-draw-list button')].map((x) => x.textContent));
+        expect(mine.length === 1 && /3D/.test(mine[0]), 'Draw It lists the drawing: ' + JSON.stringify(mine));
+        // "draw a jet engine in 3D" typed in a chat: a Draw It chat opens and it is drawn there
+        await page.evaluate(() => deskGo('chat'));
+        await page.fill('#prompt-input', 'draw a jet engine in 3D'); await page.click('#send-btn');
         await page.waitForFunction(() => [...document.querySelectorAll('#chat-log .ld-title')].some((t) => /jet/i.test(t.textContent)), null, { timeout: 30000 });
-        if (process.env.SHOTS) { await page.locator('#chat-log .ld').last().scrollIntoViewIfNeeded(); await page.waitForTimeout(1500); await page.screenshot({ path: `${process.env.SHOTS}/v319-desktop-jet-3d.png` }); }
-        // a greeting: no model; and off in Settings: no model
-        const n0 = await page.evaluate(() => document.querySelectorAll('#chat-log .ld').length);
-        await page.fill('#prompt-input', 'thanks!'); await page.click('#send-btn'); await page.waitForTimeout(1500);
-        await page.evaluate(() => { state.everyModel = false; });
-        await page.fill('#prompt-input', 'what is a verb?'); await page.click('#send-btn'); await page.waitForTimeout(1500);
-        expect(await page.evaluate(() => document.querySelectorAll('#chat-log .ld').length) === n0, 'no model for a greeting, nor with the setting off');
-        expect(await page.evaluate(() => !!document.getElementById('every-model-toggle')), 'the setting is in Settings');
-        // a student can find it: Settings, then the page it is on, then it shows
-        const where = await page.evaluate(() => { const t = document.getElementById('every-model-toggle'); const card = t.closest('[data-page]'); const sec = t.closest('[data-sec]'); return { page: card && card.dataset.page, sec: sec && sec.dataset.sec, hiddenBy: (() => { let e = t; while (e && e !== document.body) { if (e.hidden) return e.className || e.id; e = e.parentElement; } return null; })() }; });
-        expect(where.sec === 'study', 'the setting is under Study, where a student looks for it (v320): ' + JSON.stringify(where));
+        expect(await page.evaluate(() => isDrawChat() && (document.querySelector('#side-nav .on') || {}).dataset.page === 'draw'), 'a drawing asked for in a chat is made in Draw It');
       }
       expect(!errors.length, name + ': page errors: ' + errors.join(' | '));
     } finally { await ctx.close(); }

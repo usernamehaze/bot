@@ -110,7 +110,10 @@ self.addEventListener('fetch', (event) => {
           return response;
         })
         .catch(() =>
-          caches.match(event.request, { ignoreSearch: true }).then((c) => c || caches.match('start.html'))
+          caches.match(event.request, { ignoreSearch: true }).then((c) => c
+            // (v322) offline at a page's own address (/app/chats, /app/draw/<id> ...): it is the app
+            || (/^\/app(\/|$)/.test(url.pathname) ? caches.match('app.html') : null)
+            || caches.match('start.html'))
         )
     );
     return;
