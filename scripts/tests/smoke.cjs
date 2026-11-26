@@ -1052,7 +1052,7 @@ test('v320 Blender models and real materials: the book’s airplane and bicycle 
   } finally { await ctx.close(); }
 });
 
-test('v322 Draw It: a chat answers in words (no 3D model under every answer); drawings and 3D models are in Draw It, its own chats below Chats, where Machine view still draws a model with Anatomy’s kit; "draw a jet engine" typed in a chat opens a Draw It chat', async (b) => {
+test('v322 Draw It: a chat answers in words (no 3D model under every answer); Draw It, below Chats, is a place for drawings and 3D models, where Machine view still draws a model with Anatomy’s kit; (v323) a chat draws too, when asked with the words that ask to be shown', async (b) => {
   const noun = fs.readFileSync(fileAt('tests/fixtures/live/noun3d.json'), 'utf8'), jet = fs.readFileSync(fileAt('tests/fixtures/live/jet3d.json'), 'utf8');
   const asks = [];
   const fake = (body) => { const all = JSON.stringify(body.messages || []); if (/here by building a 3D model/.test(all)) { asks.push(all); return { text: /jet/i.test(all) ? jet : noun }; } if (/You check drawings/.test(all)) return { text: '{}' }; return { text: /jet/i.test(all) ? 'A jet engine sucks air in at the front, squeezes it, burns fuel in it, and the hot gas spins a turbine and pushes out the back.' : 'A **noun** is a word that names a person, a place, a thing or an idea. In "Maria went to Manila with her book", the nouns are Maria, Manila and book.' }; };
@@ -1100,11 +1100,22 @@ test('v322 Draw It: a chat answers in words (no 3D model under every answer); dr
         await page.click('#side-nav [data-page="draw"]'); await page.waitForSelector('#chat-log .desk-draw');
         const mine = await page.evaluate(() => [...document.querySelectorAll('#chat-log .dk-draw-list button')].map((x) => x.textContent));
         expect(mine.length === 1 && /3D/.test(mine[0]), 'Draw It lists the drawing: ' + JSON.stringify(mine));
-        // "draw a jet engine in 3D" typed in a chat: a Draw It chat opens and it is drawn there
+        // (v323) a chat draws again, in the chat itself, when asked: the owner's words (draw, illustrate, build, make,
+        // show...) bring "How should I show it?"; a question to explain, or a reviewer or quiz to make, does not
+        const words = await page.evaluate(() => ['illustrate the water cycle', 'can you build a volcano', 'please show me the lungs', 'map out the digestive system', 'assemble a bicycle', 'make me a reviewer on cells', 'create a quiz about plants', 'show me the steps to solve 2x+3=7', 'explain photosynthesis', 'what is a pencil made of', 'compose a poem about the sea'].map((q) => liveShowWords(q) ? 1 : 0).join(''));
+        expect(words === '11111000000', 'the words that ask to be shown, and not a study task or a question: ' + words);
         await page.evaluate(() => deskGo('chat'));
+        await page.fill('#prompt-input', 'what is a noun?'); await page.click('#send-btn');
+        await page.waitForFunction(() => state.messages.filter((m) => m.role === 'assistant').length === 1, null, { timeout: 20000 });
+        await page.fill('#prompt-input', 'illustrate the water cycle'); await page.click('#send-btn');
+        await page.waitForSelector('.ld-pop', { timeout: 10000 });
+        const pop = await page.evaluate(() => [...document.querySelectorAll('.ld-pop button')].map((x) => x.textContent.trim()).join('|') + (isDrawChat() ? ' (in Draw It)' : ''));
+        expect(/Draw it/.test(pop) && /3D model/.test(pop) && /Just explain/.test(pop) && !/Draw It/.test(pop), '"illustrate the water cycle" in a chat: How should I show it? ' + pop);
+        await page.keyboard.press('Escape');
         await page.fill('#prompt-input', 'draw a jet engine in 3D'); await page.click('#send-btn');
         await page.waitForFunction(() => [...document.querySelectorAll('#chat-log .ld-title')].some((t) => /jet/i.test(t.textContent)), null, { timeout: 30000 });
-        expect(await page.evaluate(() => isDrawChat() && (document.querySelector('#side-nav .on') || {}).dataset.page === 'draw'), 'a drawing asked for in a chat is made in Draw It');
+        const there = await page.evaluate(() => ({ draw: isDrawChat(), asked: state.messages.filter((m) => m.role === 'user').length }));
+        expect(!there.draw && there.asked >= 2, 'a drawing asked for in a chat is drawn in that chat: ' + JSON.stringify(there));
       }
       expect(!errors.length, name + ': page errors: ' + errors.join(' | '));
     } finally { await ctx.close(); }

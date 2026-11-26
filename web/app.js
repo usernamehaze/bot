@@ -2836,7 +2836,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=322'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=323'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2858,7 +2858,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=322'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=323'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -3134,7 +3134,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=322').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=323').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -7058,8 +7058,9 @@ async function handleSend(text, opts = {}) {
     liveShowClose(false); // (a new message closes an open "How should I show it?")
   if (!opts.noDraw && !doc && LIVE_BACK_3D_RE.test(text.trim()) && liveLastDrawn() && canChat()) return liveDrawReply(text, true); // (v315: "make it 3D": the drawing on screen, in 3D)
   if (!opts.noDraw && !doc && liveDrawFollowFits(text)) return liveDrawFollow(text); // (v306: a question about the drawing on screen is answered on it)
-  // (v322) "draw a heart", "make a 3D of a car" typed in a chat: a new Draw It chat opens and it is drawn there
-  if (!opts.noDraw && !doc && !isDrawChat() && liveDrawRequest(text) && !(window.CassieCare && window.CassieCare.check(text))) { promptInput.value = ''; autoGrow(); openDrawIt(); return handleSend(text, opts); }
+  // (v323) a chat draws again, in the chat itself: "draw", "sketch", "build", "make", "show" (and their kin: SHOW_WORDS)
+  // asking for something to be shown pops up "How should I show it?"; a question to be explained is only explained
+  if (!opts.noDraw && !doc && !isDrawChat() && liveShowWords(text) && !(window.CassieCare && window.CassieCare.check(text))) return liveShowAsk(text);
   if (!opts.noDraw && liveDrawRequest(text)) return liveShowAsk(text); // (v253: she asks how to show it, then draws it live)
   // (v322) in Draw It everything asked is drawn (how it works: drawn, moving; a thing: drawn with its parts named);
   // in a chat, "how does it work" is answered in words
@@ -7519,6 +7520,18 @@ async function answerPicture(label) {
 // Cassie asks how to show it, once a chat (Draw it, 3D model, Real photo, Just explain). A message that already says
 // how ("in 3D") skips the question; pictures and photos keep the picture maker, graphs keep the math board.
 const LIVE_DRAW_RE = /\b(?:illustrations?|diagrams?|drawings?|sketch(?:es)?|pictures?)\s+(?:of|showing|about)\s+how\b|\b(?:draw|sketch|diagram|illustrate|visuali[sz]e|iguhit|idrawing|i-?drawing|ipakita)\b|\bshow\s+(?:me|us)\b|\bbuild\s+(?:me|us)\b|\bmake\s+(?:me\s+)?an?\s+(?:diagram|model|drawing|sketch)\b|\b(?:explain|teach)\b.*\b(?:with|using|in)\s+(?:a\s+)?(?:drawing|diagram|graphics?|visuals?|3d)\b|\bin\s+3d\b/i;
+/* (v323) The words that ask Cassie to show something (the owner's list: draw, sketch, create, build, make, show and the
+   words like them). Asked for at the start ("illustrate the water cycle", "can you build a volcano", "please show me the
+   heart"), they bring "How should I show it?": Draw it, 3D model, Real photo or Just explain. Not when what is asked
+   for is something to write or study (a reviewer, a quiz, notes, the steps, the answer...), nor for a sum or a graph. */
+const SHOW_WORDS = 'draw|illustrate|render|depict|trace|pen|pencil|delineate|portray|sketch|draft|outline|rough\\s+out|block\\s+out|doodle|jot\\s+down|map\\s+out|diagram|create|originate|invent|conceive|craft|devise|formulate|generate|pioneer|build|construct|assemble|erect|fabricate|engineer|forge|put\\s+together|establish|make|produce|manufacture|fashion|shape|mold|mould|prepare|compose|synthesi[sz]e|show|display|exhibit|demonstrate|present|reveal|showcase|expose|highlight';
+const SHOW_WORDS_RE = new RegExp(`^\\s*(?:(?:(?:can|could|would|will)\\s+(?:you|u)|please|pls|plz|kindly|i\\s+(?:want|need|would\\s+like|'d\\s+like)(?:\\s+you)?(?:\\s+to)?|help\\s+me(?:\\s+to)?|let'?s|try\\s+to|cassie,?|hey\\s+cassie,?)\\s+)*(?:${SHOW_WORDS})\\b`, 'i');
+const SHOW_NOT_RE = /\b(?:reviewers?|quiz(?:zes)?|tests?|exams?|notes?|summary|summaries|essays?|paragraphs?|flash\s*cards?|cards|plans?|schedules?|timetables?|lists?|tables?|steps?|solutions?|answers?|codes?|programs?|scripts?|functions?|letters?|poems?|story|stories|emails?|reports?|presentations?|slides?|speech(?:es)?|sentences?|questions?|thesis|resume|cv|bibliograph\w*|citations?|references?|your\s+work|my\s+work|calculations?|proofs?|formulas?|examples?|recipes?|budgets?|lessons?|study\s+guides?|reading|research|mnemonics?|acronyms?|songs?|jokes?|titles?|captions?|passwords?|accounts?|decisions?|mistakes?|arguments?|claims?|hypothes[ie]s|conclusions?|introductions?|intro|reflections?|journal|prayers?|slogans?|tagline|outline\s+of\s+my|my\s+(?:essay|paper|report|thesis|speech))\b/i;
+function liveShowWords(text) {
+  const t = String(text || '').trim();
+  if (t.length < 4 || t.length > 300 || !SHOW_WORDS_RE.test(t) || SHOW_NOT_RE.test(t) || LIVE_MATH_RE.test(t) || LIVE_PIC_RE.test(t)) return false;
+  return /[a-z0-9]/i.test(t.replace(SHOW_WORDS_RE, '').replace(/\b(?:me|us|it|please|pls|po)\b/gi, '')); // (something to show: "draw" alone has nothing)
+}
 const LIVE_PIC_RE = /\b(?:picture|pic|photo|image|realistic|photorealistic|poster|logo|wallpaper|paint(?:ing)?|cartoon|anime|larawan|illustration\s+of\s+a\s+(?:person|character))\b/i;
 const LIVE_MATH_RE = /\b(?:graph|plot|chart|equation|function|parabola|slope|y\s*=|f\(x\)|x\^)/i;
 // (v308) "make a 3d bicycle", "create a 3D model of the heart", "can you make a bicycle": a thing to be shown, so she
@@ -7680,11 +7693,11 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=322')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=323')));
 // (v310) Cassie's drawing book: a checked drawing of a common subject (a bicycle, the heart, the solar system...) shows
 // at once, right every time, with no AI and no question used (offline too). Anything else is drawn by the AI.
 let liveBookLib = null;
-const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=322').catch(() => null)));
+const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=323').catch(() => null)));
 // (v316) the drawing book, grown by the team: AI drawings that passed every check go to Cassie's server with
 // only their subject's few words; the owner approves the good ones on the dashboard, and the app keeps a copy of
 // every approved drawing, so they show at once (offline too) like the hand-checked ones
@@ -9237,7 +9250,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=322');
+      exploreMod = await import('./explore/cell3d.js?v=323');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -9287,7 +9300,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=322');
+      labsMod = await import('./labs/labs.js?v=323');
       islandRest();
     }
     labsMod.open({
@@ -11252,10 +11265,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=322').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=323').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=322', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=323', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
