@@ -9795,7 +9795,7 @@ test('Cursor Cassie lessons: only the lesson is numbered (not Drive’s toolbar,
       await cdp.send('Runtime.enable'); await page.waitForTimeout(300);
       const { frameTree } = await cdp.send('Page.getFrameTree');
       const w = worlds.find((c) => c.auxData && c.auxData.frameId === frameTree.frame.id && c.auxData.type === 'isolated' && /Cassie/.test(c.name));
-      return async (js) => { const r = await cdp.send('Runtime.evaluate', { contextId: w.id, expression: js, returnByValue: true, awaitPromise: true }); if (r.exceptionDetails) throw new Error(JSON.stringify(r.exceptionDetails).slice(0, 300)); return r.result.value; };
+      return (js) => evalInWorld(cdp, w.id, js, 300);
     };
     const open = async (url) => { await page.goto(url); await page.bringToFront(); await page.waitForFunction(() => document.getElementById('cassie-ext-host-92f1'), null, { timeout: 10000 }); await page.waitForTimeout(400); return world(); };
     const lessonNow = () => page.evaluate((h) => { const n = document.querySelector(h); if (!n) return null; const r = n.shadowRoot, c = r.querySelector('.ct-card').getBoundingClientRect(); return { step: n.dataset.step, drawn: n.dataset.drawn, lost: n.dataset.lost || '', count: r.querySelector('.ct-count').textContent, say: r.querySelector('.ct-say').textContent, card: { left: c.left, top: c.top, right: c.right, bottom: c.bottom, width: c.width, height: c.height }, cursor: r.querySelector('.ct-cursor').classList.contains('on'), text: r.querySelector('.ct-card').innerText }; }, HOST);
@@ -9983,6 +9983,21 @@ test('Cursor Cassie lessons: only the lesson is numbered (not Drive’s toolbar,
 
 // Cassie's live drawing in the extension: what its tests share (the real extension in a real browser; the AI,
 // her voice and the picture counter are faked or watched in the background)
+// runs js in the extension's own script world. On GitHub's slower machines Chrome can now and then throw away a promise
+// it is still waiting on ("Promise was collected"); the answer is then asked for again, up to 3 times
+async function evalInWorld(cdp, contextId, js, cut) {
+  for (let i = 1; ; i++) {
+    try {
+      const r = await cdp.send('Runtime.evaluate', { contextId, expression: js, returnByValue: true, awaitPromise: true });
+      if (r.exceptionDetails) throw new Error(JSON.stringify(r.exceptionDetails).slice(0, cut));
+      return r.result.value;
+    } catch (e) {
+      if (i >= 3 || !/Promise was collected/.test(String(e && e.message))) throw e;
+      await new Promise((ok) => setTimeout(ok, 500 * i));
+    }
+  }
+}
+
 async function liveExt({ viewport = { width: 1280, height: 800 } } = {}) {
   const ext = fileAt('extension');
   const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));
@@ -10030,7 +10045,7 @@ async function liveExt({ viewport = { width: 1280, height: 800 } } = {}) {
     await cdp.send('Runtime.enable'); await page.waitForTimeout(300);
     const { frameTree } = await cdp.send('Page.getFrameTree');
     const w = worlds.find((c) => c.auxData && c.auxData.frameId === frameTree.frame.id && c.auxData.type === 'isolated' && /Cassie/.test(c.name));
-    return async (js) => { const r = await cdp.send('Runtime.evaluate', { contextId: w.id, expression: js, returnByValue: true, awaitPromise: true }); if (r.exceptionDetails) throw new Error(JSON.stringify(r.exceptionDetails).slice(0, 400)); return r.result.value; };
+    return (js) => evalInWorld(cdp, w.id, js, 400);
   };
   const open = async (url) => { await page.goto(url); await page.bringToFront(); await page.waitForFunction((h) => document.querySelector(h), EXT, { timeout: 10000 }); await page.waitForTimeout(400); return world(); };
   // her card, as the student sees it, on a page (the tab) or in the side panel: on(pg) → { card, tap, until }
@@ -13801,12 +13816,13 @@ test('v282: every empty state shows Cassie (3D, as in the chat) in her own mood 
   await page.evaluate(() => botMood('idle')); m = await mood();
   expect(!/glasses|pencil/.test(m.a || ''), 'and back to what she wears today: ' + JSON.stringify(m));
   await page.evaluate(() => { captureQuizMarks('[[GOT: q1 || a]]'); captureQuizMarks('[[GOT: q2 || a]]'); captureQuizMarks('[[GOT: q3 || a]]'); });
-  await page.waitForTimeout(300); m = await mood();
+  await page.waitForFunction(() => { const e = document.querySelector('#cassie-2d-root [data-state]'); return e && e.dataset.state === 'dance'; }, null, { timeout: 5000 }).catch(() => {}); m = await mood();
   expect(m.s === 'dance', 'three right in a row: she dances: ' + JSON.stringify(m));
   await page.waitForTimeout(3800);
   await page.fill('#prompt-input', 'thank you!'); await page.click('#send-btn');
-  await page.waitForFunction(() => /Anything else/.test(document.getElementById('chat-log').textContent), null, { timeout: 15000 });
-  const winked = await page.waitForFunction(() => { const e = document.querySelector('#cassie-2d-root [data-state]'); return e && e.dataset.state === 'wink'; }, null, { timeout: 7000 }).then(() => true, () => false);
+  await page.waitForFunction(() => /Anything else/.test(document.getElementById('chat-log').textContent), null, { timeout: 30000 });
+  // (20 s, not 7: GitHub's slower machines can take that long to answer and wink)
+  const winked = await page.waitForFunction(() => { const e = document.querySelector('#cassie-2d-root [data-state]'); return e && e.dataset.state === 'wink'; }, null, { timeout: 20000 }).then(() => true, () => false);
   m = await mood();
   expect(winked, 'a thank you: a wink once she has answered: ' + JSON.stringify(m));
   expect(!errors.length, 'no script errors: ' + errors.join(' | '));
