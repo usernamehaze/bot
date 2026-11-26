@@ -214,3 +214,196 @@ def empty(name, parent, at=(0, 0, 0), spin=None):
     if spin:
         e["spin"] = spin
     return e
+
+# ---------- (anatomy) smooth tubes, shells, booleans, splitting by material
+
+def frames(pts):
+    """Parallel-transport frames along a polyline (Blender coords): [(tangent, normal, binormal)]."""
+    n = len(pts); out = []
+    t0 = norm(sub3(pts[1], pts[0]))
+    ref = (0, 0, 1) if abs(t0[2]) < 0.9 else (1, 0, 0)
+    nrm = norm(cross(ref, t0))
+    for i in range(n):
+        t = norm(sub3(pts[min(i + 1, n - 1)], pts[max(i - 1, 0)]))
+        nrm = norm(sub3(nrm, tuple(t[k] * sum(nrm[j] * t[j] for j in range(3)) for k in range(3))))
+        out.append((t, nrm, cross(t, nrm)))
+    return out
+
+def smooth_path(cpts, per=8):
+    """Catmull-Rom through control points (Blender coords)."""
+    if len(cpts) < 3:
+        return [tuple(cpts[0][k] + (cpts[1][k] - cpts[0][k]) * i / per for k in range(3)) for i in range(per + 1)]
+    P = [cpts[0]] + list(cpts) + [cpts[-1]]; out = []
+    for i in range(1, len(P) - 2):
+        p0, p1, p2, p3 = P[i - 1], P[i], P[i + 1], P[i + 2]
+        for s in range(per):
+            t = s / per; t2, t3 = t * t, t * t * t
+            out.append(tuple(0.5 * (2 * p1[k] + (-p0[k] + p2[k]) * t + (2 * p0[k] - 5 * p1[k] + 4 * p2[k] - p3[k]) * t2 + (-p0[k] + 3 * p1[k] - 3 * p2[k] + p3[k]) * t3) for k in range(3)))
+    out.append(cpts[-1]); return out
+
+def sweep(name, cpts, radius, mat, parent, seg=20, hollow=0.0, per=8, caps=True, inner_mat=None):
+    """A smooth tube through Cassie points; radius a number or f(u) (0..1 along); hollow: wall thickness (an open
+    vessel you can see into, its inside in inner_mat)."""
+    pts = smooth_path([T(*p) for p in cpts], per)
+    F = frames(pts); n = len(pts)
+    rad = radius if callable(radius) else (lambda u: radius)
+    verts, faces = [], []
+    def ring(r):
+        for i, p in enumerate(pts):
+            t, nn, b = F[i]; rr = r(i / (n - 1))
+            for j in range(seg):
+                a = 2 * math.pi * j / seg
+                verts.append(tuple(p[k] + rr * (math.cos(a) * nn[k] + math.sin(a) * b[k]) for k in range(3)))
+    ring(rad); base_in = len(verts)
+    if hollow:
+        ring(lambda u: max(0.002, rad(u) - hollow))
+    for i in range(n - 1):
+        for j in range(seg):
+            a0, a1 = i * seg + j, i * seg + (j + 1) % seg
+            faces.append((a0, a1, a1 + seg, a0 + seg))
+            if hollow:
+                b0, b1 = base_in + a0, base_in + a1
+                faces.append((b0, b0 + seg, b1 + seg, b1))
+    mats = [0] * len(faces)
+    if hollow:
+        mats = [0 if (k % 2 == 0) else 1 for k in range(len(faces))]
+        for end in (0, n - 1):  # the cut rim: a ring from outside to inside
+            for j in range(seg):
+                o0, o1 = end * seg + j, end * seg + (j + 1) % seg
+                faces.append((o0, base_in + o0, base_in + o1, o1) if end == 0 else (o0, o1, base_in + o1, base_in + o0)); mats.append(0)
+    elif caps:
+        for end in (0, n - 1):
+            c = len(verts); verts.append(pts[end])
+            for j in range(seg):
+                a0, a1 = end * seg + j, end * seg + (j + 1) % seg
+                faces.append((c, a1, a0) if end == 0 else (c, a0, a1)); mats.append(0)
+    ob = mesh_obj(name, verts, faces, mat, parent)
+    if hollow:
+        ob.data.materials.append(inner_mat or mat)
+        for p, m in zip(ob.data.polygons, mats): p.material_index = m
+    shade_auto(ob, 60)
+    return ob
+
+def ellipsoid(name, centre, radii, mat, parent, seg=40, rings=24, rot=None, bumps=None):
+    """An ellipsoid at a Cassie point; radii in Cassie axes (x, y, z); rot: degrees about Cassie z (a tilt);
+    bumps(u, v) -> scale factor (an organic, uneven surface)."""
+    rx, ry, rz = radii; verts, faces = [], []
+    c = math.cos(math.radians(rot or 0)); s = math.sin(math.radians(rot or 0))
+    for i in range(rings + 1):
+        v = math.pi * i / rings
+        for j in range(seg):
+            u = 2 * math.pi * j / seg
+            k = bumps(u, v) if bumps else 1.0
+            x, y, z = rx * math.sin(v) * math.cos(u) * k, ry * math.cos(v) * k, rz * math.sin(v) * math.sin(u) * k
+            x, y = x * c - y * s, x * s + y * c
+            verts.append(T(centre[0] + x, centre[1] + y, centre[2] + z))
+    for i in range(rings):
+        for j in range(seg):
+            a0, a1 = i * seg + j, i * seg + (j + 1) % seg
+            faces.append((a0, a0 + seg, a1 + seg, a1))
+    ob = mesh_obj(name, verts, faces, mat, parent)
+    weld(ob); shade_auto(ob, 70)
+    return ob
+
+def weld(ob, dist=1e-5):
+    """Merge the points that sit on each other (a sphere's poles): a closed surface, which cutting needs."""
+    import bmesh as _bm
+    bm = _bm.new(); bm.from_mesh(ob.data)
+    _bm.ops.remove_doubles(bm, verts=bm.verts, dist=dist)
+    _bm.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(ob.data); bm.free(); ob.data.update()
+
+def boolean(ob, cutter, op="DIFFERENCE"):
+    """Cut `cutter` out of `ob` (its faces keep the cutter's material: the cut-open walls)."""
+    m = ob.modifiers.new("bool", "BOOLEAN"); m.operation = op; m.object = cutter; m.solver = "EXACT"
+    try: m.use_self = False
+    except Exception: pass
+    dg = bpy.context.evaluated_depsgraph_get()
+    me = bpy.data.meshes.new_from_object(ob.evaluated_get(dg), preserve_all_data_layers=True, depsgraph=dg)
+    ob.modifiers.clear(); ob.data = me
+    return ob
+
+def split(ob, names, parents):
+    """Split a mesh into one object per material: names[i] for material i, parented to parents[i]."""
+    import bmesh as _bm
+    out = []
+    for mi, (nm, par) in enumerate(zip(names, parents)):
+        bm = _bm.new(); bm.from_mesh(ob.data)
+        kill = [f for f in bm.faces if f.material_index != mi]
+        _bm.ops.delete(bm, geom=kill, context='FACES')
+        if not bm.faces:
+            bm.free(); continue
+        me = bpy.data.meshes.new(nm); bm.to_mesh(me); bm.free()
+        for m in ob.data.materials: me.materials.append(m)
+        o = bpy.data.objects.new(nm, me); bpy.context.collection.objects.link(o); o.parent = par
+        for p in me.polygons: p.use_smooth = True
+        shade_auto(o, 50); out.append(o)
+    bpy.data.objects.remove(ob)
+    return out
+
+def shell(name, R_out, R_in, mat, parent, centre=(0, 0, 0), axis=(1, 0, 0), th=(0.0, math.pi), cut=(0.0, 0.0), seg=64, rings=40, inner_mat=None, rim_mat=None):
+    """A thick spherical shell about Cassie `axis` (unit, Cassie coords) at Cassie `centre`: polar angle from the axis
+    in th, minus the wedge of azimuth `cut` (radians; (0, 0) = whole), its cut edges closed (rim_mat)."""
+    a = norm(T(*axis)); cc = T(*centre)
+    ref = (0, 0, 1) if abs(a[2]) < 0.9 else (1, 0, 0)
+    u = norm(cross(ref, a)); v = cross(a, u)
+    whole = cut[1] <= cut[0]
+    phis = [cut[1] + (2 * math.pi - (cut[1] - cut[0])) * j / seg for j in range(seg + (0 if whole else 1))]
+    if whole: phis = [2 * math.pi * j / seg for j in range(seg)]
+    ths = [th[0] + (th[1] - th[0]) * i / rings for i in range(rings + 1)]
+    verts, faces, mats = [], [], []
+    def pt(R, t, p): return tuple(cc[k] + R * (math.cos(t) * a[k] + math.sin(t) * (math.cos(p) * u[k] + math.sin(p) * v[k])) for k in range(3))
+    np_ = len(phis)
+    for R in (R_out, R_in):
+        for t in ths:
+            for p in phis: verts.append(pt(R, t, p))
+    inn = (rings + 1) * np_
+    J = np_ if whole else np_ - 1
+    for i in range(rings):
+        for j in range(J):
+            j1 = (j + 1) % np_
+            a0, a1, b0, b1 = i * np_ + j, i * np_ + j1, (i + 1) * np_ + j, (i + 1) * np_ + j1
+            faces.append((a0, a1, b1, b0)); mats.append(0)
+            faces.append((inn + a0, inn + b0, inn + b1, inn + a1)); mats.append(1)
+    for i in (0, rings):  # the open rims (front opening and back), outside to inside
+        if th[0] == 0.0 and i == 0: continue
+        if th[1] >= math.pi - 1e-6 and i == rings: continue
+        for j in range(J):
+            j1 = (j + 1) % np_
+            a0, a1 = i * np_ + j, i * np_ + j1
+            faces.append((a0, inn + a0, inn + a1, a1) if i == 0 else (a0, a1, inn + a1, inn + a0)); mats.append(2)
+    if not whole:  # the two cut faces of the wedge
+        for j in (0, np_ - 1):
+            for i in range(rings):
+                a0, b0 = i * np_ + j, (i + 1) * np_ + j
+                faces.append((a0, b0, inn + b0, inn + a0) if j == 0 else (a0, inn + a0, inn + b0, b0)); mats.append(2)
+    ob = mesh_obj(name, verts, faces, mat, parent)
+    ob.data.materials.append(inner_mat or mat); ob.data.materials.append(rim_mat or mat)
+    for p, m in zip(ob.data.polygons, mats): p.material_index = m
+    shade_auto(ob, 50)
+    return ob
+
+def see_through(m, alpha):
+    """A material you can see into (glTF alphaMode BLEND)."""
+    b = m.node_tree.nodes.get("Principled BSDF"); b.inputs["Alpha"].default_value = alpha
+    for attr, val in (("surface_render_method", "BLENDED"), ("blend_method", "BLEND")):
+        try: setattr(m, attr, val)
+        except Exception: pass
+    return m
+
+def colour_by(ob, fn):
+    """Paint each point of a mesh with fn(Cassie point) -> linear RGB (exported as the mesh's own colours)."""
+    me = ob.data
+    if "Col" not in me.color_attributes: me.color_attributes.new("Col", 'FLOAT_COLOR', 'POINT')
+    col = me.color_attributes["Col"]
+    for v in me.vertices:
+        c = fn((v.co.x, v.co.z, -v.co.y)); col.data[v.index].color = (*c, 1.0)
+
+def vertex_material(name, roughness=0.5, coat=0.0, metallic=0.0):
+    m = bpy.data.materials.new(name); m.use_nodes = True
+    nt = m.node_tree; b = nt.nodes.get("Principled BSDF")
+    ca = nt.nodes.new("ShaderNodeVertexColor"); ca.layer_name = "Col"
+    nt.links.new(ca.outputs["Color"], b.inputs["Base Color"])
+    b.inputs["Roughness"].default_value = roughness; b.inputs["Metallic"].default_value = metallic
+    if coat: b.inputs["Coat Weight"].default_value = coat
+    return m

@@ -1026,7 +1026,7 @@ test('v320 Blender models and real materials: the book’s airplane and bicycle 
   const { ctx, page, errors } = await open(b, { book: true, lite: 'off', device: 'Desktop Chrome', viewport: { width: 1280, height: 860 }, scale: process.env.SHOTS ? 2 : 1, state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: (body) => { if (/explains by DRAWING/.test(JSON.stringify(body.messages || []))) drawCalls.push(1); return { text: 'Words.' }; } });
   page.on('request', (r) => { if (/\/models\/\w+\.glb/.test(r.url())) got.push(r.url().replace(/^.*\/models\//, '')); });
   try {
-    for (const [q, name, n] of [['show me an airplane in 3D', 'airplane', 7], ['show me a bicycle in 3D', 'bicycle', 11], ['make a 3D of a dragon', 'dragon', 9]]) {
+    for (const [q, name, n] of [['show me an airplane in 3D', 'airplane', 7], ['show me a bicycle in 3D', 'bicycle', 11], ['make a 3D of a dragon', 'dragon', 9], ['show me the heart in 3D', 'heart', 8], ['show me the brain in 3D', 'brain', 6], ['show me the human eye in 3D', 'eye', 8], ['show me the lungs in 3D', 'lungs', 6], ['show me the layers of the skin in 3D', 'skin', 7]]) {
       await page.evaluate((q) => { chatLog.innerHTML = ''; state.messages = []; liveDrawReply(q, true); }, q);
       await page.waitForFunction(() => { const s = document.querySelector('#chat-log .ld-stage'); return s && s.dataset.model; }, null, { timeout: 30000 });
       await page.waitForFunction((n) => document.querySelectorAll('#chat-log .ld-tag').length >= n, n, { timeout: 30000 });
