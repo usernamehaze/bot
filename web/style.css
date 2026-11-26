@@ -4605,3 +4605,16 @@ label.notif-top { cursor: pointer; min-height: 44px; }
 @keyframes ldSnake { from { transform: skewX(-6deg); } to { transform: skewX(6deg); } }
 html.lite .ld-anim { animation: none !important; }
 @media (prefers-reduced-motion: reduce) { .ld-svg:not(.ld-force) .ld-anim { animation: none !important; } }
+/* (v328) the appliance kit: drums and blades turn, louvers swing, drops fall, steam rises, hot wires and lights glow */
+.ld-a-spin { animation: ldSpin 2.4s linear infinite; }
+.ld-a-spinf { animation: ldSpin .3s linear infinite; }
+.ld-a-flapf { animation: ldFlap .08s linear infinite alternate; }
+.ld-a-turn { animation: ldTurn 2.6s ease-in-out infinite alternate; }
+.ld-a-glow { animation: ldGlow 1.4s ease-in-out infinite alternate; }
+.ld-a-drip { animation: ldDrip 1.05s ease-in infinite; }
+.ld-a-steam { animation: ldSteam 2.7s ease-out infinite; }
+@keyframes ldSpin { to { transform: rotate(360deg); } }
+@keyframes ldTurn { from { transform: translateX(-3px); } to { transform: translateX(3px); } }
+@keyframes ldGlow { from { opacity: .35; } to { opacity: 1; } }
+@keyframes ldDrip { from { transform: translateY(0); opacity: 1; } to { transform: translateY(var(--drop, 20px)); opacity: .15; } }
+@keyframes ldSteam { from { transform: translateY(0) scale(.6); opacity: .75; } to { transform: translateY(var(--rise, -20px)) scale(1.4); opacity: 0; } }

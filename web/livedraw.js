@@ -26,8 +26,8 @@ const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ---------- the spec: what the AI wrote, made safe ----------
-const KINDS2 = ['line', 'arrow', 'rect', 'circle', 'ellipse', 'poly', 'path', 'text', 'vehicle', 'tree', 'flower', 'leaf', 'cloud', 'sun', 'moon', 'rainbow', 'snowflake', 'bolt', 'drops', 'grass', 'rock', 'log', 'mushroom', 'animal']; // (v324: and the nature kit; v327: animals)
-const KINDS3 = ['cylinder', 'tube', 'disc', 'cone', 'torus', 'ring', 'blades', 'sphere', 'box', 'capsule', 'pipe', 'arrow', 'lathe', 'plate', 'tree', 'flower', 'leaf', 'cloud', 'sun', 'moon', 'rainbow', 'rock', 'grass', 'log', 'mushroom', 'ground', 'drops', 'snowflake', 'bolt', 'vehicle', 'animal']; // (v325: and the nature kit in 3D; v326: vehicles; v327: animals)
+const KINDS2 = ['line', 'arrow', 'rect', 'circle', 'ellipse', 'poly', 'path', 'text', 'vehicle', 'tree', 'flower', 'leaf', 'cloud', 'sun', 'moon', 'rainbow', 'snowflake', 'bolt', 'drops', 'grass', 'rock', 'log', 'mushroom', 'animal', 'appliance']; // (v324: and the nature kit; v327: animals)
+const KINDS3 = ['cylinder', 'tube', 'disc', 'cone', 'torus', 'ring', 'blades', 'sphere', 'box', 'capsule', 'pipe', 'arrow', 'lathe', 'plate', 'tree', 'flower', 'leaf', 'cloud', 'sun', 'moon', 'rainbow', 'rock', 'grass', 'log', 'mushroom', 'ground', 'drops', 'snowflake', 'bolt', 'vehicle', 'animal', 'appliance']; // (v325: and the nature kit in 3D; v326: vehicles; v327: animals)
 const has = (x, k) => x[k] != null && x[k] !== '';
 // (v320) what a 3D part is really made of, with photographically grounded values from the Blender skills pack
 // (github.com/arjun988/blender-skills, realistic-style/references/pbr-values.md): metals are fully metallic, everything
@@ -632,7 +632,7 @@ export async function render(host, rawSpec, opts = {}) {
   let mv = null; const mvHost = spec.mode === '3d' ? el('div', 'ld-mv') : null;
   const machineOn = async () => {
     if (mv) return mv;
-    let m = null; try { m = await import('./isoview.js?v=327'); } catch (e) { return null; }
+    let m = null; try { m = await import('./isoview.js?v=328'); } catch (e) { return null; }
     mv = m.machine(mvHost, spec, { dark: !lightPage() });
     if (mv) {
       const row = el('div', 'ld-mv-acts');
@@ -986,7 +986,7 @@ function draw2d(stage, spec, { animate, setSay, hint }) {
 // One shape each ({"t":"tree","kind":"oak","x":200,"y":230,"h":160}), drawn the way the owner's guide pictures are: soft,
 // rounded, glossy like clay, every form outlined a shade darker, shaded underneath and lit from the top left. x and y are
 // where it stands on the ground (a cloud, the sun, the moon, a snowflake: its middle); h (or w, r) its size.
-const KIT = ['tree', 'flower', 'leaf', 'cloud', 'sun', 'moon', 'rainbow', 'snowflake', 'bolt', 'drops', 'grass', 'rock', 'log', 'mushroom', 'vehicle', 'animal']; // (v326: and vehicles; v327: animals)
+const KIT = ['tree', 'flower', 'leaf', 'cloud', 'sun', 'moon', 'rainbow', 'snowflake', 'bolt', 'drops', 'grass', 'rock', 'log', 'mushroom', 'vehicle', 'animal', 'appliance']; // (v326: and vehicles; v327: animals; v328: appliances)
 const KIT_KINDS = {
   tree: ['round', 'oak', 'pine', 'bush', 'palm', 'blossom', 'fruit', 'autumn'],
   flower: ['sunflower', 'daisy', 'tulip', 'rose', 'lily', 'lavender', 'blossom', 'hydrangea'],
@@ -994,6 +994,7 @@ const KIT_KINDS = {
   cloud: ['white', 'rain', 'storm', 'snow', 'grey'],
   rock: ['stone', 'mossy'], log: ['log', 'stump'], grass: ['grass', 'flowers'],
   get vehicle() { return VEH_KINDS; },
+  get appliance() { return APPL_KINDS; },
   get animal() { return ANIMAL_KINDS; },
 };
 // the box a kit shape fills (for the checks and the labels): [[x0, y0], [x1, y1]]
@@ -1007,6 +1008,7 @@ function kitBox(sh) {
   }
   if (t === 'vehicle') return vehBox(sh); // (v326)
   if (t === 'animal') return animalBox(sh); // (v327)
+  if (t === 'appliance') return applBox(sh); // (v328)
   if (t === 'tree') return [[x - h * (sh.kind === 'pine' ? 0.32 : 0.46), y - h], [x + h * (sh.kind === 'pine' ? 0.32 : 0.46), y]];
   if (t === 'flower' || t === 'mushroom') return [[x - h * 0.36, y - h], [x + h * 0.36, y]];
   if (t === 'leaf') return [[x - h * 0.42, y - h], [x + h * 0.42, y]];
@@ -2121,10 +2123,309 @@ function shape2d(s, p) {
   if (t === 'poly' && Array.isArray(s.pts)) { const pts = s.pts.slice(0, 60).map((q) => `${num(q && q[0], -50, 450)},${num(q && q[1], -50, 450)}`).join(' '); return paint(mk('polyline', { points: pts })); }
   if (t === 'text') { const e = mk('text', { x: n('x'), y: n('y'), class: 'ld-word', 'font-size': num(s.size, 8, 22, 12) }); e.textContent = words(s.text ?? s.s, 60); return e; }
   if (t === 'animal') return animalShape(s, mk); // (v327) an animal, whole and moving
+  if (t === 'appliance') return applianceShape(s, mk); // (v328) a home appliance, its working parts moving
   if (KIT.includes(t)) return kitShape(s, mk); // (v324) a tree, a flower, a cloud...: drawn whole, in the guide's style
   return null;
 }
 
+// ---------- (v328) the appliance kit: home appliances, drawn whole from the front, the side or open, their working parts moving ----------
+// {"t":"appliance","kind":"washer","x":200,"y":230,"h":160,"view":"front|side|open"}: x its middle, y the floor under it, h its height
+// (or w its width). Each one's real size (metres: width W, height H, depth D) keeps them in proportion with each other.
+const APPL = {
+  fridge: { W: 0.9, H: 1.78, D: 0.75, col: '#c6cacf' }, washer: { W: 0.6, H: 0.85, D: 0.6, col: '#c6cacf' }, microwave: { W: 0.5, H: 0.3, D: 0.38, col: '#c6cacf' },
+  blender: { W: 0.18, H: 0.43, D: 0.18, col: '#bdc1c6' }, toaster: { W: 0.3, H: 0.2, D: 0.18, col: '#cfd3d8' }, coffeemaker: { W: 0.22, H: 0.36, D: 0.26, col: '#c6cacf' },
+  vacuum: { W: 0.3, H: 1.1, D: 0.32, col: '#bdc1c6' }, aircon: { W: 0.45, H: 0.75, D: 0.38, col: '#d8dbdf' }, fan: { W: 0.46, H: 1.25, D: 0.4, col: '#eef1f4' },
+  ricecooker: { W: 0.3, H: 0.27, D: 0.3, col: '#f3f3f1' },
+};
+const APPL_KINDS = Object.keys(APPL);
+const APPL_OPEN = { fridge: [-0.73, 0.73], washer: [-0.52, 0.3], microwave: [-0.48, 0.25] }; // (opened: its door swung out, in metres from its middle)
+function applSize(sh) {
+  const A = APPL[String(sh.kind || '').toLowerCase()] || APPL.fridge, view = sh.view === 'side' ? 'side' : sh.view === 'open' ? 'open' : 'front';
+  const wide = view === 'side' ? A.D : A.W, h = +sh.h > 0 ? +sh.h : +sh.w > 0 ? +sh.w * A.H / wide : 160;
+  return { A, view, k: Math.max(8, Math.min(260, h)) / A.H };
+}
+function applBox(sh) {
+  const { A, view, k } = applSize(sh), x = +sh.x, y = +sh.y, kind = String(sh.kind || '').toLowerCase();
+  let [u0, u1] = view === 'side' ? [-A.D / 2, A.D / 2] : [-A.W / 2, A.W / 2];
+  if (view === 'open' && APPL_OPEN[kind]) [u0, u1] = APPL_OPEN[kind];
+  if (kind === 'vacuum' && view === 'side') [u0, u1] = [-0.2, 0.2];
+  const top = A.H + (kind === 'ricecooker' ? 0.08 : kind === 'coffeemaker' && view === 'open' ? 0.12 : 0);
+  return [[x + u0 * k, y - top * k], [x + u1 * k, y]];
+}
+let applN = 0;
+function applianceShape(s, mk) {
+  const kind = APPL[String(s.kind || '').toLowerCase()] ? String(s.kind).toLowerCase() : 'fridge', A = APPL[kind];
+  const N = (v, lo, hi, d) => { v = +v; return Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d; };
+  const x = N(s.x ?? s.cx, -40, 440, 200), y = N(s.y ?? s.cy, -40, 300, 220), { view, k } = applSize(s), moving = !s.still, id = `ldap${++applN}`;
+  const root = mk('g', { class: 'ld-kit ld-appliance' });
+  const top = mk('g', s.facing === 'left' ? { transform: `translate(${2 * x},0) scale(-1,1)` } : {}); root.appendChild(top);
+  const fx = (n) => n.toFixed(1), P = (u, v) => [x + u * k, y - v * k];
+  const sw = Math.max(0.8, k * 0.006);
+  const path = (parent, d, fill, o = {}) => { const e = mk('path', { d, fill: fill || 'none', stroke: o.stroke || 'none', 'stroke-width': o.w || sw, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }); if (o.op != null) e.setAttribute(fill && fill !== 'none' ? 'fill-opacity' : 'stroke-opacity', o.op); if (o.style) e.setAttribute('style', o.style); parent.appendChild(e); return e; };
+  const rr = (u0, v0, u1, v1, r = 0.01) => { const [xa, yb] = P(Math.min(u0, u1), Math.min(v0, v1)), [xb, ya] = P(Math.max(u0, u1), Math.max(v0, v1)), q = Math.min(r * k, (xb - xa) / 2, (yb - ya) / 2);
+    return `M${fx(xa + q)},${fx(ya)}L${fx(xb - q)},${fx(ya)}Q${fx(xb)},${fx(ya)} ${fx(xb)},${fx(ya + q)}L${fx(xb)},${fx(yb - q)}Q${fx(xb)},${fx(yb)} ${fx(xb - q)},${fx(yb)}L${fx(xa + q)},${fx(yb)}Q${fx(xa)},${fx(yb)} ${fx(xa)},${fx(yb - q)}L${fx(xa)},${fx(ya + q)}Q${fx(xa)},${fx(ya)} ${fx(xa + q)},${fx(ya)}Z`; };
+  const circ = (u, v, r) => kc(...P(u, v), r * k), oval = (u, v, rx, ry, rot = 0) => ke(...P(u, v), rx * k, ry * k, rot);
+  const poly = (pts) => 'M' + pts.map(([u, v]) => P(u, v).map(fx).join(',')).join('L') + 'Z';
+  const soft = (pts) => ksmooth(pts.map(([u, v]) => P(u, v)));
+  const line = (pts) => 'M' + pts.map(([u, v]) => P(u, v).map(fx).join(',')).join('L');
+  const edge = (c, q = 0.42) => kitDark(c, q), lite = (c, q = 0.45) => kitLight(c, q);
+  const col = typeof s.fill === 'string' && /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(s.fill) ? s.fill : A.col;
+  const dark = '#2b2f36', glassC = '#2a3440', black = '#33363b';
+  // a moving part: its own group, turning (or moving) about a point
+  const mover = (parent, cls, u, v, extra = '') => { const [ox, oy] = P(u, v); const g = mk('g', moving ? { class: `ld-anim ${cls}`, style: `transform-origin:${fx(ox)}px ${fx(oy)}px;${extra}` } : {}); parent.appendChild(g); return g; };
+  // a brushed steel panel: its outline, a soft light band on the left, a shadow down the right, a bright top edge
+  const panel = (g, u0, v0, u1, v1, r = 0.012, c = col) => {
+    path(g, rr(u0, v0, u1, v1, r), c, { stroke: edge(c, 0.38) });
+    const wd = u1 - u0, ht = v1 - v0;
+    path(g, rr(u0 + wd * 0.06, v0 + ht * 0.02, u0 + wd * 0.3, v1 - ht * 0.02, r * 0.6), lite(c, 0.5), { op: 0.45 });
+    path(g, rr(u1 - wd * 0.12, v0 + ht * 0.01, u1 - wd * 0.015, v1 - ht * 0.01, r * 0.5), edge(c, 0.18), { op: 0.45 });
+    path(g, line([[u0 + r, v1 - ht * 0.012], [u1 - r, v1 - ht * 0.012]]), 'none', { stroke: lite(c, 0.7), w: sw * 1.2, op: 0.8 });
+  };
+  const bar = (g, u0, v0, u1, v1, c = '#d9dde2') => { path(g, rr(u0, v0, u1, v1, Math.min(Math.abs(u1 - u0), Math.abs(v1 - v0)) / 2), c, { stroke: edge(c, 0.45) }); path(g, rr(u0 + (u1 - u0) * 0.15, v0 + (v1 - v0) * 0.1, u0 + (u1 - u0) * 0.45, v1 - (v1 - v0) * 0.1, 0.004), lite(c, 0.7), { op: 0.7 }); };
+  const feet = (g, us, h = 0.025, wd = 0.03) => us.forEach((u) => path(g, rr(u - wd / 2, 0, u + wd / 2, h + 0.004, 0.006), '#4a4e55', { stroke: '#2b2e33' }));
+  const shadow = (u0, u1) => path(top, oval((u0 + u1) / 2, 0, (u1 - u0) * 0.56, Math.max(0.012, (u1 - u0) * 0.04)), '#000000', { op: 0.16 });
+  const dots = (g, u0, v0, u1, v1, n, m, r, c, op = 0.5) => { let d = ''; for (let i = 0; i < n; i++) for (let j = 0; j < m; j++) d += circ(u0 + (u1 - u0) * (i + 0.5) / n, v0 + (v1 - v0) * (j + 0.5) / m, r); path(g, d, c, { op }); };
+  const drop = (g, u, v, fall, delay, c = '#6b4226') => { const e = path(mover(g, 'ld-a-drip', u, v, `--drop:${fx(fall * k)}px;animation-delay:${delay}s`), soft([[u, v + 0.006], [u + 0.004, v - 0.002], [u, v - 0.007], [u - 0.004, v - 0.002]]), c); return e; };
+  const steam = (g, u, v, rise, delay) => path(mover(g, 'ld-a-steam', u, v, `--rise:${fx(-rise * k)}px;animation-delay:${delay}s`), circ(u, v, rise * 0.18), '#ffffff', { op: 0.8, stroke: '#d5dbe2' });
+  const air = (g, pts, c = '#7cc4f0', delay = 0) => path(g, soft(pts).replace(/Z$/, ''), 'none', { stroke: c, w: sw * 2, op: 0.85, style: moving ? `stroke-dasharray:6 7;animation:ldFlow 1.1s linear infinite;animation-delay:${delay}s` : '' });
+  const g = mk('g', {}); top.appendChild(g);
+
+  if (kind === 'fridge') {
+    shadow(-0.48, 0.48);
+    if (view === 'side') {
+      feet(g, [-0.3, 0.3]); panel(g, -0.375, 0.03, 0.375, 1.78, 0.02);
+      path(g, rr(0.33, 0.04, 0.375, 1.77, 0.01), edge(col, 0.12), { stroke: edge(col, 0.4) }); path(g, line([[0.33, 0.61], [0.375, 0.61]]), 'none', { stroke: edge(col, 0.5), w: sw });
+      path(g, soft([[0.375, 0.78], [0.41, 0.82], [0.425, 1.15], [0.41, 1.5], [0.375, 1.54], [0.395, 1.5], [0.405, 1.15], [0.395, 0.82]]), '#d9dde2', { stroke: edge('#d9dde2', 0.45) });
+      bar(g, 0.375, 0.47, 0.41, 0.52);
+      dots(g, -0.36, 0.06, -0.3, 0.2, 2, 6, 0.006, dark, 0.6); // (the vents for the compressor at the back)
+    } else if (view === 'open') {
+      feet(g, [-0.38, 0.38]);
+      panel(g, -0.45, 0.03, 0.45, 0.62, 0.015); bar(g, -0.3, 0.47, 0.3, 0.52);
+      path(g, rr(-0.45, 0.62, 0.45, 1.78, 0.015), '#e9edf1', { stroke: edge(col, 0.4) });
+      path(g, rr(-0.42, 0.64, 0.42, 1.75, 0.01), '#f6f8fa', { stroke: '#cfd6dd' });
+      path(g, poly([[-0.42, 1.75], [-0.33, 1.68], [0.33, 1.68], [0.42, 1.75]]), '#e3e8ee'); path(g, poly([[-0.42, 0.64], [-0.33, 0.7], [-0.33, 1.68], [-0.42, 1.75]]), '#e7ecf1'); path(g, poly([[0.42, 0.64], [0.33, 0.7], [0.33, 1.68], [0.42, 1.75]]), '#dde3e9');
+      [0.98, 1.22, 1.46].forEach((v) => { path(g, poly([[-0.4, v], [0.4, v], [0.33, v + 0.025], [-0.33, v + 0.025]]), '#cfe6f3', { stroke: '#a9c6d8', op: 0.85 }); });
+      [-0.2, 0.2].forEach((u) => { path(g, rr(u - 0.19, 0.67, u + 0.19, 0.9, 0.012), '#eaf3f8', { stroke: '#b9cbd8' }); path(g, rr(u - 0.08, 0.83, u + 0.08, 0.87, 0.01), '#d4e1ea'); });
+      path(g, mover(g, 'ld-a-glow', 0, 1.7), oval(0, 1.705, 0.09, 0.018), '#fff6c8', { stroke: '#f0dc8a' });
+      [-1, 1].forEach((sd) => { // the doors, swung wide, their bins on the inside
+        const a = sd * 0.45, b = sd * 0.73;
+        path(g, poly([[a, 0.62], [b, 0.6], [b, 1.8], [a, 1.78]]), '#dfe4ea', { stroke: edge(col, 0.4) });
+        path(g, poly([[b, 0.6], [b + sd * 0.025, 0.605], [b + sd * 0.025, 1.795], [b, 1.8]]), col, { stroke: edge(col, 0.4) });
+        [0.8, 1.1, 1.4].forEach((v) => path(g, poly([[a + sd * 0.02, v], [b - sd * 0.02, v - 0.01], [b - sd * 0.02, v + 0.09], [a + sd * 0.02, v + 0.08]]), '#e8f2f8', { stroke: '#a9c3d4', op: 0.9 }));
+      });
+    } else {
+      feet(g, [-0.38, 0.38]);
+      panel(g, -0.45, 0.03, 0.45, 0.61, 0.015); panel(g, -0.45, 0.62, -0.003, 1.78, 0.015); panel(g, 0.003, 0.62, 0.45, 1.78, 0.015);
+      bar(g, -0.3, 0.47, 0.3, 0.52); bar(g, -0.055, 0.78, -0.025, 1.55); bar(g, 0.025, 0.78, 0.055, 1.55);
+      path(g, rr(-0.37, 1.02, -0.13, 1.42, 0.02), '#3d434b', { stroke: '#22262b' }); path(g, rr(-0.34, 1.05, -0.16, 1.3, 0.015), '#262a30');
+      path(g, rr(-0.35, 1.33, -0.15, 1.39, 0.008), '#18202b'); dots(g, -0.34, 1.34, -0.16, 1.38, 5, 1, 0.006, '#64d0f5', 0.9);
+      path(g, rr(-0.29, 1.12, -0.21, 1.25, 0.01), '#4b525b'); path(g, rr(0.3, 1.7, 0.4, 1.73, 0.005), lite(col, 0.6));
+    }
+  } else if (kind === 'washer') {
+    shadow(-0.32, 0.32);
+    if (view === 'side') {
+      feet(g, [-0.25, 0.25]); panel(g, -0.3, 0.025, 0.3, 0.85, 0.015);
+      [[-0.22, -0.04], [0.02, 0.2]].forEach(([u0, u1]) => { path(g, rr(u0, 0.09, u1, 0.7, 0.03), edge(col, 0.1), { stroke: edge(col, 0.3) }); path(g, rr(u0 + 0.02, 0.12, u0 + 0.05, 0.67, 0.012), lite(col, 0.5), { op: 0.6 }); });
+      path(g, soft([[0.3, 0.2], [0.33, 0.25], [0.335, 0.4], [0.33, 0.55], [0.3, 0.6]]), '#d9dde2', { stroke: edge('#d9dde2', 0.45) });
+      [0.79, 0.74].forEach((v) => path(g, rr(-0.33, v - 0.012, -0.3, v + 0.012, 0.006), '#9aa1a9', { stroke: '#6b7178' })); // (the water hose and drain nozzles at the back)
+    } else {
+      feet(g, [-0.25, 0.25]); panel(g, -0.3, 0.025, 0.3, 0.85, 0.015);
+      path(g, line([[-0.3, 0.72], [0.3, 0.72]]), 'none', { stroke: edge(col, 0.35), w: sw });
+      path(g, rr(-0.27, 0.745, -0.1, 0.81, 0.008), lite(col, 0.25), { stroke: edge(col, 0.4) }); path(g, rr(-0.22, 0.765, -0.15, 0.78, 0.005), edge(col, 0.35));
+      path(g, circ(-0.035, 0.778, 0.032), '#dfe3e8', { stroke: edge(col, 0.5) }); path(g, line([[-0.035, 0.778], [-0.035, 0.802]]), 'none', { stroke: '#6b7178', w: sw * 1.3 });
+      path(g, rr(0.04, 0.752, 0.25, 0.805, 0.008), '#1a1e24'); path(g, rr(0.06, 0.765, 0.16, 0.795, 0.004), '#ff9a3c', { op: 0.85 }); dots(g, 0.18, 0.76, 0.24, 0.8, 2, 2, 0.007, '#8fd0ff', 0.9);
+      path(g, rr(0.17, 0.05, 0.27, 0.13, 0.008), lite(col, 0.15), { stroke: edge(col, 0.35) });
+      const cu = view === 'open' ? 0 : 0, cv = 0.4;
+      path(g, circ(cu, cv, 0.215), '#e2e6ea', { stroke: edge(col, 0.5) }); path(g, circ(cu, cv, 0.18), '#3b4048', { stroke: '#22262b' });
+      const drum = mover(g, 'ld-a-spin', cu, cv);
+      path(drum, circ(cu, cv, 0.16), '#9aa1aa', { stroke: '#6d737b' });
+      let holes = ''; for (let r = 0.05; r < 0.155; r += 0.022) for (let a = 0; a < 6.28; a += 0.16 / (r * 12)) holes += circ(cu + Math.cos(a) * r, cv + Math.sin(a) * r, 0.0035); path(drum, holes, '#5d636b', { op: 0.6 });
+      [0, 2.094, 4.189].forEach((a) => path(drum, poly([[cu + Math.cos(a - 0.12) * 0.155, cv + Math.sin(a - 0.12) * 0.155], [cu + Math.cos(a) * 0.035, cv + Math.sin(a) * 0.035], [cu + Math.cos(a + 0.12) * 0.155, cv + Math.sin(a + 0.12) * 0.155]]), '#c3c8ce', { stroke: '#7d838b' }));
+      path(drum, circ(cu, cv, 0.03), '#c3c8ce', { stroke: '#7d838b' });
+      path(drum, soft([[cu - 0.09, cv - 0.07], [cu - 0.02, cv - 0.12], [cu + 0.06, cv - 0.1], [cu + 0.02, cv - 0.06]]), '#5b8fd6', { op: 0.9, stroke: '#3c6fb8' }); // (the clothes, tumbling)
+      path(drum, soft([[cu + 0.04, cv + 0.05], [cu + 0.11, cv + 0.02], [cu + 0.12, cv + 0.08], [cu + 0.07, cv + 0.1]]), '#e85d75', { op: 0.9, stroke: '#c03c55' });
+      if (view === 'open') { // the round door, swung open on its hinge at the left
+        path(g, oval(-0.42, cv, 0.085, 0.215), '#e2e6ea', { stroke: edge(col, 0.5) }); path(g, oval(-0.42, cv, 0.06, 0.16), '#7f99ad', { op: 0.55, stroke: '#5b6f80' });
+        path(g, rr(-0.34, cv - 0.04, -0.21, cv + 0.04, 0.01), '#cfd4da', { stroke: edge(col, 0.4) });
+      } else {
+        path(g, circ(cu, cv, 0.165), '#7f99ad', { op: 0.32 }); path(g, soft([[cu - 0.12, cv + 0.06], [cu - 0.06, cv + 0.13], [cu, cv + 0.145], [cu - 0.07, cv + 0.11]]), '#ffffff', { op: 0.45 });
+        path(g, rr(0.19, cv - 0.04, 0.23, cv + 0.04, 0.01), '#cfd4da', { stroke: edge(col, 0.4) });
+      }
+    }
+  } else if (kind === 'microwave') {
+    shadow(-0.26, 0.26);
+    if (view === 'side') {
+      feet(g, [-0.15, 0.15], 0.012, 0.025); panel(g, -0.19, 0.012, 0.19, 0.3, 0.012);
+      for (let i = 0; i < 6; i++) path(g, rr(-0.16 + i * 0.022, 0.05, -0.152 + i * 0.022, 0.12, 0.003), dark, { op: 0.7 });
+      path(g, rr(0.17, 0.015, 0.19, 0.297, 0.004), edge(col, 0.15));
+    } else {
+      feet(g, [-0.2, 0.2], 0.012, 0.03); panel(g, -0.25, 0.012, 0.25, 0.3, 0.012);
+      path(g, rr(0.12, 0.03, 0.235, 0.285, 0.008), edge(col, 0.06), { stroke: edge(col, 0.35) });
+      path(g, rr(0.14, 0.235, 0.215, 0.27, 0.006), '#11161c'); path(g, rr(0.15, 0.243, 0.205, 0.262, 0.003), '#7cf08c', { op: 0.85 });
+      for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) path(g, rr(0.145 + i * 0.024, 0.15 + j * 0.024, 0.162 + i * 0.024, 0.163 + j * 0.024, 0.004), '#dfe3e8', { stroke: edge(col, 0.4) });
+      path(g, circ(0.178, 0.085, 0.032), '#d9dde2', { stroke: edge(col, 0.5) }); path(g, line([[0.178, 0.085], [0.178, 0.11]]), 'none', { stroke: '#6b7178', w: sw * 1.3 });
+      const cav = (g2) => { // inside: warm light, the glass turntable and a bowl on it
+        path(g2, rr(-0.215, 0.035, 0.09, 0.275, 0.006), '#e8c993'); path(g2, poly([[-0.215, 0.035], [-0.18, 0.07], [0.055, 0.07], [0.09, 0.035]]), '#d9b47a');
+        path(g2, poly([[-0.215, 0.275], [-0.18, 0.24], [0.055, 0.24], [0.09, 0.275]]), '#f3dcb0');
+        path(g2, oval(-0.063, 0.075, 0.11, 0.022), '#f2f6f8', { op: 0.7, stroke: '#c9d3da' });
+        const plate = mover(g2, 'ld-a-turn', -0.063, 0.075); path(plate, rr(-0.11, 0.08, -0.02, 0.13, 0.03), '#e85d4a', { stroke: '#b8412f' }); path(plate, oval(-0.065, 0.13, 0.045, 0.01), '#f6a64a');
+        path(mover(g2, 'ld-a-glow', -0.06, 0.15), rr(-0.215, 0.035, 0.09, 0.275, 0.006), '#ffd884', { op: 0.35 });
+      };
+      if (view === 'open') {
+        path(g, rr(-0.235, 0.02, 0.105, 0.29, 0.006), '#4d535b'); cav(g);
+        path(g, poly([[-0.25, 0.012], [-0.48, -0.005], [-0.48, 0.317], [-0.25, 0.3]]), col, { stroke: edge(col, 0.4) });
+        path(g, poly([[-0.29, 0.04], [-0.44, 0.03], [-0.44, 0.29], [-0.29, 0.28]]), glassC, { op: 0.85 }); path(g, rr(-0.475, 0.08, -0.46, 0.24, 0.006), '#d9dde2');
+      } else {
+        path(g, rr(-0.235, 0.025, 0.105, 0.287, 0.01), '#4a5058', { stroke: edge(col, 0.5) }); cav(g);
+        path(g, rr(-0.225, 0.03, 0.095, 0.28, 0.008), glassC, { op: 0.7 }); dots(g, -0.215, 0.04, 0.085, 0.27, 26, 20, 0.0022, '#0d1116', 0.3);
+        bar(g, 0.098, 0.06, 0.112, 0.255);
+        path(g, soft([[-0.2, 0.25], [-0.12, 0.27], [-0.05, 0.27], [-0.15, 0.255]]), '#ffffff', { op: 0.25 });
+      }
+    }
+  } else if (kind === 'blender') {
+    shadow(-0.1, 0.1);
+    path(g, soft([[-0.088, 0.005], [0.088, 0.005], [0.074, 0.08], [0.066, 0.132], [-0.066, 0.132], [-0.074, 0.08]]), col, { stroke: edge(col, 0.4) });
+    path(g, soft([[-0.07, 0.012], [-0.04, 0.012], [-0.04, 0.12], [-0.06, 0.12]]), lite(col, 0.5), { op: 0.5 }); path(g, rr(-0.09, 0, 0.09, 0.012, 0.004), '#2b2e33');
+    if (view !== 'side') { path(g, circ(0, 0.075, 0.026), '#d4d8dd', { stroke: edge(col, 0.5) }); path(g, line([[0, 0.075], [0, 0.095]]), 'none', { stroke: '#6b7178', w: sw * 1.3 }); [-0.04, -0.02, 0, 0.02, 0.04].forEach((u) => path(g, circ(u, 0.03, 0.007), '#e3e7eb', { stroke: edge(col, 0.5) })); }
+    else path(g, circ(0.072, 0.075, 0.012), '#d4d8dd', { stroke: edge(col, 0.5) });
+    path(g, rr(-0.058, 0.13, 0.058, 0.158, 0.006), '#d4d8dd', { stroke: edge(col, 0.45) });
+    const jar = [[-0.05, 0.158], [0.05, 0.158], [0.076, 0.39], [-0.076, 0.39]];
+    path(g, poly(jar), '#f0c35a', { op: 0.55 }); // (a smoothie, blending)
+    path(g, poly([[-0.064, 0.3], [0.064, 0.3], [0.076, 0.39], [-0.076, 0.39]]), '#ffffff', { op: 0.6 });
+    path(g, soft([[0.07, 0.36], [0.115, 0.355], [0.115, 0.22], [0.062, 0.2], [0.064, 0.225], [0.098, 0.235], [0.098, 0.34], [0.072, 0.345]]), '#e7eef3', { op: 0.75, stroke: '#9fb2c0' });
+    const bl = mover(g, 'ld-a-flapf', 0, 0.175); path(bl, line([[-0.04, 0.19], [0.04, 0.16]]), 'none', { stroke: '#8d949c', w: sw * 2.2 }); path(bl, line([[-0.04, 0.16], [0.04, 0.19]]), 'none', { stroke: '#aab0b7', w: sw * 2.2 });
+    path(g, circ(0, 0.172, 0.008), '#6b7178');
+    path(g, poly(jar), '#dde9f1', { op: 0.28, stroke: '#94a7b6' });
+    [[-0.035, 0.17, -0.05, 0.38], [0.035, 0.17, 0.05, 0.38]].forEach(([a, b, c2, d]) => path(g, line([[a, b], [c2, d]]), 'none', { stroke: '#ffffff', w: sw * 1.6, op: 0.6 }));
+    path(g, rr(-0.082, 0.388, 0.082, 0.413, 0.008), '#2a2c30'); path(g, rr(-0.026, 0.41, 0.026, 0.43, 0.005), '#cfd8de', { stroke: '#8d99a3' });
+  } else if (kind === 'toaster') {
+    shadow(-0.16, 0.16);
+    if (view === 'side') {
+      path(g, rr(-0.095, 0, 0.095, 0.025, 0.006), '#3a3d42'); path(g, rr(-0.09, 0.02, 0.09, 0.195, 0.04), col, { stroke: edge(col, 0.4) });
+      path(g, rr(-0.06, 0.03, -0.035, 0.18, 0.005), lite(col, 0.5), { op: 0.5 }); path(g, rr(-0.004, 0.06, 0.004, 0.17, 0.003), '#22252a');
+      path(g, rr(-0.025, 0.105, 0.025, 0.125, 0.006), '#2b2e33'); path(g, circ(-0.045, 0.05, 0.013), '#dfe3e8', { stroke: edge(col, 0.5) });
+      [-0.02, 0, 0.02].forEach((u) => path(g, circ(u + 0.04, 0.045, 0.006), '#e8ecef', { stroke: edge(col, 0.5) }));
+    } else if (view === 'open') { // from above: the two slots, their wires glowing red hot
+      path(g, rr(-0.15, 0.0, 0.15, 0.18, 0.035), col, { stroke: edge(col, 0.4) });
+      [0.055, 0.125].forEach((v) => { path(g, rr(-0.12, v - 0.022, 0.12, v + 0.022, 0.012), '#2a2c30'); const hot = mover(g, 'ld-a-glow', 0, v); path(hot, line(Array.from({ length: 21 }, (_, i) => [-0.11 + i * 0.011, v + (i % 2 ? 0.012 : -0.012)])), 'none', { stroke: '#ff6a2a', w: sw * 1.4 }); path(g, rr(-0.1, v - 0.01, 0.1, v + 0.01, 0.006), '#d9a35c', { op: 0.9 }); });
+    } else {
+      path(g, rr(-0.155, 0, 0.155, 0.028, 0.008), '#3a3d42');
+      [-0.07, 0.07].forEach((u) => { path(g, soft([[u - 0.055, 0.17], [u - 0.058, 0.215], [u, 0.232], [u + 0.058, 0.215], [u + 0.055, 0.17]]), '#e3b471', { stroke: '#a8743a' }); path(g, soft([[u - 0.045, 0.2], [u, 0.215], [u + 0.045, 0.2], [u, 0.205]]), '#c98a45', { op: 0.6 }); });
+      path(g, rr(-0.15, 0.025, 0.15, 0.2, 0.05), col, { stroke: edge(col, 0.4) });
+      path(g, rr(-0.13, 0.04, -0.07, 0.185, 0.02), lite(col, 0.6), { op: 0.5 }); path(g, rr(0.11, 0.035, 0.14, 0.185, 0.02), edge(col, 0.18), { op: 0.5 });
+      path(g, rr(0.15, 0.1, 0.19, 0.125, 0.006), '#2b2e33'); path(g, circ(0.162, 0.055, 0.012), '#dfe3e8', { stroke: edge(col, 0.5) });
+    }
+  } else if (kind === 'coffeemaker') {
+    shadow(-0.12, 0.12);
+    path(g, rr(-0.11, 0, 0.11, 0.03, 0.008), col, { stroke: edge(col, 0.4) }); path(g, rr(-0.095, 0.028, 0.06, 0.036, 0.003), '#1d1f23');
+    if (view === 'side') {
+      panel(g, -0.13, 0.03, -0.02, 0.36, 0.01); path(g, rr(-0.13, 0.215, 0.12, 0.34, 0.012), col, { stroke: edge(col, 0.4) }); path(g, rr(-0.135, 0.335, 0.125, 0.36, 0.008), '#2a2c30');
+      path(g, rr(-0.09, 0.1, -0.07, 0.3, 0.008), '#a9d6f2', { stroke: '#6e8a9c', op: 0.9 }); path(g, rr(-0.09, 0.1, -0.07, 0.2, 0.008), '#4a9fe0', { op: 0.7 });
+      path(g, soft([[-0.015, 0.045], [0.1, 0.045], [0.105, 0.095], [-0.02, 0.095]]), '#5b3521', { op: 0.92 }); path(g, soft([[-0.02, 0.04], [0.1, 0.04], [0.115, 0.1], [0.095, 0.17], [0.0, 0.18], [-0.025, 0.1]]), '#e3edf3', { op: 0.32, stroke: '#8fa3b2' }); path(g, rr(-0.01, 0.175, 0.1, 0.19, 0.006), '#2a2c30');
+    } else {
+      panel(g, -0.11, 0.21, 0.11, 0.335, 0.012); path(g, rr(-0.112, 0.333, 0.112, 0.36, 0.008), '#2a2c30');
+      path(g, rr(-0.11, 0.03, -0.085, 0.215, 0.004), '#2a2c30'); path(g, rr(0.085, 0.03, 0.11, 0.215, 0.004), '#2a2c30'); path(g, rr(-0.085, 0.19, 0.085, 0.215, 0.004), '#2a2c30');
+      path(g, circ(-0.07, 0.3, 0.008), '#5b6068');
+      if (view === 'open') { path(g, rr(-0.105, 0.36, 0.105, 0.37, 0.004), '#2a2c30'); path(g, poly([[-0.06, 0.335], [0.06, 0.335], [0.03, 0.28], [-0.03, 0.28]]), '#c9a36a', { stroke: '#8a6a3c' }); path(g, oval(0, 0.33, 0.055, 0.008), '#5a3a22'); }
+      const jug = [[-0.075, 0.04], [0.05, 0.04], [0.072, 0.09], [0.06, 0.15], [0.04, 0.18], [-0.065, 0.18], [-0.085, 0.15], [-0.095, 0.09]];
+      path(g, soft([[-0.09, 0.045], [0.065, 0.045], [0.07, 0.095], [-0.093, 0.095]]), '#5b3521', { op: 0.92 });
+      path(g, soft(jug), '#e3edf3', { op: 0.32, stroke: '#8fa3b2' });
+      path(g, soft([[0.055, 0.16], [0.095, 0.155], [0.1, 0.07], [0.06, 0.06], [0.062, 0.08], [0.083, 0.085], [0.08, 0.14], [0.058, 0.14]]), '#2a2c30');
+      path(g, rr(-0.07, 0.175, 0.045, 0.192, 0.006), '#2a2c30'); path(g, soft([[-0.08, 0.06], [-0.07, 0.15], [-0.06, 0.15], [-0.07, 0.06]]), '#ffffff', { op: 0.5 });
+      [0, 0.35, 0.7].forEach((dl) => drop(g, -0.01, 0.185, 0.085, dl, '#5b3521'));
+    }
+  } else if (kind === 'vacuum') {
+    shadow(-0.16, 0.16);
+    if (view === 'side') {
+      path(g, rr(-0.16, 0.01, 0.17, 0.07, 0.02), '#3a3d42', { stroke: '#1d1f23' }); path(g, rr(-0.12, 0.05, 0.14, 0.085, 0.015), col, { stroke: edge(col, 0.4) });
+      path(g, circ(-0.13, 0.05, 0.05), '#2a2c30', { stroke: '#121315' }); path(g, circ(-0.13, 0.05, 0.02), '#8d949c');
+      const roll = mover(g, 'ld-a-spinf', 0.13, 0.03); path(roll, circ(0.13, 0.03, 0.022), '#5b6068', { stroke: '#2a2c30' }); path(roll, line([[0.11, 0.03], [0.15, 0.03]]), 'none', { stroke: '#e0b23c', w: sw * 1.6 }); path(roll, line([[0.13, 0.01], [0.13, 0.05]]), 'none', { stroke: '#e0b23c', w: sw * 1.6 });
+      path(g, poly([[-0.09, 0.08], [-0.02, 0.08], [0.01, 0.5], [-0.07, 0.5]]), col, { stroke: edge(col, 0.4) });
+      path(g, poly([[-0.075, 0.14], [-0.02, 0.14], [0.0, 0.42], [-0.06, 0.42]]), '#dfe9f0', { op: 0.6, stroke: '#94a7b6' });
+      path(g, line([[-0.03, 0.5], [0.0, 0.98]]), 'none', { stroke: col, w: k * 0.022 }); path(g, soft([[-0.01, 0.98], [0.06, 1.1], [0.02, 1.1], [-0.02, 1.0]]), '#2a2c30');
+      path(g, soft([[0.0, 0.12], [0.05, 0.2], [0.06, 0.5], [0.03, 0.62], [-0.01, 0.62]]).replace(/Z$/, ''), 'none', { stroke: '#2a2c30', w: k * 0.016 });
+    } else {
+      path(g, rr(-0.15, 0.005, 0.15, 0.07, 0.015), '#3a3d42', { stroke: '#1d1f23' }); path(g, rr(-0.13, 0.04, 0.13, 0.085, 0.015), col, { stroke: edge(col, 0.4) }); path(g, rr(-0.1, 0.055, 0.1, 0.07, 0.006), '#2a2c30', { op: 0.7 });
+      path(g, rr(-0.08, 0.085, 0.08, 0.14, 0.02), col, { stroke: edge(col, 0.4) });
+      path(g, rr(-0.068, 0.14, 0.068, 0.42, 0.02), '#dfe9f0', { op: 0.5, stroke: '#94a7b6' });
+      path(g, soft([[-0.06, 0.15], [0.06, 0.15], [0.06, 0.21], [-0.06, 0.21]]), '#8b8579', { op: 0.75 });
+      const swirl = mover(g, 'ld-a-spinf', 0, 0.3); for (let i = 0; i < 7; i++) { const a = i * 0.9, r = 0.015 + i * 0.006; path(swirl, circ(Math.cos(a) * r, 0.3 + Math.sin(a) * r * 1.6, 0.005), '#8b8579', { op: 0.7 }); }
+      path(g, poly([[-0.03, 0.4], [0.03, 0.4], [0.012, 0.2], [-0.012, 0.2]]), '#c9d3da', { op: 0.6, stroke: '#94a7b6' });
+      path(g, rr(-0.075, 0.42, 0.075, 0.5, 0.025), col, { stroke: edge(col, 0.4) });
+      path(g, rr(-0.012, 0.5, 0.012, 0.98, 0.01), col, { stroke: edge(col, 0.45) });
+      path(g, soft([[-0.012, 0.97], [-0.05, 1.04], [-0.02, 1.1], [0.02, 1.1], [0.04, 1.04], [0.012, 0.97]]), col, { stroke: edge(col, 0.45) }); path(g, soft([[-0.02, 1.0], [-0.03, 1.05], [-0.01, 1.08], [0.02, 1.07], [0.02, 1.02]]), '#2a2c30');
+      path(g, soft([[0.07, 0.11], [0.11, 0.18], [0.115, 0.48], [0.09, 0.6], [0.03, 0.62], [0.013, 0.6]]).replace(/Z$/, ''), 'none', { stroke: '#2a2c30', w: k * 0.018 });
+    }
+  } else if (kind === 'aircon') {
+    shadow(-0.24, 0.24);
+    const wheels = (us) => us.forEach((u) => { path(g, circ(u, 0.022, 0.022), '#2a2c30', { stroke: '#121315' }); });
+    if (view === 'side') {
+      wheels([-0.13, 0.13]); path(g, rr(-0.19, 0.035, 0.19, 0.75, 0.06), col, { stroke: edge(col, 0.4) });
+      path(g, rr(-0.04, 0.6, 0.06, 0.65, 0.02), edge(col, 0.25), { stroke: edge(col, 0.4) });
+      path(g, rr(-0.26, 0.38, -0.19, 0.46, 0.01), '#e6e8ea', { stroke: '#a7adb3' }); for (let i = 0; i < 4; i++) path(g, line([[-0.255 + i * 0.016, 0.385], [-0.255 + i * 0.016, 0.455]]), 'none', { stroke: '#b9bec4', w: sw });
+      air(g, [[-0.27, 0.42], [-0.32, 0.47], [-0.36, 0.44], [-0.4, 0.49]], '#f08a5d');
+    } else {
+      wheels([-0.16, 0.16]); path(g, rr(-0.225, 0.035, 0.225, 0.75, 0.06), col, { stroke: edge(col, 0.4) });
+      path(g, rr(-0.2, 0.05, -0.12, 0.7, 0.03), lite(col, 0.55), { op: 0.5 });
+      path(g, rr(-0.16, 0.5, 0.16, 0.69, 0.02), '#4a5058', { stroke: edge(col, 0.5) });
+      for (let i = 0; i < 4; i++) { const v = 0.525 + i * 0.043, lv = mover(g, 'ld-a-tail', 0, v, `animation-delay:${i * 0.1}s`); path(lv, rr(-0.15, v - 0.012, 0.15, v + 0.012, 0.006), '#e8ebee', { stroke: '#a7adb3' }); }
+      path(g, rr(-0.04, 0.42, 0.04, 0.435, 0.004), edge(col, 0.3));
+      [[0.12, 0], [0, 0.4], [-0.12, 0.8]].forEach(([du, dl]) => air(g, [[du, 0.7], [du * 1.4, 0.78], [du * 1.2 - 0.03, 0.84], [du * 1.6, 0.9]], '#7cc4f0', dl));
+    }
+  } else if (kind === 'fan') {
+    shadow(-0.22, 0.22);
+    path(g, oval(0, 0.025, 0.2, 0.03), col, { stroke: edge(col, 0.4) }); path(g, soft([[-0.16, 0.03], [0.16, 0.03], [0.06, 0.08], [-0.06, 0.08]]), col, { stroke: edge(col, 0.4) });
+    path(g, rr(-0.015, 0.07, 0.015, 0.8, 0.008), col, { stroke: edge(col, 0.45) }); path(g, rr(-0.022, 0.55, 0.022, 0.6, 0.006), '#9aa1a9');
+    if (view === 'side') {
+      path(g, rr(-0.12, 0.88, -0.02, 1.02, 0.04), col, { stroke: edge(col, 0.4) }); path(g, rr(-0.02, 0.8, 0.0, 0.9, 0.006), col);
+      path(g, oval(0.04, 0.95, 0.05, 0.22), '#ffffff', { op: 0.25, stroke: '#9aa1a9' }); path(g, oval(0.03, 0.95, 0.012, 0.03), '#5b9bd5');
+      const bl = mover(g, 'ld-a-flapf', 0.03, 0.95); path(bl, oval(0.03, 0.95, 0.02, 0.2), '#7fb7e6', { op: 0.6 });
+    } else {
+      path(g, rr(-0.025, 0.8, 0.025, 0.88, 0.01), col);
+      path(g, circ(0, 0.95, 0.225), '#ffffff', { op: 0.25, stroke: '#a3aab2', w: sw * 1.6 });
+      const blades = mover(g, 'ld-a-spinf', 0, 0.95);
+      for (let i = 0; i < 3; i++) { const a = i * 2.094, c = Math.cos(a), sn = Math.sin(a), R = (u, v) => [u * c - v * sn, 0.95 + u * sn + v * c]; path(blades, soft([R(0.02, 0.01), R(0.12, 0.06), R(0.19, 0.03), R(0.18, -0.04), R(0.08, -0.03)]), '#7fb7e6', { op: 0.85, stroke: '#4e8ec7' }); }
+      let wires = ''; for (let i = 0; i < 24; i++) { const a = i * 0.2618; wires += line([[Math.cos(a) * 0.05, 0.95 + Math.sin(a) * 0.05], [Math.cos(a) * 0.222, 0.95 + Math.sin(a) * 0.222]]); } path(g, wires, 'none', { stroke: '#b9bfc6', w: sw * 0.7, op: 0.8 });
+      [0.12, 0.18].forEach((r) => path(g, circ(0, 0.95, r), 'none', { stroke: '#b9bfc6', w: sw * 0.7, op: 0.8 }));
+      path(g, circ(0, 0.95, 0.04), col, { stroke: edge(col, 0.4) }); path(g, circ(-0.01, 0.96, 0.015), '#ffffff', { op: 0.6 });
+    }
+  } else if (kind === 'ricecooker') {
+    shadow(-0.16, 0.16);
+    if (view === 'open') {
+      path(g, poly([[-0.13, 0.2], [0.13, 0.2], [0.12, 0.33], [-0.12, 0.33]]), col, { stroke: edge(col, 0.4) }); // (the lid, flipped up behind)
+      path(g, rr(-0.15, 0.01, 0.15, 0.2, 0.05), col, { stroke: edge(col, 0.35) }); path(g, oval(0, 0.2, 0.13, 0.025), '#b9bfc6', { stroke: '#8a9098' });
+      path(g, oval(0, 0.205, 0.11, 0.018), '#fbfaf3', { stroke: '#d8d2bd' }); dots(g, -0.09, 0.198, 0.09, 0.212, 14, 2, 0.006, '#ffffff', 0.9);
+      [0, 0.8, 1.6].forEach((dl, i) => steam(g, -0.04 + i * 0.04, 0.23, 0.12, dl));
+    } else {
+      path(g, rr(-0.15, 0.01, 0.15, 0.2, 0.05), col, { stroke: edge(col, 0.35) }); path(g, rr(-0.13, 0.03, -0.07, 0.18, 0.03), '#ffffff', { op: 0.6 });
+      path(g, soft([[-0.145, 0.195], [0.145, 0.195], [0.11, 0.25], [0, 0.27], [-0.11, 0.25]]), lite(col, 0.3), { stroke: edge(col, 0.35) });
+      path(g, rr(-0.012, 0.262, 0.012, 0.28, 0.005), '#9aa1a9'); path(g, rr(-0.06, 0.271, 0.06, 0.288, 0.008), '#5b6068');
+      path(g, rr(-0.05, 0.07, 0.05, 0.14, 0.012), '#e6e5df', { stroke: '#b5b3ab' }); path(g, rr(-0.012, 0.09, 0.012, 0.125, 0.004), '#5b6068');
+      path(mover(g, 'ld-a-glow', -0.03, 0.155), circ(-0.03, 0.155, 0.008), '#ff5a3c'); path(g, circ(0.03, 0.155, 0.008), '#f6b23c', { op: 0.6 });
+      if (view === 'side') { [-1, 1].forEach((sd) => path(g, rr(sd * 0.15, 0.14, sd * 0.175, 0.17, 0.006), '#5b6068')); }
+      [0, 0.9, 1.8].forEach((dl) => steam(g, 0, 0.29, 0.13, dl));
+    }
+  }
+  return root;
+}
+
+// (v328) what Cassie knows about each appliance: how it looks from each side, how it works, and its parts in their real places
+const APPLIANCES = [
+  { is: /\b(refrigerators?|fridges?|ref|freezers?|ref ?ri ?ge ?ra ?tor)\b/i, not: /\b(reference|referee)\b/i, kind: 'fridge', what: 'a refrigerator', views: 'front: a tall box, two doors on top that meet in the middle with long handles, a freezer drawer below, an ice and water dispenser on the left door; side: a tall plain panel, the handles sticking out at the front; open: shelves, door bins, crisper drawers at the bottom and a light at the top; back: the black condenser coils and the compressor at the bottom', works: 'It moves heat out of the box. A liquid called refrigerant boils in the evaporator coils inside, taking in heat so the inside gets cold; the compressor at the bottom back squeezes the gas so it gets hot; the condenser coils at the back give that heat to the room; the expansion valve lets the pressure drop so it is cold again, round and round. Thick foam walls keep the cold in and a rubber seal closes the doors.', parts: ['evaporator (inside, at the back)', 'compressor (at the bottom back)', 'condenser coils (on the back)', 'expansion valve', 'thermostat', 'shelves and drawers', 'door seal', 'light'] },
+  { is: /\b(washing machines?|washers?|labahan|washing mashine|laundry machines?)\b/i, not: /\b(dish ?washers?|pressure washers?)\b/i, kind: 'washer', what: 'a washing machine', views: 'front: a box with a round glass door low in the middle, the steel drum and its paddles seen through it, a control panel across the top (detergent drawer on the left, a dial, a display), a small filter door at the bottom right; side: a plain panel with pressed ridges; back: the water inlet and drain hose', works: 'A valve lets water in and it mixes with soap from the detergent drawer. A motor turns the drum through a belt, so the paddles lift the clothes and drop them through the soapy water. A pump drains the dirty water, it rinses, then the drum spins very fast and the water flies out through its holes.', parts: ['drum (with holes and paddles)', 'motor', 'belt and pulley', 'water inlet valve', 'drain pump', 'detergent drawer', 'door seal', 'control panel'] },
+  { is: /\b(microwaves?|microwave ovens?)\b/i, not: /\b(microwave (radiation|background|frequenc\w+|spectrum))\b/i, kind: 'microwave', what: 'a microwave oven', views: 'front: a wide box, a door with a see-through window on the left, the control panel on the right (display, buttons, a dial); open: a box-shaped cavity, a glass turntable on the floor, a light in the corner; side and top: vent slots', works: 'A magnetron (behind the control panel) makes microwaves, invisible waves that a metal channel (the waveguide) sends into the metal cavity. They make the water in the food jiggle very fast, which heats it from inside. The turntable turns the food so it heats evenly; the metal mesh in the window keeps the waves in while letting you see.', parts: ['magnetron (behind the control panel)', 'waveguide', 'cavity', 'turntable', 'door with metal mesh window', 'control panel', 'vent slots'] },
+  { is: /\b(blenders?|smoothie makers?)\b/i, kind: 'blender', what: 'a blender', views: 'front: a jar (pitcher) with a lid and a handle on the side, standing on a heavy base with a dial and buttons; inside the jar at the bottom: four sharp blades', works: 'A strong electric motor in the base spins a shaft that pokes up through the jar\'s bottom; the blades on it spin thousands of times a minute, cutting the food and making a whirlpool that pulls it down into the blades again and again.', parts: ['jar (pitcher)', 'lid', 'blades', 'motor (in the base)', 'drive coupling', 'speed dial and buttons'] },
+  { is: /\b(toasters?)\b/i, kind: 'toaster', what: 'a toaster', views: 'front: a rounded steel box on a black base, two slots on top with bread in them; side: the lever that pushes the bread down, a browning dial and buttons (cancel, reheat, defrost); from above: two long slots lined with thin wires', works: 'Pushing the lever down lowers the bread and switches on the current. Thin nichrome wires lining each slot get red hot and toast both sides. A timer set by the dial lets go of a catch and a spring pops the toast up. Crumbs fall into a tray that slides out of the bottom.', parts: ['slots', 'heating wires (nichrome)', 'lever', 'spring', 'browning dial (timer)', 'crumb tray'] },
+  { is: /\b(coffee ?makers?|coffee machines?|drip coffee|coffee brewers?)\b/i, kind: 'coffeemaker', what: 'a drip coffee maker', views: 'front: a glass carafe on a warming plate at the bottom, the filter basket and showerhead above it under a lid; side: a window showing the water level in the tank at the back', works: 'Water from the tank runs into an aluminium tube under the warming plate, where a heater boils it; bubbles push the hot water up a tube to the showerhead, which sprinkles it over the ground coffee in the filter; coffee drips down into the carafe, and the warming plate keeps it hot.', parts: ['water tank', 'heating element', 'hot water tube', 'showerhead', 'filter basket', 'carafe', 'warming plate'] },
+  { is: /\b(vacuum cleaners?|vacuums?|hoovers?)\b/i, not: /\bvacuum (tubes?|chambers?|of space|energy|pumps?)\b/i, kind: 'vacuum', what: 'an upright vacuum cleaner', views: 'front: a tall stick with a looped handle on top, a clear dust bin in the middle, a wide floor head at the bottom; side: big back wheels, the hose on the back; underneath: a spinning brush roll', works: 'A motor spins a fan that pushes air out the back, which leaves low pressure inside, so the air outside rushes in through the floor head carrying dust. The brush roll spins to loosen dirt from the carpet. In the bin the air whirls round (a cyclone), throwing the dust out to the sides, and a filter cleans the air before it leaves.', parts: ['motor and fan', 'brush roll', 'floor head', 'dust bin (cyclone)', 'filter', 'hose', 'handle'] },
+  { is: /\b(air ?con(ditioner|ditioning)?s?|aircons?|portable a\/?c|a\/?c units?)\b/i, kind: 'aircon', what: 'a portable air conditioner', views: 'front: a tall rounded box on little wheels, louvers at the top front blowing cool air; back: two grilles and a wide hose that carries hot air out of a window; top: the control panel', works: 'It works like a fridge for a room: refrigerant in the cold evaporator coils takes heat from the room air the fan blows over them, the compressor squeezes the gas so it is hot, and the hot condenser coils give that heat to air that the exhaust hose blows outside. Water from the air drips into a tank.', parts: ['evaporator coils', 'compressor', 'condenser coils', 'fans', 'louvers', 'exhaust hose', 'water tank', 'air filter'] },
+  { is: /\b(electric fans?|stand fans?|electric ?fan|bentilador|fans?)\b/i, not: /\b(fans? of|fan ?(base|club|page|art|fiction)|ceiling fans?)\b/i, kind: 'fan', what: 'an electric stand fan', views: 'front: a round wire guard with three blades inside, on a tall pole over a round base; side: the motor behind the blades', works: 'An electric motor spins the blades; each blade is tilted, so it pushes air forward like a propeller. A gear at the back slowly turns the head from side to side. It does not cool the air; moving air helps sweat evaporate from your skin, which cools you.', parts: ['blades', 'motor', 'guard', 'oscillation gear', 'speed buttons', 'pole and base'] },
+  { is: /\b(rice cookers?|rice ?cooker|kaldero)\b/i, kind: 'ricecooker', what: 'a rice cooker', views: 'front: a round white pot with a domed lid, a switch and two lights (cook and warm) on the front, a little steam vent on the lid; open: the inner pot of rice', works: 'A heating plate under the inner pot boils the water. While there is water the pot stays at 100 degrees; once the rice has soaked it all up, the pot gets hotter, a magnet in the thermostat lets go, and the switch flips from cook to keep warm.', parts: ['inner pot', 'heating plate', 'thermostat (magnet)', 'lid', 'steam vent', 'switch and lights'] },
+];
+export function applianceGuide(asked = '') {
+  const q = String(asked || ''), hits = APPLIANCES.filter((a) => a.is.test(q) && !(a.not && a.not.test(q))).sort((a, b) => q.match(b.is)[0].length - q.match(a.is)[0].length).slice(0, 2);
+  return hits.map((a) => `About ${a.what} (draw it with the appliance kit, kind "${a.kind}"; its moving parts move on their own): how it looks: ${a.views}. How it works: ${a.works} Its main parts, each in its real place: ${a.parts.join(', ')}.`).join('\n');
+}
 // ---------- a picture of a finished drawing (for Cassie to check her own work) ----------
 export async function snapshot(rawSpec) {
   const spec = clean(rawSpec); if (!spec) return null;
@@ -2545,7 +2846,7 @@ function finishMat(T, colour, finish, { real, matte, glow }) {
 // tree, a flower or a rock stands at y 0; clouds, the sun and the moon float high above; roots grow below it). Surfaces
 // are bent by noise so nothing is a perfect ball: lumpy leafy crowns, rough bark, jagged pine tiers, faceted rocks;
 // every clump a slightly different green, and matte natural materials that catch the light like the real thing.
-const KIT3 = ['tree', 'flower', 'leaf', 'cloud', 'sun', 'moon', 'rainbow', 'rock', 'grass', 'log', 'mushroom', 'ground', 'drops', 'snowflake', 'bolt', 'vehicle', 'animal']; // (v326: and vehicles; v327: animals)
+const KIT3 = ['tree', 'flower', 'leaf', 'cloud', 'sun', 'moon', 'rainbow', 'rock', 'grass', 'log', 'mushroom', 'ground', 'drops', 'snowflake', 'bolt', 'vehicle', 'animal', 'appliance']; // (v326: and vehicles; v327: animals; v328: appliances)
 const KIT3_KINDS = {
   tree: ['round', 'oak', 'pine', 'bush', 'palm', 'blossom', 'fruit', 'autumn', 'bare'],
   flower: ['sunflower', 'daisy', 'tulip', 'rose', 'lily', 'lavender', 'blossom', 'hydrangea'],
@@ -2553,11 +2854,17 @@ const KIT3_KINDS = {
   rock: ['stone', 'mossy'], log: ['log', 'stump'], grass: ['grass', 'flowers'], ground: ['grass', 'soil', 'sand', 'snow'],
   get vehicle() { return VEH_KINDS; },
   get animal() { return ANIMAL_KINDS; },
+  get appliance() { return APPL_KINDS; },
 };
 // the box a kit model fills, from where it stands (for the model's checks and the camera)
 function kit3Box(s, pos) {
   const t = String(s.t || '').toLowerCase(), h = Math.abs(n3(s.h ?? s.size, t === 'tree' ? 3 : 1)), w = Math.abs(n3(s.w ?? s.r ?? s.size, 1)), r = Math.abs(n3(s.r ?? s.size, 0.6));
   const [x, y, z] = pos, sq = (a, lo, hi) => [x - a, y + lo, z - a, x + a, y + hi, z + a];
+  if (t === 'appliance') { // (v328) standing on the floor, its front toward +z (turned, its depth along x)
+    const A = APPL[String(s.kind)] || APPL.fridge, H = Math.min(12, Math.max(0.1, Math.abs(n3(s.h ?? (s.w != null ? Math.abs(n3(s.w, 1)) * A.H / A.W : null) ?? s.size, A.H * 1.2)))), q = H / A.H;
+    const turned = ['x', '-x', 'left', 'right'].includes(s.facing), hw = (turned ? A.D : A.W) * q / 2, hd = (turned ? A.W : A.D) * q / 2;
+    return [x - hw, y, z - hd, x + hw, y + H + (s.kind === 'ricecooker' ? 0.09 * q : 0), z + hd];
+  }
   if (t === 'animal') { // (v327) from where it stands (a flying bird, a fish or a jellyfish: its middle)
     const L = Math.abs(n3(s.w ?? s.size ?? s.len, 3)), A = ANIMALS[String(s.kind)] || ANIMALS.lion, tall = animalTall(A) * L, mid = A.b === 'fish' || A.b === 'bat' || (A.b === 'bird' && s.pose === 'fly');
     return mid ? [x - L / 2, y - tall / 2, z - L * .3, x + L / 2, y + tall / 2, z + L * .3] : [x - L / 2, y, z - L * .25, x + L / 2, y + tall, z + L * .25];
@@ -3120,6 +3427,175 @@ function kit3d(T, s, mat) {
     };
     if (s.still) delete G.userData.animate;
     G.rotation.y = ({ '-x': Math.PI, z: -Math.PI / 2, '-z': Math.PI / 2, left: Math.PI })[s.facing] || 0;
+  } else if (t === 'appliance') { // (v328) a home appliance in 3D, its front toward +z, standing on the floor (y 0), h its height; its working parts move
+    const A = APPL[kind] || APPL.fridge, H = Math.min(12, Math.max(0.1, Math.abs(n3(s.h ?? (s.w != null ? Math.abs(n3(s.w, 1)) * A.H / A.W : null) ?? s.size, A.H * 1.2)))), k = H / A.H;
+    const W = A.W * k, D = A.D * k, open = s.pose === 'open';
+    const col = own || A.col;
+    const MX = (hex, rough, metal, extra = {}) => { const m = M(hex, rough, { ...extra, mx: metal }); m.metalness = metal; return m; };
+    const steel = MX(col, 0.32, A.col === col && col !== '#f3f3f1' && col !== '#eef1f4' ? 0.55 : 0.05, { clear: true }), black = M('#2a2c30', 0.45, { clear: true }), plastic = M('#e9ecef', 0.5), chrome = MX('#e3e7eb', 0.18, 0.85);
+    const glassM = (hex = '#dfeaf2', op = 0.28) => { const m = M(hex, 0.05, { clear: true, gl: op }).clone(); m.transparent = true; m.opacity = op; m.depthWrite = false; return m; };
+    const lit = (hex, gi = 0.9) => M(hex, 0.4, { glow: hex, gi });
+    const RB = T.RoundedBox;
+    const box = (sx, sy, sz, m, x, y, z, parent = G, r = 0.18) => { const rad = Math.min(sx, sy, sz) * r; const e = new T.Mesh(RB && rad > 0.002 ? new RB(sx, sy, sz, 2, rad) : new T.BoxGeometry(sx, sy, sz), m); e.position.set(x, y, z); parent.add(e); return e; };
+    const cyl = (r0, r1, h, m, x, y, z, axis = 'y', parent = G, seg = 32, openEnd = false) => { const e = new T.Mesh(new T.CylinderGeometry(r0, r1, h, seg, 1, openEnd), m); e.position.set(x, y, z); if (axis === 'x') e.rotation.z = Math.PI / 2; if (axis === 'z') e.rotation.x = Math.PI / 2; parent.add(e); return e; };
+    const sph = (r, m, x, y, z, parent = G) => { const e = new T.Mesh(new T.SphereGeometry(r, 18, 14), m); e.position.set(x, y, z); parent.add(e); return e; };
+    const lathe3 = (pts, m, x, y, z, parent = G, seg = 40) => { const e = new T.Mesh(new T.LatheGeometry(pts.map(([a, b]) => new T.Vector2(a * k, b * k)), seg), m); e.position.set(x, y, z); parent.add(e); return e; };
+    const tube3 = (pts, r, m, parent = G) => { const e = new T.Mesh(new T.TubeGeometry(new T.CatmullRomCurve3(pts.map(([a, b, c]) => new T.Vector3(a * k, b * k, c * k))), 48, r * k, 12), m); parent.add(e); return e; };
+    const piv = (x, y, z, parent = G) => { const p = new T.Group(); p.position.set(x, y, z); parent.add(p); return p; };
+    const feet = (pts, h = 0.025, r = 0.016) => pts.forEach(([a, c]) => cyl(r * k, r * 1.2 * k, h * k, black, a * k, h * k / 2, c * k));
+    const hollow = (u0, v0, u1, v1, dz, th, outer, inner, parent = G) => { // a cabinet open at the front: back, sides, top and bottom, lined inside
+      const w = (u1 - u0) * k, h = (v1 - v0) * k, d = dz * k, t2 = th * k, cx = (u0 + u1) / 2 * k, cy = (v0 + v1) / 2 * k, bz = D / 2 - d;
+      box(w, h, t2, outer, cx, cy, bz + t2 / 2, parent, 0.05); box(t2, h, d, outer, u0 * k + t2 / 2, cy, bz + d / 2, parent, 0.05); box(t2, h, d, outer, u1 * k - t2 / 2, cy, bz + d / 2, parent, 0.05);
+      box(w, t2, d, outer, cx, v1 * k - t2 / 2, bz + d / 2, parent, 0.05); box(w, t2, d, outer, cx, v0 * k + t2 / 2, bz + d / 2, parent, 0.05);
+      if (inner) { const li = new T.Mesh(new T.BoxGeometry(w - t2 * 2.2, h - t2 * 2.2, d - t2), inner); li.material.side = T.BackSide; li.position.set(cx, cy, bz + t2 + (d - t2) / 2 + 0.001); parent.add(li); }
+    };
+    const anim = []; // what moves: called with the time in seconds
+    const plate = (w, h, th, hole, m, x, y, z, parent = G) => { // a flat panel with an opening cut through it (a round door hole, a window)
+      const sh = new T.Shape(), r0 = Math.min(w, h) * 0.04; sh.moveTo(-w / 2 + r0, -h / 2); sh.lineTo(w / 2 - r0, -h / 2); sh.quadraticCurveTo(w / 2, -h / 2, w / 2, -h / 2 + r0); sh.lineTo(w / 2, h / 2 - r0); sh.quadraticCurveTo(w / 2, h / 2, w / 2 - r0, h / 2); sh.lineTo(-w / 2 + r0, h / 2); sh.quadraticCurveTo(-w / 2, h / 2, -w / 2, h / 2 - r0); sh.lineTo(-w / 2, -h / 2 + r0); sh.quadraticCurveTo(-w / 2, -h / 2, -w / 2 + r0, -h / 2);
+      const hp = new T.Path(); if (hole[0] === 'c') hp.absarc(hole[1], hole[2], hole[3], 0, Math.PI * 2, true); else { const [, x0, y0, x1, y1] = hole; hp.moveTo(x0, y0); hp.lineTo(x0, y1); hp.lineTo(x1, y1); hp.lineTo(x1, y0); hp.lineTo(x0, y0); } sh.holes.push(hp);
+      const g = new T.ExtrudeGeometry(sh, { depth: th, bevelEnabled: true, bevelSize: th * 0.3, bevelThickness: th * 0.3, bevelSegments: 2, curveSegments: 48 }); g.translate(0, 0, -th / 2);
+      const e = new T.Mesh(g, m); e.position.set(x, y, z); parent.add(e); return e; };
+    const fz = D / 2; // the front face
+
+    if (kind === 'fridge') {
+      feet([[-0.38, 0.3], [0.38, 0.3], [-0.38, -0.3], [0.38, -0.3]]);
+      const liner = M('#f4f6f8', 0.6);
+      hollow(-0.45, 0.62, 0.45, 1.78, 0.72, 0.035, steel, liner); box(W, 0.59 * k, D - 0.02 * k, steel, 0, 0.325 * k, -0.01 * k, G, 0.04);
+      [0.98, 1.22, 1.46].forEach((v) => { const sh = box(0.8 * k, 0.012 * k, 0.6 * k, glassM('#cfe6f3', 0.5), 0, v * k, -0.02 * k, G, 0.1); sh.userData.keepOpacity = 0.5; });
+      [-0.2, 0.2].forEach((u) => { const c = box(0.37 * k, 0.2 * k, 0.55 * k, glassM('#eaf3f8', 0.55), u * k, 0.76 * k, -0.04 * k, G, 0.08); c.userData.keepOpacity = 0.55; });
+      const light = box(0.16 * k, 0.025 * k, 0.06 * k, lit('#fff6c8', 1.2), 0, 1.74 * k, -0.1 * k);
+      box(W - 0.01 * k, 0.58 * k, 0.04 * k, steel, 0, 0.325 * k, fz + 0.01 * k, G, 0.08); cyl(0.012 * k, 0.012 * k, 0.6 * k, chrome, 0, 0.5 * k, fz + 0.065 * k, 'x');
+      [-1, 1].forEach((sd) => { // each French door turns on its hinge at the outside edge; opened, it swings wide
+        const p = piv(sd * W / 2, 0, fz + 0.012 * k), w2 = W / 2 - 0.006 * k;
+        box(w2, 1.15 * k, 0.045 * k, steel, -sd * w2 / 2, 1.2 * k, 0.022 * k, p, 0.06);
+        const hx = -sd * (w2 - 0.045 * k); cyl(0.012 * k, 0.012 * k, 0.76 * k, chrome, hx, 1.17 * k, 0.085 * k, 'y', p); [0.8, 1.54].forEach((v) => cyl(0.008 * k, 0.008 * k, 0.04 * k, chrome, hx, v * k, 0.063 * k, 'z', p));
+        [0.85, 1.15, 1.45].forEach((v) => { const b = box(w2 * 0.8, 0.08 * k, 0.07 * k, glassM('#e8f2f8', 0.6), -sd * w2 / 2, v * k, -0.04 * k, p, 0.1); b.userData.keepOpacity = 0.6; });
+        if (sd < 0) { box(0.24 * k, 0.4 * k, 0.02 * k, M('#33383f', 0.4), -sd * 0.205 * k, 1.22 * k, 0.05 * k, p, 0.1); box(0.16 * k, 0.05 * k, 0.01 * k, lit('#64d0f5', 0.6), -sd * 0.205 * k, 1.37 * k, 0.062 * k, p); }
+        if (open) p.rotation.y = sd * 1.9;
+      });
+      if (open) anim.push((tm) => { light.material.emissiveIntensity = 1 + Math.sin(tm * 2) * 0.15; });
+    } else if (kind === 'washer') {
+      feet([[-0.25, 0.25], [0.25, 0.25], [-0.25, -0.25], [0.25, -0.25]]);
+      hollow(-0.3, 0.025, 0.3, 0.85, 0.58, 0.02, steel, M('#3b4048', 0.6)); const body = plate(W, 0.825 * k, 0.02 * k, ['c', 0, -0.0375 * k, 0.18 * k], steel, 0, 0.4375 * k, fz - 0.01 * k);
+      box(0.18 * k, 0.065 * k, 0.02 * k, MX('#d6dadf', 0.3, 0.4), -0.185 * k, 0.778 * k, fz + 0.006 * k, G, 0.15); cyl(0.032 * k, 0.032 * k, 0.025 * k, chrome, -0.035 * k, 0.778 * k, fz + 0.012 * k, 'z');
+      box(0.21 * k, 0.055 * k, 0.012 * k, M('#14181e', 0.3), 0.145 * k, 0.778 * k, fz + 0.004 * k, G, 0.1); box(0.1 * k, 0.026 * k, 0.004 * k, lit('#ff9a3c', 0.8), 0.11 * k, 0.778 * k, fz + 0.011 * k);
+      box(0.1 * k, 0.08 * k, 0.012 * k, steel, 0.22 * k, 0.09 * k, fz + 0.004 * k, G, 0.1);
+      const dr = piv(0, 0.4 * k, fz - 0.33 * k); // the drum: a steel tub with holes and three paddles, turning on its axle
+      const tub = new T.Mesh(new T.CylinderGeometry(0.17 * k, 0.17 * k, 0.3 * k, 40, 1, true), MX('#a3aab2', 0.3, 0.7)); tub.material = tub.material.clone(); tub.material.side = T.DoubleSide; tub.rotation.x = Math.PI / 2; tub.position.z = 0.15 * k; dr.add(tub);
+      cyl(0.17 * k, 0.17 * k, 0.01 * k, MX('#8d949c', 0.35, 0.6), 0, 0, 0, 'z', dr);
+      for (let i = 0; i < 3; i++) { const pd = box(0.05 * k, 0.03 * k, 0.28 * k, MX('#c3c8ce', 0.3, 0.6), 0, 0, 0.15 * k, dr, 0.3); const a = i * 2.094; pd.position.x = Math.cos(a) * 0.15 * k; pd.position.y = Math.sin(a) * 0.15 * k; pd.rotation.z = a + Math.PI / 2; }
+      [['#5b8fd6', -0.07, -0.08], ['#e85d75', 0.06, -0.09], ['#f4c542', 0.0, -0.11]].forEach(([c, a, b]) => { const cl = sph(0.055 * k, M(c, 0.9), a * k, b * k, 0.14 * k, dr); cl.scale.set(1.3, 0.7, 1); });
+      const dp = piv(-0.215 * k, 0.4 * k, fz + 0.015 * k); // the round door, hinged at the left
+      const ring = new T.Mesh(new T.TorusGeometry(0.19 * k, 0.025 * k, 16, 48), chrome); ring.position.x = 0.215 * k; dp.add(ring);
+      const gl = cyl(0.17 * k, 0.15 * k, 0.03 * k, glassM('#8fb0c8', 0.35), 0.215 * k, 0, -0.01 * k, 'z', dp); gl.userData.keepOpacity = 0.35;
+      box(0.025 * k, 0.07 * k, 0.025 * k, chrome, 0.41 * k, 0, 0.01 * k, dp);
+      if (open) dp.rotation.y = -1.6;
+      anim.push((tm) => { dr.rotation.z = tm * 2.6; });
+      void body;
+    } else if (kind === 'microwave') {
+      feet([[-0.2, 0.15], [0.2, 0.15], [-0.2, -0.15], [0.2, -0.15]], 0.012, 0.014);
+      const warm = M('#e9cf9f', 0.6, { glow: '#ffcf80', gi: 0.35 });
+      hollow(-0.25, 0.012, 0.11, 0.3, 0.38, 0.018, steel, warm); box(0.14 * k, 0.288 * k, D, steel, 0.18 * k, 0.156 * k, 0, G, 0.05);
+      box(0.075 * k, 0.035 * k, 0.006 * k, M('#11161c', 0.3), 0.18 * k, 0.255 * k, fz + 0.002 * k); box(0.055 * k, 0.018 * k, 0.003 * k, lit('#7cf08c', 0.7), 0.18 * k, 0.255 * k, fz + 0.006 * k);
+      for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) box(0.018 * k, 0.014 * k, 0.008 * k, plastic, (0.155 + i * 0.025) * k, (0.155 + j * 0.024) * k, fz + 0.003 * k, G, 0.3);
+      cyl(0.03 * k, 0.03 * k, 0.025 * k, chrome, 0.18 * k, 0.08 * k, fz + 0.012 * k, 'z');
+      const tt = piv(-0.07 * k, 0.04 * k, 0); // the glass turntable, a bowl of soup on it, turning
+      const pl = cyl(0.13 * k, 0.13 * k, 0.006 * k, glassM('#f2f6f8', 0.6), 0, 0, 0, 'y', tt); pl.userData.keepOpacity = 0.6;
+      lathe3([[0, 0], [0.04, 0], [0.055, 0.02], [0.062, 0.05], [0.058, 0.05], [0.05, 0.022], [0, 0.006]], M('#e85d4a', 0.4, { clear: true }), 0.03 * k, 0.003 * k, 0, tt);
+      cyl(0.056 * k, 0.056 * k, 0.004 * k, M('#f6a64a', 0.6), 0.03 * k, 0.045 * k, 0, 'y', tt);
+      const lamp = sph(0.012 * k, lit('#fff2c0', 1.4), 0.09 * k, 0.27 * k, 0.05 * k);
+      const dp = piv(-0.25 * k, 0.156 * k, fz + 0.01 * k); // the door, hinged at the left, its window see-through
+      const dw = 0.36 * k; plate(dw, 0.288 * k, 0.02 * k, ['r', -0.15 * k, -0.11 * k, 0.13 * k, 0.11 * k], steel, dw / 2, 0, 0, dp);
+      const win = box(0.27 * k, 0.22 * k, 0.024 * k, glassM('#2a3440', 0.55), dw / 2 - 0.02 * k, 0, 0.002 * k, dp, 0.05); win.userData.keepOpacity = 0.55;
+      cyl(0.008 * k, 0.008 * k, 0.2 * k, chrome, dw - 0.015 * k, 0, 0.025 * k, 'y', dp);
+      if (open) dp.rotation.y = -1.7;
+      anim.push((tm) => { tt.rotation.y = tm * 0.9; lamp.material.emissiveIntensity = 1.2 + Math.sin(tm * 9) * 0.15; });
+    } else if (kind === 'blender') {
+      box(0.175 * k, 0.012 * k, 0.175 * k, black, 0, 0.006 * k, 0, G, 0.2);
+      const base = new T.Mesh(new T.CylinderGeometry(0.068 * k, 0.088 * k, 0.12 * k, 4, 1), steel); base.rotation.y = Math.PI / 4; base.position.y = 0.072 * k; G.add(base);
+      cyl(0.024 * k, 0.024 * k, 0.02 * k, chrome, 0, 0.075 * k, 0.07 * k, 'z'); [-0.04, -0.02, 0, 0.02, 0.04].forEach((u) => sph(0.006 * k, plastic, u * k, 0.03 * k, 0.083 * k));
+      cyl(0.058 * k, 0.062 * k, 0.026 * k, chrome, 0, 0.145 * k, 0);
+      const juice = lathe3([[0, 0.162], [0.047, 0.162], [0.066, 0.3], [0, 0.3]], M('#f0b84a', 0.5, { clear: true }), 0, 0, 0);
+      const jar = lathe3([[0.05, 0.158], [0.077, 0.39], [0.074, 0.39], [0.047, 0.162]], glassM('#e3eef5', 0.3), 0, 0, 0); jar.userData.keepOpacity = 0.3; jar.material.side = T.DoubleSide;
+      const hnd = tube3([[0.07, 0.36, 0], [0.115, 0.35, 0], [0.118, 0.22, 0], [0.065, 0.2, 0]], 0.009, glassM('#e3eef5', 0.55)); hnd.userData.keepOpacity = 0.55;
+      cyl(0.082 * k, 0.08 * k, 0.025 * k, black, 0, 0.402 * k, 0); cyl(0.025 * k, 0.025 * k, 0.02 * k, glassM('#cfd8de', 0.7), 0, 0.42 * k, 0);
+      const bl = piv(0, 0.172 * k, 0); [0, Math.PI / 2].forEach((a, i) => { const b = box(0.075 * k, 0.003 * k, 0.012 * k, chrome, 0, i * 0.006 * k, 0, bl, 0.1); b.rotation.y = a; b.rotation.z = i ? 0.3 : -0.3; });
+      anim.push((tm) => { bl.rotation.y = tm * 40; juice.rotation.y = tm * 4; });
+    } else if (kind === 'toaster') {
+      box(W + 0.01 * k, 0.03 * k, D + 0.01 * k, black, 0, 0.015 * k, 0, G, 0.25);
+      box(W, 0.17 * k, D, steel, 0, 0.115 * k, 0, G, 0.28);
+      const hot = M('#ff6a2a', 0.5, { glow: '#ff5a1a', gi: 1 });
+      [-0.035, 0.035].forEach((zz) => { box(0.24 * k, 0.004 * k, 0.03 * k, M('#1d1f23', 0.6), 0, 0.2 * k, zz * k, G, 0.2); box(0.22 * k, 0.003 * k, 0.034 * k, hot, 0, 0.198 * k, zz * k); box(0.2 * k, 0.07 * k, 0.018 * k, M('#e3b471', 0.85), 0, 0.2 * k, zz * k, G, 0.25); });
+      box(0.035 * k, 0.022 * k, 0.03 * k, black, W / 2 + 0.014 * k, 0.13 * k, 0, G, 0.25); cyl(0.013 * k, 0.013 * k, 0.012 * k, chrome, W / 2 + 0.004 * k, 0.06 * k, 0.03 * k, 'x');
+      anim.push((tm) => { hot.emissiveIntensity = 0.7 + Math.sin(tm * 2.2) * 0.3; });
+    } else if (kind === 'coffeemaker') {
+      box(W, 0.03 * k, D, steel, 0, 0.015 * k, 0, G, 0.2); cyl(0.07 * k, 0.07 * k, 0.006 * k, black, -0.01 * k, 0.032 * k, 0.04 * k);
+      box(W, 0.2 * k, 0.07 * k, black, 0, 0.13 * k, -D / 2 + 0.035 * k, G, 0.1);
+      box(W, 0.125 * k, D, steel, 0, 0.275 * k, 0, G, 0.12); box(W + 0.004 * k, 0.025 * k, D + 0.004 * k, black, 0, 0.348 * k, 0, G, 0.3);
+      box(0.004 * k, 0.15 * k, 0.025 * k, glassM('#a9d6f2', 0.7), W / 2 + 0.001 * k, 0.24 * k, -0.06 * k);
+      const carafe = piv(-0.01 * k, 0.036 * k, 0.04 * k);
+      const cof = lathe3([[0, 0], [0.065, 0], [0.078, 0.04], [0.074, 0.06], [0, 0.06]], M('#4a2a18', 0.3, { clear: true }), 0, 0.004 * k, 0, carafe);
+      const jug = lathe3([[0.065, 0], [0.082, 0.05], [0.075, 0.11], [0.055, 0.145], [0.053, 0.145], [0.073, 0.11], [0.08, 0.05], [0.063, 0.003]], glassM('#e3edf3', 0.3), 0, 0, 0, carafe); jug.userData.keepOpacity = 0.3; jug.material.side = T.DoubleSide;
+      tube3([[0.07, 0.125 + 0.036, 0.04], [0.115, 0.12 + 0.036, 0.04], [0.118, 0.04 + 0.036, 0.04], [0.08, 0.03 + 0.036, 0.04]], 0.009, black).position.x = -0.01 * k;
+      cyl(0.058 * k, 0.058 * k, 0.012 * k, black, 0, 0.15 * k, 0, 'y', carafe);
+      const drips = [0, 1, 2].map(() => sph(0.005 * k, M('#5b3521', 0.2, { clear: true }), -0.01 * k, 0.2 * k, 0.04 * k));
+      anim.push((tm) => { drips.forEach((d, i) => { const f = (tm * 1.3 + i / 3) % 1; d.position.y = (0.205 - f * 0.11) * k; }); cof.scale.y = 0.9 + ((tm * 0.05) % 0.2); });
+    } else if (kind === 'vacuum') {
+      box(0.3 * k, 0.05 * k, 0.24 * k, M('#33363b', 0.6), 0, 0.035 * k, 0.04 * k, G, 0.25); box(0.26 * k, 0.03 * k, 0.16 * k, steel, 0, 0.07 * k, 0.03 * k, G, 0.3);
+      [-1, 1].forEach((sd) => cyl(0.045 * k, 0.045 * k, 0.03 * k, black, sd * 0.16 * k, 0.045 * k, -0.08 * k, 'x'));
+      const roll = cyl(0.02 * k, 0.02 * k, 0.26 * k, M('#e0b23c', 0.8), 0, 0.022 * k, 0.12 * k, 'x');
+      const up = piv(0, 0.07 * k, -0.06 * k); up.rotation.x = -0.12;
+      cyl(0.08 * k, 0.085 * k, 0.06 * k, steel, 0, 0.04 * k, 0, 'y', up);
+      const bin = cyl(0.07 * k, 0.07 * k, 0.28 * k, glassM('#dfe9f0', 0.35), 0, 0.21 * k, 0, 'y', up); bin.userData.keepOpacity = 0.35;
+      cyl(0.065 * k, 0.065 * k, 0.06 * k, M('#8b8579', 0.95), 0, 0.105 * k, 0, 'y', up);
+      const cone = cyl(0.03 * k, 0.012 * k, 0.18 * k, glassM('#c9d3da', 0.6), 0, 0.24 * k, 0, 'y', up); cone.userData.keepOpacity = 0.6;
+      const swirl = piv(0, 0.2 * k, 0, up); for (let i = 0; i < 10; i++) { const a = i * 0.63, r = (0.025 + (i % 3) * 0.012) * k; sph(0.006 * k, M('#8b8579', 0.9), Math.cos(a) * r, (i % 4) * 0.02 * k, Math.sin(a) * r, swirl); }
+      cyl(0.075 * k, 0.075 * k, 0.07 * k, steel, 0, 0.385 * k, 0, 'y', up);
+      cyl(0.013 * k, 0.013 * k, 0.52 * k, steel, 0, 0.68 * k, 0, 'y', up);
+      const grip = new T.Mesh(new T.TubeGeometry(new T.CatmullRomCurve3([[0, 0.87], [-0.05, 0.93], [-0.03, 0.99], [0.03, 0.99], [0.05, 0.93], [0.012, 0.87]].map(([a, b]) => new T.Vector3(a * k, b * k, 0))), 40, 0.014 * k, 10), black); up.add(grip);
+      const hose = new T.Mesh(new T.TubeGeometry(new T.CatmullRomCurve3([[0.06, 0.04, 0.02], [0.11, 0.12, -0.02], [0.115, 0.42, -0.04], [0.08, 0.56, -0.03], [0.015, 0.58, 0]].map(([a, b, c]) => new T.Vector3(a * k, b * k, c * k))), 48, 0.014 * k, 10), black); up.add(hose);
+      anim.push((tm) => { roll.rotation.x = tm * 30; swirl.rotation.y = tm * 9; });
+    } else if (kind === 'aircon') {
+      [[-0.17, 0.13], [0.17, 0.13], [-0.17, -0.13], [0.17, -0.13]].forEach(([a, c]) => sph(0.022 * k, black, a * k, 0.022 * k, c * k));
+      box(W, 0.715 * k, D, steel, 0, 0.395 * k, 0, G, 0.12);
+      box(0.32 * k, 0.19 * k, 0.03 * k, M('#454b53', 0.5), 0, 0.6 * k, fz - 0.005 * k, G, 0.1);
+      const louvers = [0, 1, 2, 3].map((i) => { const p = piv(0, (0.53 + i * 0.043) * k, fz + 0.012 * k); box(0.3 * k, 0.026 * k, 0.006 * k, plastic, 0, 0, 0, p, 0.2); return p; });
+      box(0.1 * k, 0.012 * k, 0.004 * k, M('#9aa1a9', 0.4), 0, 0.43 * k, fz + 0.002 * k);
+      const hz = -D / 2; for (let i = 0; i < 9; i++) { const rg = new T.Mesh(new T.TorusGeometry(0.06 * k, 0.008 * k, 8, 24), plastic); rg.position.set(0, 0.42 * k, hz - i * 0.022 * k); G.add(rg); }
+      cyl(0.06 * k, 0.06 * k, 0.2 * k, plastic, 0, 0.42 * k, hz - 0.09 * k, 'z');
+      const cool = glassM('#9fd6f7', 0.5), puffs = [0, 1, 2, 3, 4, 5].map((i) => sph(0.025 * k, cool, ((i % 3) - 1) * 0.1 * k, 0.6 * k, fz));
+      anim.push((tm) => { louvers.forEach((p, i) => { p.rotation.x = Math.sin(tm * 1.2 + i * 0.2) * 0.35 - 0.2; }); puffs.forEach((p, i) => { const f = (tm * 0.5 + i / 6) % 1; p.position.z = fz + f * 0.35 * k; p.position.y = (0.6 + f * 0.12) * k; p.scale.setScalar(0.6 + f * 1.4); p.material.opacity = 0.5 * (1 - f); }); });
+      puffs.forEach((p) => { p.material = cool.clone(); p.userData.keepOpacity = 0.5; });
+    } else if (kind === 'fan') {
+      cyl(0.19 * k, 0.21 * k, 0.03 * k, steel, 0, 0.015 * k, 0); cyl(0.06 * k, 0.16 * k, 0.05 * k, steel, 0, 0.05 * k, 0);
+      cyl(0.015 * k, 0.015 * k, 0.75 * k, chrome, 0, 0.45 * k, 0);
+      const head = piv(0, 0.9 * k, 0); // the head turns from side to side; the blades spin
+      const mot = sph(0.07 * k, steel, 0, 0.05 * k, -0.07 * k, head); mot.scale.set(1, 1, 1.3); cyl(0.02 * k, 0.02 * k, 0.06 * k, chrome, 0, 0.05 * k, -0.01 * k, 'z', head);
+      const gz = 0.03 * k, gy = 0.05 * k, wire = MX('#c9ced4', 0.3, 0.6);
+      [0.225, 0.16, 0.09].forEach((r) => { const t3 = new T.Mesh(new T.TorusGeometry(r * k, (r > 0.2 ? 0.006 : 0.003) * k, 8, 64), wire); t3.position.set(0, gy, gz + 0.02 * k); head.add(t3); const t4 = t3.clone(); t4.position.z = gz - 0.03 * k; head.add(t4); });
+      for (let i = 0; i < 20; i++) { const a = i * Math.PI / 10; const sp = new T.Mesh(new T.CylinderGeometry(0.002 * k, 0.002 * k, 0.17 * k, 4), wire); sp.position.set(Math.cos(a) * 0.14 * k, gy + Math.sin(a) * 0.14 * k, gz + 0.02 * k); sp.rotation.z = a - Math.PI / 2; head.add(sp); }
+      const blades = piv(0, gy, gz - 0.005 * k, head);
+      for (let i = 0; i < 3; i++) { const b = sph(0.1 * k, M('#7fb7e6', 0.3, { clear: true }), 0, 0, 0, blades); b.scale.set(0.85, 0.45, 0.06); b.position.set(Math.cos(i * 2.094) * 0.11 * k, Math.sin(i * 2.094) * 0.11 * k, 0); b.rotation.set(0.35, 0, i * 2.094); }
+      cyl(0.035 * k, 0.03 * k, 0.03 * k, steel, 0, 0, 0.012 * k, 'z', blades);
+      anim.push((tm) => { blades.rotation.z = -tm * 22; head.rotation.y = Math.sin(tm * 0.4) * 0.6; });
+    } else if (kind === 'ricecooker') {
+      feet([[-0.1, 0.1], [0.1, 0.1], [-0.1, -0.1], [0.1, -0.1]], 0.012, 0.012);
+      lathe3([[0, 0.01], [0.13, 0.01], [0.15, 0.04], [0.152, 0.15], [0.14, 0.2], [0, 0.2]], M(col, 0.35, { clear: true }), 0, 0, 0, G, 48);
+      cyl(0.135 * k, 0.135 * k, 0.012 * k, MX('#b9bfc6', 0.3, 0.6), 0, 0.2 * k, 0);
+      box(0.1 * k, 0.07 * k, 0.03 * k, M('#e6e5df', 0.5), 0, 0.105 * k, 0.142 * k, G, 0.3); box(0.024 * k, 0.035 * k, 0.02 * k, M('#5b6068', 0.4), 0, 0.105 * k, 0.16 * k, G, 0.3);
+      const red = sph(0.008 * k, lit('#ff5a3c', 1), -0.03 * k, 0.155 * k, 0.142 * k); sph(0.008 * k, lit('#f6b23c', 0.3), 0.03 * k, 0.155 * k, 0.142 * k);
+      [-1, 1].forEach((sd) => box(0.03 * k, 0.03 * k, 0.05 * k, M('#5b6068', 0.4), sd * 0.16 * k, 0.16 * k, 0, G, 0.3));
+      cyl(0.12 * k, 0.12 * k, 0.01 * k, M('#fbfaf3', 0.9), 0, 0.195 * k, 0); // (the cooked rice, seen when it is open)
+      const lid = piv(0, 0.205 * k, -0.14 * k);
+      lathe3([[0, 0.065], [0.06, 0.06], [0.12, 0.03], [0.145, 0.0], [0, 0.0]], M(kitLight3(col), 0.3, { clear: true }), 0, 0, 0.14 * k, lid, 48);
+      box(0.12 * k, 0.018 * k, 0.03 * k, M('#5b6068', 0.4), 0, 0.075 * k, 0.14 * k, lid, 0.4); cyl(0.012 * k, 0.012 * k, 0.015 * k, M('#9aa1a9', 0.4), 0.05 * k, 0.065 * k, 0.12 * k, 'y', lid);
+      if (open) lid.rotation.x = -1.7;
+      const st = glassM('#ffffff', 0.6), puffs = [0, 1, 2, 3].map((i) => { const p = sph(0.025 * k, st.clone(), 0, 0.28 * k, 0); p.userData.keepOpacity = 0.6; return p; });
+      const vx = open ? 0 : 0.05 * k, vz = open ? 0 : -0.02 * k, vy = open ? 0.22 : 0.29;
+      anim.push((tm) => { red.material.emissiveIntensity = 0.6 + Math.sin(tm * 3) * 0.4; puffs.forEach((p, i) => { const f = (tm * 0.35 + i / 4) % 1; p.position.set(vx + Math.sin(f * 6 + i) * 0.02 * k, (vy + f * 0.2) * k, vz); p.scale.setScalar(0.5 + f * 1.5); p.material.opacity = 0.6 * (1 - f); }); });
+    }
+    if (anim.length && !s.still) G.userData.animate = (time) => anim.forEach((f) => f(time));
+    G.rotation.y = ({ x: Math.PI / 2, '-x': -Math.PI / 2, '-z': Math.PI, left: -Math.PI / 2, right: Math.PI / 2 })[s.facing] || 0;
   }
   return G;
 }

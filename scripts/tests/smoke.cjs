@@ -1052,6 +1052,36 @@ test('v320 Blender models and real materials: the book’s airplane and bicycle 
   } finally { await ctx.close(); }
 });
 
+test('v328 the appliance kit: ten home appliances drawn whole from the front, the side and open, built in 3D with their doors opening and their working parts moving; Cassie\'s appliance guide tells her how each looks and works; the book draws how a microwave works, a fridge in 3D, a washer flat, and all the home appliances', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 860 }, server: false, book: true, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, scale: process.env.SHOTS ? 2 : 1 });
+  const r = await page.evaluate(async () => {
+    const bk = await liveBookLoad(), m = await liveDrawLoad();
+    const kinds = ['fridge', 'washer', 'microwave', 'blender', 'toaster', 'coffeemaker', 'vacuum', 'aircon', 'fan', 'ricecooker'];
+    const flat = []; kinds.forEach((k) => ['front', 'side', 'open'].forEach((v) => { const sp = m.clean({ title: k, mode: '2d', parts: [{ id: 'a', label: k, say: k, color: '#888888', shapes: [{ t: 'appliance', kind: k, x: 200, y: 236, h: { fridge: 200, vacuum: 200, fan: 200, aircon: 180, washer: 170, microwave: 90 }[k] || 140, view: v }] }] }); const n = m.check(sp, 'draw a ' + k).filter((x) => /single line|plain circles|outside/.test(x)).length; if (n) flat.push(k + ' ' + v); }));
+    const guide = ['how does a refrigerator work', 'how does a washing machine work', 'how do microwaves heat food', 'how does a rice cooker work', 'how does an electric fan work', 'what is the vacuum of space', 'draw a lion'].map((q) => (m.applianceGuide(q).match(/kind "(\w+)"/) || [0, '-'])[1]).join(' ');
+    const book = [['how does a microwave work', 'microwave'], ['how does a microwave work in 3D', 'microwave'], ['home appliances', 'appliances'], ['home appliances in 3D', 'appliances'], ['refrigerator in 3D', 'fridge'], ['washing machine', 'washer']].map(([q, key]) => { const raw = bk.fromBook(q, /3d/i.test(q)), sp = m.clean(raw); return { q, want: key, key: raw && raw.book, mode: sp.mode, issues: sp.mode === '3d' ? m.check3d(sp) : m.check(sp, q) }; });
+    const p2 = liveDrawPrompt(false), p3 = liveDrawPrompt(true);
+    return { flat, guide, book, notCmb: !bk.fromBook('the cosmic microwave background', false), prompt: /the appliance kit/.test(p2) && /the 3D appliance kit/.test(p3) && /"t":"appliance"/.test(p2) };
+  });
+  expect(!r.flat.length, 'every appliance from every side is a whole drawing, inside the picture: ' + r.flat.join(', '));
+  expect(r.guide === 'fridge washer microwave ricecooker fan - -', 'her appliance guide finds the appliance asked about, and not the vacuum of space: ' + r.guide);
+  for (const x of r.book) expect(x.key === x.want && !x.issues.length && x.mode === (/3d/i.test(x.q) ? '3d' : '2d'), `${x.q}: from the book, no problems: ` + JSON.stringify(x));
+  expect(r.notCmb, 'the cosmic microwave background is not a microwave oven');
+  expect(r.prompt, 'the AI is told the appliance kit, flat and in 3D');
+  // flat: the drums, blades and steam move
+  await page.evaluate(async () => { chatLog.innerHTML = ''; const bk = await liveBookLoad(); liveDrawFresh = false; renderMessage('assistant', '```cassie-draw\n' + JSON.stringify(bk.fromBook('home appliances', false)) + '\n```'); });
+  await page.waitForSelector('#chat-log .ld svg .ld-appliance', { timeout: 20000 });
+  const moving = await page.evaluate(() => document.querySelectorAll('#chat-log .ld svg .ld-appliance .ld-anim').length);
+  expect(moving >= 8, 'the appliances have moving parts: ' + moving);
+  if (process.env.SHOTS) { await page.waitForTimeout(1200); await page.locator('#chat-log .ld').scrollIntoViewIfNeeded(); await page.screenshot({ path: `${process.env.SHOTS}/v328-appliances.png` }); }
+  // in 3D: the microwave is built, open, its turntable turning
+  await page.evaluate(async () => { chatLog.innerHTML = ''; const bk = await liveBookLoad(); liveDrawFresh = false; renderMessage('assistant', '```cassie-draw\n' + JSON.stringify(bk.fromBook('how does a microwave work in 3D', true)) + '\n```'); });
+  await page.waitForSelector('#chat-log .ld .ld-stage canvas', { timeout: 20000 });
+  await page.waitForTimeout(1500);
+  if (process.env.SHOTS) { await page.locator('#chat-log .ld').scrollIntoViewIfNeeded(); await page.screenshot({ path: `${process.env.SHOTS}/v328-microwave-3d.png` }); }
+  expect(!errors.length, 'page errors: ' + errors.join(' | '));
+  await ctx.close();
+});
 test('v327 the animal kit: every animal drawn whole and lifelike, moving on its own (legs walk, tails swish, wings flap, fins sweep), flat and in 3D; Cassie\'s animal guide tells her each one\'s class, home, food and how it moves; the book draws the animal habitats, flat and as layers in 3D, each animal in its real home', async (b) => {
   const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 860 }, server: false, book: true, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, scale: process.env.SHOTS ? 2 : 1 });
   const r = await page.evaluate(async () => {
@@ -8100,7 +8130,7 @@ test('v310 drawings, accurate, fast and reliable: her drawing book shows a check
   const hits = await page.evaluate(async () => { const bk = await liveBookLoad(); return ['draw a bicycle', 'make a 3d bicycle', 'how do a bicycle’s gears shift', 'draw a motorbike', 'show me the human heart', 'draw a heart emoji', 'explain the water cycle', 'how does photosynthesis work', 'draw how a volcano erupts', 'how does a jet engine work', 'draw the solar system', 'build an atom in 3D', 'draw a bicycle for my science project', 'paano gumagana ang bisikleta'].map((q) => { const x = bk.fromBook(q, /3d/i.test(q)); return x ? x.book + ':' + x.mode : '-'; }).join(' '); });
   expect(hits === 'bicycle:2d bicycle:3d - - heart:2d - water:2d photosynthesis:2d volcano:2d jet:3d solar:3d atom:3d - bicycle:2d', 'the book answers the subject, the AI answers a narrow question: ' + hits);
   // every book drawing is whole, named and passes the app's own checks for a real figure
-  const book = await page.evaluate(async () => { const bk = await liveBookLoad(), m = await liveDrawLoad(); return bk.bookKeys().map((k) => { const raw = bk.fromBook({ bicycle: 'draw a bicycle', solar: 'the solar system', atom: 'an atom', heart: 'the heart', water: 'the water cycle', photosynthesis: 'photosynthesis', volcano: 'a volcano', jet: 'a jet engine', brain: 'the human brain', fridge: 'how does a fridge work', dragon: 'draw a dragon', earth: 'layers of the earth', animalcell: 'an animal cell', airplane: 'an airplane', camera: 'build a camera', washer: 'how does a washing machine work', circulation: 'draw the circulatory system', eye: 'the human eye', lungs: 'the lungs', skin: 'the layers of the skin', tree: 'the parts of a tree', flower: 'the parts of a flower', garden: 'draw a garden', weather: 'types of weather', car: 'how does a car work', habitats: 'animal habitats' }[k], false), sp = m.clean(raw); return [k, sp && sp.parts.length, sp && sp.parts.every((p) => p.label && p.say), sp ? (sp.mode === '2d' ? m.check(sp, sp.title).filter((x) => /leaves (it|them) out|used for more than one/.test(x)) : []) : ['none']]; }); });
+  const book = await page.evaluate(async () => { const bk = await liveBookLoad(), m = await liveDrawLoad(); return bk.bookKeys().map((k) => { const raw = bk.fromBook({ bicycle: 'draw a bicycle', solar: 'the solar system', atom: 'an atom', heart: 'the heart', water: 'the water cycle', photosynthesis: 'photosynthesis', volcano: 'a volcano', jet: 'a jet engine', brain: 'the human brain', fridge: 'how does a fridge work', dragon: 'draw a dragon', earth: 'layers of the earth', animalcell: 'an animal cell', airplane: 'an airplane', camera: 'build a camera', washer: 'how does a washing machine work', circulation: 'draw the circulatory system', eye: 'the human eye', lungs: 'the lungs', skin: 'the layers of the skin', tree: 'the parts of a tree', flower: 'the parts of a flower', garden: 'draw a garden', weather: 'types of weather', car: 'how does a car work', habitats: 'animal habitats', microwave: 'how does a microwave work', appliances: 'home appliances' }[k], false), sp = m.clean(raw); return [k, sp && sp.parts.length, sp && sp.parts.every((p) => p.label && p.say), sp ? (sp.mode === '2d' ? m.check(sp, sp.title).filter((x) => /leaves (it|them) out|used for more than one/.test(x)) : []) : ['none']]; }); });
   expect(book.every(([, n, named, bad]) => n >= 4 && named && !bad.length), 'every book drawing is whole and named, with every textbook part: ' + JSON.stringify(book));
   const b3 = await page.evaluate(async () => { const bk = await liveBookLoad(), m = await liveDrawLoad(); const sp = m.clean(bk.fromBook('make a 3d bicycle', true)); return { n: sp.parts.length, labels: sp.parts.map((p) => p.label).join(','), issues: m.check3d(sp) }; });
   expect(b3.n === 11 && /Brakes/.test(b3.labels) && !b3.issues.length, 'the 3D bicycle keeps all 11 parts (brakes too) and passes the model checks: ' + JSON.stringify(b3));
