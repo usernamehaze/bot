@@ -7827,13 +7827,20 @@ test('v315 drawings: the book dragon is a solid illustrated animal; "make it 3D"
   for (let k = 0; k < 60 && !calls.some((c) => /building a 3D model/.test(c.sys)); k++) await page.waitForTimeout(250);
   const c3 = calls.find((c) => /building a 3D model/.test(c.sys));
   expect(c3 && /blender/i.test(c3.user) && !/3D please/.test(c3.user), '"3D please" asks for the blender in 3D: ' + (c3 ? c3.user.slice(0, 200) : 'no 3D call'));
-  // asked in 3D, something soft or a process is built in 3D, not drawn flat (the book's flat heart is not used)
+  // asked in 3D, the heart is shown in 3D, not drawn flat: (v321) the book's real 3D heart (made from the Labs' scanned
+  // body), at once and with no AI; a soft subject the book does not have is still built in 3D by the AI
   await page.evaluate(() => { chatLog.innerHTML = ''; state.messages = []; });
   calls.length = 0;
   await page.fill('#prompt-input', 'show me the human heart in 3D'); await page.click('#send-btn');
+  await page.waitForFunction(() => document.querySelector('#chat-log .ld .ld-stage[data-model]'), null, { timeout: 40004 });
+  const h3 = await page.evaluate(() => { const l = document.querySelector('#chat-log .ld'); return { mode: l.querySelector('.ld-stage') ? '3d' : '2d', model: l.querySelector('.ld-stage').dataset.model }; });
+  expect(h3.mode === '3d' && !calls.some((c) => /explains by DRAWING/.test(c.sys)), 'the heart asked in 3D is shown in 3D from the book, no AI: ' + JSON.stringify(h3));
+  await page.evaluate(() => { chatLog.innerHTML = ''; state.messages = []; });
+  calls.length = 0;
+  await page.fill('#prompt-input', 'show me a jellyfish in 3D'); await page.click('#send-btn');
   for (let k = 0; k < 60 && !calls.some((c) => /explains by DRAWING/.test(c.sys)); k++) await page.waitForTimeout(250);
   const h = calls.find((c) => /explains by DRAWING/.test(c.sys));
-  expect(h && /building a 3D model/.test(h.sys) && /spheres, capsules and lathes/.test(h.sys) && !/so draw it flat/.test(h.sys), 'the heart asked in 3D is built in 3D: ' + (h ? h.sys.slice(0, 160) : 'no call'));
+  expect(h && /building a 3D model/.test(h.sys) && /spheres, capsules and lathes/.test(h.sys) && !/so draw it flat/.test(h.sys), 'a soft thing asked in 3D is built in 3D: ' + (h ? h.sys.slice(0, 160) : 'no call'));
   expect(!errors.length, 'page errors: ' + errors.join(' | '));
   await ctx.close();
 });
@@ -7973,7 +7980,7 @@ test('v310 drawings, accurate, fast and reliable: her drawing book shows a check
   const hits = await page.evaluate(async () => { const bk = await liveBookLoad(); return ['draw a bicycle', 'make a 3d bicycle', 'how do a bicycle’s gears shift', 'draw a motorbike', 'show me the human heart', 'draw a heart emoji', 'explain the water cycle', 'how does photosynthesis work', 'draw how a volcano erupts', 'how does a jet engine work', 'draw the solar system', 'build an atom in 3D', 'draw a bicycle for my science project', 'paano gumagana ang bisikleta'].map((q) => { const x = bk.fromBook(q, /3d/i.test(q)); return x ? x.book + ':' + x.mode : '-'; }).join(' '); });
   expect(hits === 'bicycle:2d bicycle:3d - - heart:2d - water:2d photosynthesis:2d volcano:2d jet:3d solar:3d atom:3d - bicycle:2d', 'the book answers the subject, the AI answers a narrow question: ' + hits);
   // every book drawing is whole, named and passes the app's own checks for a real figure
-  const book = await page.evaluate(async () => { const bk = await liveBookLoad(), m = await liveDrawLoad(); return bk.bookKeys().map((k) => { const raw = bk.fromBook({ bicycle: 'draw a bicycle', solar: 'the solar system', atom: 'an atom', heart: 'the heart', water: 'the water cycle', photosynthesis: 'photosynthesis', volcano: 'a volcano', jet: 'a jet engine', brain: 'the human brain', fridge: 'how does a fridge work', dragon: 'draw a dragon', earth: 'layers of the earth', animalcell: 'an animal cell', airplane: 'an airplane', camera: 'build a camera', washer: 'how does a washing machine work', circulation: 'draw the circulatory system' }[k], false), sp = m.clean(raw); return [k, sp && sp.parts.length, sp && sp.parts.every((p) => p.label && p.say), sp ? (sp.mode === '2d' ? m.check(sp, sp.title).filter((x) => /leaves (it|them) out|used for more than one/.test(x)) : []) : ['none']]; }); });
+  const book = await page.evaluate(async () => { const bk = await liveBookLoad(), m = await liveDrawLoad(); return bk.bookKeys().map((k) => { const raw = bk.fromBook({ bicycle: 'draw a bicycle', solar: 'the solar system', atom: 'an atom', heart: 'the heart', water: 'the water cycle', photosynthesis: 'photosynthesis', volcano: 'a volcano', jet: 'a jet engine', brain: 'the human brain', fridge: 'how does a fridge work', dragon: 'draw a dragon', earth: 'layers of the earth', animalcell: 'an animal cell', airplane: 'an airplane', camera: 'build a camera', washer: 'how does a washing machine work', circulation: 'draw the circulatory system', eye: 'the human eye', lungs: 'the lungs', skin: 'the layers of the skin' }[k], false), sp = m.clean(raw); return [k, sp && sp.parts.length, sp && sp.parts.every((p) => p.label && p.say), sp ? (sp.mode === '2d' ? m.check(sp, sp.title).filter((x) => /leaves (it|them) out|used for more than one/.test(x)) : []) : ['none']]; }); });
   expect(book.every(([, n, named, bad]) => n >= 4 && named && !bad.length), 'every book drawing is whole and named, with every textbook part: ' + JSON.stringify(book));
   const b3 = await page.evaluate(async () => { const bk = await liveBookLoad(), m = await liveDrawLoad(); const sp = m.clean(bk.fromBook('make a 3d bicycle', true)); return { n: sp.parts.length, labels: sp.parts.map((p) => p.label).join(','), issues: m.check3d(sp) }; });
   expect(b3.n === 11 && /Brakes/.test(b3.labels) && !b3.issues.length, 'the 3D bicycle keeps all 11 parts (brakes too) and passes the model checks: ' + JSON.stringify(b3));

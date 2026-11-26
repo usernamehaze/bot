@@ -30,12 +30,13 @@ vec3 t_perturb(vec3 surf, vec3 n, vec2 dh, float face) {
 
 // kind: a body layer id (skeletal, muscular, …) or 'cell'. extra: more material settings; film: true makes a
 // see-through shell (a membrane) clearer in the middle and thicker towards its edges, like skin is.
-export function tissueMaterial(THREE, kind, { film = false, ...extra } = {}) {
+// scale: how many of the body's metres one unit of the model is (Cassie's drawing-book organs are made bigger: v321)
+export function tissueMaterial(THREE, kind, { film = false, scale = 1, ...extra } = {}) {
   const [roughness, clearcoat, clearcoatRoughness, sheen, sheenColor, freq, bump, vary, stretch] = LOOK[kind] || LOOK.visceral;
   const skin = kind === 'regions' || film, edge = kind === 'regions' ? '0.7' : '0.92';
   const m = new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness, clearcoat, clearcoatRoughness, sheen, sheenColor: new THREE.Color(sheenColor), sheenRoughness: 0.55, ...extra });
   m.onBeforeCompile = (sh) => {
-    sh.uniforms.tFreq = { value: freq }; sh.uniforms.tBump = { value: bump }; sh.uniforms.tVary = { value: vary }; sh.uniforms.tStretch = { value: stretch };
+    sh.uniforms.tFreq = { value: freq * scale }; sh.uniforms.tBump = { value: bump }; sh.uniforms.tVary = { value: vary }; sh.uniforms.tStretch = { value: stretch };
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vObj;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvObj = position;');
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>\nvarying vec3 vObj; uniform float tFreq; uniform float tBump; uniform float tVary; uniform float tStretch;${NOISE}`)

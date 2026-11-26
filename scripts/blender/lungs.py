@@ -1,56 +1,62 @@
-"""Cassie's drawing book: the lungs in 3D (python3 lungs.py with the bpy module). The trachea with its cartilage rings,
-the two main bronchi branching three more times into bronchioles that end in clusters of air sacs (alveoli), the right
-lung (three lobes) and the left lung (two lobes, with the notch for the heart), see-through so the airways show, over
-the dome of the diaphragm. Seen from the front: the body's right lung is on the viewer's left. Writes web/models/lungs.glb."""
-import math, os, sys, random
+"""Cassie's drawing book: the lungs in 3D, the real ones. The shapes are the lungs of the Labs' scanned body
+(Z-Anatomy / BodyParts3D, made from scans of a real adult; CC BY-SA 4.0: web/explore/body), made smooth in Blender:
+the trachea, the whole bronchial tree down to the segmental bronchi, the right lung's three lobes and the left lung's
+two (with the notch for the heart), see-through so the airways show, over the dome of the diaphragm. At the end of
+each segmental bronchus, a cluster of air sacs (alveoli), drawn bigger than life so they can be seen.
+   node scan_extract.mjs lungs.json 'lungs*' 'tracheobronchial_tree*' diaphragm
+   python3 lungs.py lungs.json     (the bpy module) writes web/models/lungs.glb"""
+import math, os, random, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import *
 
+D = scan_load(sys.argv[1])
+LOBES_R = ["superior_lobe_of_right_lung", "middle_lobe_of_right_lung", "inferior_lobe_of_right_lung"]
+LOBES_L = ["superior_lobe_of_left_lung", "inferior_lobe_of_left_lung"]
+AIRWAYS = [k for k in D if "bronch" in k]
+f = scan_frame(D, LOBES_R + LOBES_L + ["trachea"], 4.6, (0.0, 0.1, 0.0))
+
 reset(); random.seed(7)
-TRACH = material("trachea", srgb("#e0a090"), 0.0, 0.45, coat=0.3)
-RING = material("cartilage ring", srgb("#f2d2c4"), 0.0, 0.4, coat=0.4)
-BRONCH = material("bronchi", srgb("#8cc4e8"), 0.0, 0.35, coat=0.5)
-ALV = material("alveoli", srgb("#f3a6a6"), 0.0, 0.5, coat=0.3)
-LUNG = see_through(material("lung tissue", srgb("#e58a86"), 0.0, 0.5, coat=0.4), 0.42)
-DIA = material("diaphragm", srgb("#b8443c"), 0.0, 0.55, coat=0.2)
+TRACH = material("trachea", srgb("#e8d6cc"), 0.0, 0.42, coat=0.35)
+BRONCH = material("bronchi", srgb("#cfe0ee"), 0.0, 0.38, coat=0.45)
+ALV = material("alveoli", srgb("#ef9f9c"), 0.0, 0.48, coat=0.35)
+LUNG_R = see_through(material("right lung", srgb("#e59a94"), 0.0, 0.45, coat=0.4), 0.34)
+LUNG_L = see_through(material("left lung", srgb("#e2928e"), 0.0, 0.45, coat=0.4), 0.34)
+DIA = see_through(material("diaphragm", srgb("#b4483e"), 0.0, 0.5, coat=0.25), 0.62)
 
-# ---------- trachea with its C-shaped cartilage rings
-tr = part("trachea")
-sweep("trachea", [(0, 1.55, 0), (0, 2.4, 0.02), (0, 3.25, 0.05)], 0.22, TRACH, tr, seg=28, hollow=0.04)
-for k in range(12):
-    y = 1.65 + k * 0.13
-    torus(f"ring {k}", T(0, y, 0.01 + 0.04 * (y - 1.55)), (0, 0, 1), 0.225, 0.03, RING, tr, seg=40, tseg=8)
-# ---------- the bronchial tree: each branch splits in two, three times, and ends in a cluster of air sacs
-br = part("bronchi"); al = part("alveoli")
-def branch(p, d, length, r, depth, side):
-    q = tuple(p[k] + d[k] * length for k in range(3))
-    mid = tuple((p[k] + q[k]) / 2 + random.uniform(-0.04, 0.04) for k in range(3))
-    sweep(f"bronchus {depth} {p[0]:.2f} {p[1]:.2f}", [p, mid, q], lambda u: r * (1 - 0.25 * u), BRONCH, br, seg=14, per=4)
-    if depth == 0:
-        for j in range(6):  # the air sacs: a small grape-like cluster
-            o = tuple(q[k] + random.uniform(-0.06, 0.06) + d[k] * 0.06 for k in range(3))
-            ball(f"alveolus {q[0]:.2f} {q[1]:.2f} {j}", T(*o), 0.045, ALV, al, seg=10)
-        return
-    for turn in (-1, 1):
-        a = math.radians(32 * turn + random.uniform(-8, 8))
-        nd = (d[0] * math.cos(a) - d[1] * math.sin(a), d[0] * math.sin(a) + d[1] * math.cos(a), d[2] + random.uniform(-0.35, 0.35))
-        l = math.sqrt(sum(x * x for x in nd)); nd = tuple(x / l for x in nd)
-        branch(q, nd, length * 0.78, r * 0.68, depth - 1, side)
-for side in (1, -1):  # the main bronchi, to each lung (the right one shorter and steeper)
-    d = (side * 0.62, -0.78, 0.0); l = math.sqrt(d[0] ** 2 + d[1] ** 2); d = (d[0] / l, d[1] / l, 0)
-    branch((0, 1.55, 0), d, 0.78 if side < 0 else 0.9, 0.16, 3, side)
-# ---------- the lungs, see-through: rounded at the top (apex), wide and hollowed at the base over the diaphragm
-for side, pid in ((-1, "rightlung"), (1, "leftlung")):
-    pt = part(pid)
-    def bumps(u, v, side=side):
-        x, y = math.sin(v) * math.cos(u), math.cos(v)
-        k = 1.0 - 0.2 * max(0.0, -y) ** 3  # the base, hollowed over the diaphragm
-        if side > 0: k -= 0.22 * math.exp(-(((x + 0.9) ** 2) + (y + 0.25) ** 2) / 0.08)  # the cardiac notch on the left lung
-        return k
-    ellipsoid(pid, (side * 1.08, 0.3, 0.0), (1.05, 1.72, 0.9), LUNG, pt, seg=56, rings=40, bumps=bumps)
-# ---------- the diaphragm: a muscle dome under both lungs
-dp = part("diaphragm")
-shell("diaphragm", 2.4, 2.32, DIA, dp, centre=(0, -3.62, 0), axis=(0, 1, 0), th=(0.0, 0.78), seg=64, rings=16)
+scan_obj("trachea", D, ["trachea"], f, TRACH, part("trachea"), subdiv=2)
+br = part("bronchi")
+for k in AIRWAYS:
+    scan_obj(k, D, k, f, BRONCH, br, subdiv=2)
+rl, ll = part("rightlung"), part("leftlung")
+for k in LOBES_R: scan_obj(k, D, k, f, LUNG_R, rl, smooth=2, subdiv=1)
+for k in LOBES_L: scan_obj(k, D, k, f, LUNG_L, ll, smooth=2, subdiv=1)
+dia = scan_obj("diaphragm", D, ["diaphragm"], f, DIA, part("diaphragm"), smooth=1, subdiv=1)
+# only its dome under the lungs (not the long tendons, the crura, that run down the spine)
+import bmesh as _bm
+low = min(f(D[k]["pos"][i:i + 3])[1] for k in LOBES_R + LOBES_L for i in range(0, len(D[k]["pos"]), 3))
+bm = _bm.new(); bm.from_mesh(dia.data)
+_bm.ops.bisect_plane(bm, geom=bm.verts[:] + bm.edges[:] + bm.faces[:], dist=1e-6, plane_co=(0, 0, low - 0.25), plane_no=(0, 0, 1), clear_inner=True)
+bm.to_mesh(dia.data); bm.free(); dia.data.update()
 
+# ---------- air sacs at the far end of every segmental bronchus
+pts = lambda k: [f(D[k]["pos"][i:i + 3]) for i in range(0, len(D[k]["pos"]), 3)]
+tr = pts("trachea"); carina = min(tr, key=lambda p: p[1])
+al = part("alveoli")
+n = 0
+for k in AIRWAYS:
+    if "segmental" not in k: continue
+    tip = max(pts(k), key=lambda p: sum((p[j] - carina[j]) ** 2 for j in range(3)))
+    out = [tip[j] - carina[j] for j in range(3)]; L = math.sqrt(sum(x * x for x in out)); out = [x / L for x in out]
+    c = [tip[j] - out[j] * 0.03 for j in range(3)]  # (inside the lung, at the tip)
+    for s in range(9):
+        q = [c[j] + random.uniform(-0.07, 0.07) + out[j] * random.uniform(-0.04, 0.02) for j in range(3)]
+        bpy.ops.mesh.primitive_uv_sphere_add(segments=14, ring_count=9, radius=random.uniform(0.032, 0.046), location=T(*q))
+        o = bpy.context.active_object; o.name = f"alveolus {n}"; o.data.materials.append(ALV); o.parent = al
+        for p in o.data.polygons: p.use_smooth = True
+        n += 1
+print("alveoli", n)
+
+tissue(lambda ob: "visceral", 1 / f.per_metre)
+print("faces", sum(len(o.data.polygons) for o in bpy.data.objects if o.type == "MESH"))
 export(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "web", "models", "lungs.glb"))
 print("wrote lungs.glb")

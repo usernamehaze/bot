@@ -407,3 +407,84 @@ def vertex_material(name, roughness=0.5, coat=0.0, metallic=0.0):
     b.inputs["Roughness"].default_value = roughness; b.inputs["Metallic"].default_value = metallic
     if coat: b.inputs["Coat Weight"].default_value = coat
     return m
+
+# ---------- (v321) real anatomy: meshes from the Labs' scanned body (scan_extract.mjs), made smooth in Blender
+def scan_load(path):
+    import json as _j
+    return _j.load(open(path))
+
+def scan_frame(data, names, size=3.0, centre=(0.0, 0.0, 0.0)):
+    """A function from the scan's metres (y up, the same axes as Cassie's) to Cassie units: the named parts
+    together are `size` across at their biggest, centred on `centre`."""
+    lo, hi = [1e9] * 3, [-1e9] * 3
+    for n in names:
+        p = data[n]["pos"]
+        for i in range(0, len(p), 3):
+            for k in range(3): lo[k] = min(lo[k], p[i + k]); hi[k] = max(hi[k], p[i + k])
+    c = [(lo[k] + hi[k]) / 2 for k in range(3)]; s = size / max(hi[k] - lo[k] for k in range(3))
+    f = lambda q: tuple((q[k] - c[k]) * s + centre[k] for k in range(3))
+    f.per_metre = s  # (Cassie units in one real metre)
+    return f
+
+def apply_mods(ob):
+    dg = bpy.context.evaluated_depsgraph_get()
+    me = bpy.data.meshes.new_from_object(ob.evaluated_get(dg), preserve_all_data_layers=True, depsgraph=dg)
+    ob.modifiers.clear(); ob.data = me
+    return ob
+
+def scan_obj(name, data, keys, f, mat, parent, remesh=None, smooth=0, subdiv=1, weld_dist=1e-4):
+    """One smooth object from scan parts `keys`: welded, optionally remeshed (voxel size in Cassie units: a closed,
+    even surface) and relaxed (smooth = iterations), then subdivided (subdiv levels) and smooth shaded."""
+    verts, faces = [], []
+    for k in ([keys] if isinstance(keys, str) else keys):
+        if k not in data: continue
+        p, ix, o = data[k]["pos"], data[k]["idx"], len(verts)
+        verts += [T(*f(p[i:i + 3])) for i in range(0, len(p), 3)]
+        faces += [(ix[i] + o, ix[i + 1] + o, ix[i + 2] + o) for i in range(0, len(ix), 3)]
+    ob = mesh_obj(name, verts, faces, mat, parent)
+    weld(ob, weld_dist)
+    if remesh:
+        m = ob.modifiers.new("remesh", "REMESH"); m.mode = "VOXEL"; m.voxel_size = remesh; m.adaptivity = 0
+        try: m.use_smooth_shade = True
+        except Exception: pass
+        apply_mods(ob)
+    if smooth:
+        m = ob.modifiers.new("relax", "LAPLACIANSMOOTH"); m.iterations = smooth; m.lambda_factor = 0.6; m.use_volume_preserve = True
+        apply_mods(ob)
+    if subdiv:
+        m = ob.modifiers.new("subd", "SUBSURF"); m.levels = subdiv; m.render_levels = subdiv
+        apply_mods(ob)
+    if not ob.data.materials: ob.data.materials.append(mat)
+    for p in ob.data.polygons: p.use_smooth = True
+    return ob
+
+def decimate(ob, ratio):
+    m = ob.modifiers.new("dec", "DECIMATE"); m.ratio = ratio
+    return apply_mods(ob)
+
+def wrap(name, target, mat, parent, centre, radius, subdiv=6, rounds=3, relax=8):
+    """A closed surface in the shape of `target` (open scan patches): a ball round it, shrink-wrapped onto it a few
+    times with relaxing in between (so it does not fold where the shape curves in). Closed, so it can be cut."""
+    bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=subdiv, radius=radius, location=T(*centre))
+    ob = bpy.context.active_object; ob.name = name; ob.data.name = name
+    for r in range(rounds):
+        m = ob.modifiers.new("wrap", "SHRINKWRAP"); m.target = target; m.wrap_method = "NEAREST_SURFACEPOINT"
+        apply_mods(ob)
+        if relax and r < rounds - 1:
+            m = ob.modifiers.new("relax", "LAPLACIANSMOOTH"); m.iterations = relax; m.lambda_factor = 0.5; m.use_volume_preserve = False
+            apply_mods(ob)
+    m = ob.modifiers.new("relax", "CORRECTIVE_SMOOTH"); m.iterations = 6; m.smooth_type = "LENGTH_WEIGHTED"
+    try: m.use_only_smooth = True
+    except Exception: pass
+    apply_mods(ob)
+    ob.data.materials.clear(); ob.data.materials.append(mat); ob.parent = parent
+    for p in ob.data.polygons: p.use_smooth = True
+    return ob
+
+def tissue(kind_of, metres_per_unit):
+    """Mark every mesh with what living tissue it is (explore/tissue.js kinds: visceral, cardiovascular, nervous,
+    muscular, skeletal, regions), so the app gives it the Labs' look; kind_of(object) -> kind or None (glass, hair)."""
+    for ob in bpy.data.objects:
+        if ob.type != "MESH": continue
+        k = kind_of(ob)
+        if k: ob["tissue"] = k; ob["tissueScale"] = round(metres_per_unit, 5)

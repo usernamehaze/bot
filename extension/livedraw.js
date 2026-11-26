@@ -586,7 +586,7 @@ export async function render(host, rawSpec, opts = {}) {
   let mv = null; const mvHost = spec.mode === '3d' ? el('div', 'ld-mv') : null;
   const machineOn = async () => {
     if (mv) return mv;
-    let m = null; try { m = await import('./isoview.js?v=320'); } catch (e) { return null; }
+    let m = null; try { m = await import('./isoview.js?v=321'); } catch (e) { return null; }
     mv = m.machine(mvHost, spec, { dark: !lightPage() });
     if (mv) {
       const row = el('div', 'ld-mv-acts');
@@ -992,8 +992,9 @@ export async function snapshot(rawSpec) {
 
 // ---------- 3D models: built piece by piece ----------
 let three = null;
-let threeFrom = () => Promise.all([import('./explore/three.module.min.js'), import('./explore/OrbitControls.js'), import('./explore/RoundedBoxGeometry.js').catch(() => null), import('./explore/GLTFLoader.js').catch(() => null)])
-  .then(([T, oc, rb, gl]) => ({ T: Object.assign(Object.create(null), T, rb ? { RoundedBox: rb.RoundedBoxGeometry } : {}, gl ? { GLTFLoader: gl.GLTFLoader } : {}), OrbitControls: oc.OrbitControls }));
+let threeFrom = () => Promise.all([import('./explore/three.module.min.js'), import('./explore/OrbitControls.js'), import('./explore/RoundedBoxGeometry.js').catch(() => null), import('./explore/GLTFLoader.js').catch(() => null),
+  import('./explore/meshopt_decoder.module.js').catch(() => null), import('./explore/tissue.js').catch(() => null)])
+  .then(([T, oc, rb, gl, mo, ti]) => ({ T: Object.assign(Object.create(null), T, rb ? { RoundedBox: rb.RoundedBoxGeometry } : {}, gl ? { GLTFLoader: gl.GLTFLoader } : {}, mo ? { MeshoptDecoder: mo.MeshoptDecoder } : {}, ti ? { tissueMaterial: ti.tissueMaterial } : {}), OrbitControls: oc.OrbitControls }));
 const loadThree = () => (three || (three = threeFrom()));
 // (the Chrome extension keeps its own copy of three.js: it says where) useThree(() => Promise<{ T, OrbitControls }>)
 export function useThree(from) { threeFrom = from; three = null; }
@@ -1063,7 +1064,12 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
   // its name, so it is named, picked, faded, pulled apart and spun like a built one; with no Blender model (or no loader,
   // as in the extension), the part is built from its shapes as always
   let glb = null;
-  if (spec.glb && T.GLTFLoader) { try { glb = await new Promise((ok, no) => new T.GLTFLoader().load(new URL(spec.glb, import.meta.url).href, ok, undefined, no)); } catch (e) { glb = null; } }
+  if (spec.glb && T.GLTFLoader) {
+    try {
+      const loader = new T.GLTFLoader(); if (T.MeshoptDecoder) loader.setMeshoptDecoder(T.MeshoptDecoder); // (v321: the models are packed small, as the Labs' body is)
+      glb = await new Promise((ok, no) => loader.load(new URL(spec.glb, import.meta.url).href, ok, undefined, no));
+    } catch (e) { glb = null; }
+  }
   const glbPart = (id) => (glb ? glb.scene.getObjectByName(id) : null);
   stage.dataset.model = glb ? 'blender' : 'built'; // (which one this is: for the tests, and for anyone looking)
   const groups = spec.parts.map((p, i) => {
@@ -1073,7 +1079,17 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
     const fromBlender = glbPart(p.id);
     if (fromBlender) {
       const copy = fromBlender.clone(true); copy.position.set(0, 0, 0); copy.rotation.set(0, 0, 0); copy.scale.set(1, 1, 1); // (its parts keep their places in the model)
-      copy.traverse((m) => { if (m.isMesh) { m.material = m.material.clone(); m.material.transparent = true; m.material.side = T.DoubleSide; if (p.glow) { m.material.emissive = new T.Color(p.color); m.material.emissiveIntensity = .5; } } });
+      copy.traverse((m) => {
+        if (!m.isMesh) return;
+        const was = m.material, kind = m.userData && m.userData.tissue;
+        // (v321) living tissue looks as it does in the Labs' 3D body: a wet shine, fine detail in the surface, no two patches
+        // the same shade (explore/tissue.js); see-through parts (the cornea, the lens, the lungs) keep their own glass
+        if (kind && T.tissueMaterial && !(was.transmission > 0) && was.opacity >= 1) {
+          m.material = T.tissueMaterial(T, kind, { vertexColors: false, color: was.color.clone(), side: T.DoubleSide, transparent: true, scale: +m.userData.tissueScale || 1 });
+        } else m.material = was.clone();
+        m.material.transparent = true; m.material.side = T.DoubleSide;
+        if (p.glow) { m.material.emissive = new T.Color(p.color); m.material.emissiveIntensity = .5; }
+      });
       [...copy.children].forEach((ch) => { g.add(ch); const ax = ch.userData && ch.userData.spin; if (['x', 'y', 'z'].includes(ax)) made.push([{ t: 'disc', axis: ax }, ch]); });
     }
     for (const s of fromBlender ? [] : p.shapes) { const own = real && FINISH[s.finish] && s.finish !== p.finish ? finishMat(T, s.color && /^#[0-9a-f]{3,8}$/i.test(s.color) ? s.color : p.color, s.finish, { real, matte, glow: p.glow }) : mat; const m = shape3d(T, s, own, along, v3, AX); if (m) { g.add(m); made.push([s, m]); } }
