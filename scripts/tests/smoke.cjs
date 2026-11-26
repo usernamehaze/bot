@@ -1052,6 +1052,33 @@ test('v320 Blender models and real materials: the book’s airplane and bicycle 
   } finally { await ctx.close(); }
 });
 
+test('v326 the vehicle kit: 32 vehicles drawn whole, cars from the side, front, back and top; built in 3D the right way round with spinning wheels; Cassie\'s vehicle guide tells her how each looks from every side, how it works and where its parts are; the book draws how a car works, flat and in 3D, every part in its place', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 860 }, server: false, book: true, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, scale: process.env.SHOTS ? 2 : 1 });
+  const r = await page.evaluate(async () => {
+    const bk = await liveBookLoad(), m = await liveDrawLoad();
+    const kinds = ['sedan', 'sports', 'hatchback', 'suv', 'pickup', 'van', 'taxi', 'police', 'classic', 'ambulance', 'bus', 'schoolbus', 'truck', 'dumptruck', 'firetruck', 'tractor', 'excavator', 'bulldozer', 'train', 'bicycle', 'motorcycle', 'scooter', 'airplane', 'helicopter', 'boat', 'ship', 'sailboat', 'rowboat', 'submarine', 'rocket', 'balloon', 'drone'];
+    const flat = kinds.map((k) => { const sp = m.clean({ title: k, mode: '2d', parts: [{ id: 'v', label: k, say: k, color: '#888888', shapes: [{ t: 'vehicle', kind: k, x: 200, y: 200, w: k === 'rocket' || k === 'balloon' ? 90 : 160 }] }, { id: 'g', label: 'Ground', say: 'The ground.', color: '#888888', shapes: [{ t: 'line', x1: 20, y1: 214, x2: 380, y2: 214 }, { t: 'line', x1: 20, y1: 220, x2: 380, y2: 220 }] }] }); return [k, m.check(sp, 'draw a ' + k).filter((x) => /single line|plain circles|outside/.test(x)).length]; }).filter(([, n]) => n);
+    const views = ['side', 'front', 'back', 'top'].map((v) => m.clean({ title: 'car', mode: '2d', parts: [{ id: 'c', label: 'Car', say: 'A car.', color: '#888888', shapes: [{ t: 'vehicle', kind: 'sedan', view: v, x: 200, y: 160, w: 160 }] }] }).parts[0].shapes[0].view);
+    const guide = ['how does a car work', 'how does an electric car work', 'how do airplanes fly', 'how does a helicopter fly', 'how does a submarine dive', 'what is photosynthesis'].map((q) => (m.vehicleGuide(q).match(/kind "(\w+)"/) || [0, '-'])[1]).join(' ');
+    const car = ['how does a car work', 'how does a car work in 3D'].map((q) => { const raw = bk.fromBook(q, /3d/i.test(q)), sp = m.clean(raw); return { q, key: raw && raw.book, mode: sp.mode, parts: sp.parts.map((p) => p.id).join(','), issues: m.check(sp, q) }; });
+    const p2 = liveDrawPrompt(false), p3 = liveDrawPrompt(true);
+    return { flat, views, guide, car, prompt: /the vehicle kit/.test(p2) && /the 3D vehicle kit/.test(p3) && /"view":"side\|front\|back\|top"/.test(p2) };
+  });
+  expect(!r.flat.length, 'every vehicle is a whole drawing, inside the picture: ' + JSON.stringify(r.flat));
+  expect(r.views.join() === 'side,front,back,top', 'a car from every side: ' + r.views.join());
+  expect(r.guide === 'sedan sedan airplane helicopter submarine -', 'her vehicle guide finds the vehicle asked about (an electric car before a car): ' + r.guide);
+  for (const x of r.car) expect(x.key === 'car' && !x.issues.length && /engine/.test(x.parts) && /fuel/.test(x.parts) && /exhaust/.test(x.parts), `${x.q}: from the book, every part in its place, no problems: ` + JSON.stringify(x));
+  expect(r.prompt, 'the AI is told the vehicle kit, flat and in 3D');
+  // built in 3D: a car stands on the ground, its wheels spin
+  await page.evaluate(async () => { chatLog.innerHTML = ''; const bk = await liveBookLoad(); liveDrawFresh = false; renderMessage('assistant', '```cassie-draw\n' + JSON.stringify(bk.fromBook('how does a car work in 3D', true)) + '\n```'); });
+  await page.waitForSelector('#chat-log .ld .ld-stage canvas', { timeout: 20000 });
+  await page.waitForTimeout(1500);
+  if (process.env.SHOTS) { await page.locator('#chat-log .ld').scrollIntoViewIfNeeded(); await page.screenshot({ path: `${process.env.SHOTS}/v326-car-3d.png` }); }
+  const where = await page.evaluate(async () => { const m = await liveDrawLoad(), bk = await liveBookLoad(), sp = m.clean(bk.fromBook('how does a car work in 3D', true)); return { body: m.partBox3(sp, 'body'), engine: m.partBox3(sp, 'engine'), fuel: m.partBox3(sp, 'fuel') }; });
+  expect(Math.abs(where.body[1]) < 0.05 && where.engine[0] > 1 && where.fuel[3] < 0, 'the car stands on the ground, the engine at the front, the fuel tank at the back: ' + JSON.stringify(where));
+  expect(!errors.length, 'page errors: ' + errors.join(' | '));
+  await ctx.close();
+});
 test('v325 the nature kit in 3D: a tree, a garden and the weather asked in 3D are built from real-looking kit models, each where it really is (trees and flowers standing on the ground, roots below it in see-through soil, clouds and the sun above), with no problems; the AI is told the kit, where things go, and to be creative', async (b) => {
   const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 860 }, server: false, book: true, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, scale: process.env.SHOTS ? 2 : 1 });
   const r = await page.evaluate(async () => {

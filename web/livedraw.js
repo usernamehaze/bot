@@ -26,8 +26,8 @@ const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ---------- the spec: what the AI wrote, made safe ----------
-const KINDS2 = ['line', 'arrow', 'rect', 'circle', 'ellipse', 'poly', 'path', 'text', 'tree', 'flower', 'leaf', 'cloud', 'sun', 'moon', 'rainbow', 'snowflake', 'bolt', 'drops', 'grass', 'rock', 'log', 'mushroom']; // (v324: and the nature kit)
-const KINDS3 = ['cylinder', 'tube', 'disc', 'cone', 'torus', 'ring', 'blades', 'sphere', 'box', 'capsule', 'pipe', 'arrow', 'lathe', 'plate', 'tree', 'flower', 'leaf', 'cloud', 'sun', 'moon', 'rainbow', 'rock', 'grass', 'log', 'mushroom', 'ground', 'drops', 'snowflake', 'bolt']; // (v325: and the nature kit in 3D)
+const KINDS2 = ['line', 'arrow', 'rect', 'circle', 'ellipse', 'poly', 'path', 'text', 'vehicle', 'tree', 'flower', 'leaf', 'cloud', 'sun', 'moon', 'rainbow', 'snowflake', 'bolt', 'drops', 'grass', 'rock', 'log', 'mushroom']; // (v324: and the nature kit)
+const KINDS3 = ['cylinder', 'tube', 'disc', 'cone', 'torus', 'ring', 'blades', 'sphere', 'box', 'capsule', 'pipe', 'arrow', 'lathe', 'plate', 'tree', 'flower', 'leaf', 'cloud', 'sun', 'moon', 'rainbow', 'rock', 'grass', 'log', 'mushroom', 'ground', 'drops', 'snowflake', 'bolt', 'vehicle']; // (v325: and the nature kit in 3D; v326: vehicles)
 const has = (x, k) => x[k] != null && x[k] !== '';
 // (v320) what a 3D part is really made of, with photographically grounded values from the Blender skills pack
 // (github.com/arjun988/blender-skills, realistic-style/references/pbr-values.md): metals are fully metallic, everything
@@ -264,6 +264,46 @@ function wrongWay(p) {
   return '';
 }
 // (v325) the box a part of a 3D model fills [x0, y0, z0, x1, y1, z1] (to check where things are)
+// ---------- (v326) Cassie's vehicle guide: what each vehicle looks like from every side, how it works, and where its parts are ----------
+// Told to her before she draws or builds one, so the parts are in their real places, the right way round, and her
+// words and drawing explain the same thing. kind: the vehicle kit's kind to draw it with.
+const VEHICLES = [
+  { is: /\b(cars?|sedans?|automobiles?|kotse|sasakyan)\b/i, kind: 'sedan', what: 'a car', views: 'side: long and low, hood in front, cabin in the middle with front and back side windows, trunk at the back, two wheels a side under arches; front: two headlights either side of the grille, the windshield above, mirrors on the doors; back: two red tail lights, the plate in the middle; top: a long rounded box, glass in the middle, the hood longer than the trunk', works: 'The engine under the hood burns petrol in its cylinders; the pistons turn the crankshaft; the gearbox and the drive shaft carry the turning to the wheels. The steering wheel turns the front wheels; the brakes press pads on discs in each wheel; the fuel tank sits under the back seat; the battery starts it.', parts: ['engine (front, under the hood)', 'gearbox', 'drive shaft', 'wheels and tyres', 'brakes (inside each wheel)', 'steering wheel', 'fuel tank (under the back)', 'battery', 'exhaust (out the back)', 'headlights and tail lights'] },
+  { is: /\b(electric cars?|evs?|teslas?|electric vehicles?)\b/i, kind: 'sedan', what: 'an electric car', views: 'like a car, but often with no grille in front', works: 'A big flat battery pack under the floor stores the energy; an electric motor at an axle turns the wheels directly; braking turns the motor into a generator that puts energy back into the battery (regenerative braking). It is charged from a plug in the side.', parts: ['battery pack (flat, under the whole floor)', 'electric motor (at the axle)', 'inverter', 'charging port (on the side)', 'wheels', 'brakes'] },
+  { is: /\b(sports cars?|race cars?|racing cars?|supercars?)\b/i, kind: 'sports', what: 'a sports car', views: 'side: very low and long, a short sloping cabin set back, big wheels close to the corners; front: low and wide, sharp headlights, big air intakes; back: wide, a spoiler, twin exhausts', works: 'A powerful engine (often behind the seats) and a light body; the low, wide shape and the spoiler push it down onto the road (downforce) so it grips in fast corners.', parts: ['engine (often behind the seats)', 'air intakes', 'spoiler', 'wide tyres', 'brakes', 'low body'] },
+  { is: /\b(suvs?|jeeps?)\b/i, kind: 'suv', what: 'an SUV', views: 'side: tall and boxy, a long flat roof, big wheels, high off the ground; front: upright grille and headlights; back: a tall upright tailgate', works: 'Like a car but taller, with more room; many drive all four wheels (4WD) so it climbs rough or slippery ground.', parts: ['engine', 'four wheel drive', 'high suspension', 'tall body', 'tailgate'] },
+  { is: /\b(pickups?|pickup trucks?|pick-ups?)\b/i, kind: 'pickup', what: 'a pickup truck', views: 'side: a cab with two doors in front and an open flat bed at the back; front: tall grille; back: the tailgate of the bed', works: 'An engine and cab in front, an open cargo bed behind on a strong frame, to carry heavy loads.', parts: ['engine', 'cab', 'cargo bed', 'tailgate', 'strong frame', 'wheels'] },
+  { is: /\b(vans?|minivans?)\b/i, kind: 'van', what: 'a van', views: 'side: one tall box from front to back, a short nose, a sliding side door; back: two tall doors', works: 'An engine under a short nose and a tall box body to carry people or goods.', parts: ['engine', 'cab', 'sliding door', 'cargo space', 'back doors', 'wheels'] },
+  { is: /\b(taxis?|cabs?)\b/i, kind: 'taxi', what: 'a taxi', views: 'a car painted yellow with a lit sign on the roof and a checker stripe', works: 'A car for hire: a meter counts the distance and time to work out the fare.', parts: ['roof sign', 'meter', 'engine', 'wheels', 'doors'] },
+  { is: /\b(police cars?|patrol cars?)\b/i, kind: 'police', what: 'a police car', views: 'a car with a light bar on the roof (red and blue), the word POLICE and stripes on the doors', works: 'A car with flashing lights and a siren so other drivers let it pass, and a radio to talk to the station.', parts: ['light bar', 'siren', 'radio', 'engine', 'wheels'] },
+  { is: /\b(ambulances?)\b/i, kind: 'ambulance', what: 'an ambulance', views: 'side: a tall white van with a red stripe and a red cross; back: two doors that open to load a stretcher', works: 'A van with flashing lights and a siren, carrying a stretcher, oxygen and medicine so paramedics treat the patient on the way to hospital.', parts: ['flashing lights and siren', 'stretcher', 'oxygen', 'back doors', 'engine'] },
+  { is: /\b(buses|bus|bus driver|jeepneys?)\b/i, kind: 'bus', what: 'a bus', views: 'side: a long tall box with a row of windows, a door near the front; front: a big flat windshield and the route sign above it; back: the engine cover', works: 'A long body on a strong frame carries many people; a big diesel or electric motor (often at the back) drives the back wheels.', parts: ['engine (at the back)', 'driver\'s seat', 'doors', 'windows', 'route sign', 'wheels'] },
+  { is: /\b(school ?bus(es)?)\b/i, kind: 'schoolbus', what: 'a school bus', views: 'side: long and yellow with a short hood in front, a row of windows, a black stripe; front: the hood and a big windshield', works: 'Like a bus, yellow so it is seen; red lights and a stop arm tell cars to stop while children get on and off.', parts: ['engine (in the hood)', 'stop arm', 'seats', 'door', 'windows', 'wheels'] },
+  { is: /\b(trucks?|lorr(y|ies)|delivery trucks?|trak)\b/i, kind: 'truck', what: 'a truck', views: 'side: a cab in front and a big box behind, extra wheels at the back for the weight; front: the tall cab with a big grille', works: 'A diesel engine under the cab drives the back wheels; the cargo box sits on a long frame; more axles share the heavy load.', parts: ['diesel engine (under the cab)', 'cab', 'cargo box', 'frame', 'back axles', 'wheels'] },
+  { is: /\b(dump ?trucks?|tipper trucks?)\b/i, kind: 'dumptruck', what: 'a dump truck', views: 'side: a cab in front and an open steel bed behind that tips up', works: 'A hydraulic ram (a strong piston pushed by oil) lifts the front of the bed so the load slides out at the back.', parts: ['cab', 'tipping bed', 'hydraulic ram', 'engine', 'wheels'] },
+  { is: /\b(fire ?trucks?|fire ?engines?)\b/i, kind: 'firetruck', what: 'a fire truck', views: 'side: long and red, a ladder on top, lockers along the side, the cab in front', works: 'A pump driven by the engine pushes water from its tank (or a hydrant) through the hoses; the ladder lifts up and out to reach high windows.', parts: ['ladder', 'water pump', 'water tank', 'hoses', 'lockers', 'cab', 'lights and siren'] },
+  { is: /\b(tractors?|traktora)\b/i, kind: 'tractor', what: 'a tractor', views: 'side: huge back wheels, small front wheels, the cab over the back wheels, the engine in front', works: 'A strong slow engine; the big deep-treaded back wheels grip soft soil to pull ploughs and trailers.', parts: ['engine', 'cab', 'big back wheels', 'small front wheels', 'hitch (at the back)'] },
+  { is: /\b(excavators?|diggers?|backhoes?)\b/i, kind: 'excavator', what: 'an excavator', views: 'side: tracks at the bottom, a turning cab on them, a long arm (boom and stick) and a bucket in front', works: 'Hydraulic rams move the boom, the stick and the bucket; the cab and arm turn all the way round on the tracks.', parts: ['tracks', 'cab', 'boom', 'stick', 'bucket', 'hydraulic rams'] },
+  { is: /\b(bulldozers?|dozers?)\b/i, kind: 'bulldozer', what: 'a bulldozer', views: 'side: tracks, a body with the cab on top, a big flat blade in front', works: 'Tracks spread its weight so it does not sink; hydraulic rams raise and lower the blade to push earth.', parts: ['tracks', 'blade', 'hydraulic rams', 'cab', 'engine'] },
+  { is: /\b(trains?|railways?|locomotives?|bullet trains?|tren|lrt|mrt)\b/i, kind: 'train', what: 'a train', views: 'side: long carriages with a row of windows, wheels in pairs on the rails; front: a pointed nose with a windshield and lights', works: 'Electric motors on the axles drive the steel wheels on steel rails; power comes from the overhead wire through the pantograph on the roof (or a diesel engine). Flanges on the wheels keep it on the rails.', parts: ['pantograph (on the roof)', 'electric motors (on the axles)', 'wheels', 'rails', 'carriages', 'driver\'s cab (at the nose)'] },
+  { is: /\b(bicycles?|bikes?|bisikleta)\b/i, kind: 'bicycle', what: 'a bicycle', views: 'side: two big wheels, a diamond frame between them, the saddle over the back, the handlebars over the front; front or back: very thin', works: 'Your feet push the pedals round; the cranks turn the chainring; the chain pulls the rear gear, which turns the back wheel. Brakes squeeze the rims; the handlebars steer the front wheel.', parts: ['frame', 'wheels', 'pedals and cranks', 'chainring', 'chain', 'rear gear', 'saddle', 'handlebars', 'brakes'] },
+  { is: /\b(motorcycles?|motorbikes?|motorsiklo)\b/i, kind: 'motorcycle', what: 'a motorcycle', views: 'side: two wheels, the engine low between them, the fuel tank above it, the seat behind, handlebars over the front fork', works: 'A small engine between the wheels drives the back wheel by a chain; the rider steers with the handlebars and leans into turns.', parts: ['engine', 'fuel tank', 'chain', 'front fork', 'handlebars', 'seat', 'exhaust'] },
+  { is: /\b(scooters?|mopeds?)\b/i, kind: 'scooter', what: 'a scooter', views: 'side: small wheels, a flat floor for the feet, the seat at the back over the engine', works: 'A small engine or motor under the seat drives the back wheel through an automatic belt, so there are no gears to change.', parts: ['engine (under the seat)', 'floorboard', 'seat', 'handlebars', 'small wheels'] },
+  { is: /\b(air ?planes?|aero ?planes?|aircraft|jets?|airliners?|eroplano)\b/i, kind: 'airplane', what: 'an airplane', views: 'side: a long tube (fuselage) with a pointed nose, the tail fin standing up at the back, the wing low across the middle with the engines under it; top: a cross, wings sweeping back; front: round fuselage, wings out to each side, engines under them', works: 'Jet engines under the wings push it forward; the curved wings make the air push up (lift) as it moves fast; flaps on the wings, the rudder on the tail fin and the elevators on the tail steer it. It lands on wheels.', parts: ['fuselage', 'wings', 'jet engines (under the wings)', 'tail fin and rudder', 'tailplane and elevators', 'cockpit (in the nose)', 'landing gear'] },
+  { is: /\b(helicopters?|choppers?|helikopter)\b/i, kind: 'helicopter', what: 'a helicopter', views: 'side: a round cabin with a big glass front, a long thin tail boom, the main rotor on top, a small rotor on the tail, skids underneath', works: 'The engine spins the long main rotor blades on top; tilting them lifts it straight up and moves it any way. The small tail rotor stops the body spinning the other way.', parts: ['main rotor', 'tail rotor', 'cabin', 'tail boom', 'engine', 'skids'] },
+  { is: /\b(drones?)\b/i, kind: 'drone', what: 'a drone', views: 'top: a small body with four arms, a spinning propeller at the end of each', works: 'Four motors spin four propellers; a computer changes each one\'s speed many times a second to hover, climb, tilt and turn. A camera hangs underneath.', parts: ['propellers', 'motors', 'battery', 'flight computer', 'camera'] },
+  { is: /\b(rockets?|space ?ships?|raket)\b/i, kind: 'rocket', what: 'a rocket', views: 'standing up: a tall thin tube, a pointed nose cone on top, fins at the bottom, fire from the nozzle', works: 'It burns fuel with oxygen it carries; the hot gas rushes out of the nozzle downward and pushes the rocket up (every action has an equal and opposite reaction). It drops its empty stages to get lighter.', parts: ['nose cone', 'payload', 'fuel tank', 'oxygen tank', 'engine and nozzle', 'fins'] },
+  { is: /\b(hot ?air balloons?|balloons?)\b/i, kind: 'balloon', what: 'a hot air balloon', views: 'a huge teardrop envelope on top, a basket hanging under it on ropes, a burner between them', works: 'The burner heats the air inside the envelope; hot air is lighter than the cold air around it, so the balloon rises. Letting it cool brings it down.', parts: ['envelope', 'burner', 'basket', 'ropes'] },
+  { is: /\b(boats?|speed ?boats?|yachts?|bangka)\b/i, kind: 'boat', what: 'a boat', views: 'side: a pointed hull in the water, a cabin with a windshield on top; top: pointed at the front, flat at the back', works: 'The hull pushes water aside and the water pushes it up (it floats); an engine at the back turns a propeller under the water that pushes it forward; the rudder steers.', parts: ['hull', 'cabin', 'engine', 'propeller (under the back)', 'rudder'] },
+  { is: /\b(ships?|cruise ships?|ferr(y|ies)|barko)\b/i, kind: 'ship', what: 'a ship', views: 'side: a long hull, decks stacked on top with rows of windows, a funnel; front: a sharp bow', works: 'A huge steel hull floats because it pushes aside more water than it weighs; big engines turn propellers at the stern.', parts: ['hull', 'bow', 'stern', 'decks', 'funnel', 'bridge', 'propellers', 'anchor'] },
+  { is: /\b(sail ?boats?|sailing (boats?|ships?))\b/i, kind: 'sailboat', what: 'a sailboat', views: 'side: a hull, a tall mast in the middle, a big triangular sail behind it and a smaller one in front', works: 'The wind fills the sails and pushes it along; the keel under the hull stops it sliding sideways; the rudder steers.', parts: ['hull', 'mast', 'mainsail', 'jib', 'keel', 'rudder'] },
+  { is: /\b(submarines?)\b/i, kind: 'submarine', what: 'a submarine', views: 'side: a long smooth tube, a tower (the sail) on top, a propeller at the back', works: 'To dive it lets water into its ballast tanks so it is heavier than the water; to rise it blows the water out with air. A propeller at the back pushes it; a periscope looks above the water.', parts: ['hull', 'ballast tanks', 'sail (tower)', 'periscope', 'propeller', 'rudder'] },
+];
+export function vehicleGuide(asked = '') {
+  const q = String(asked || ''), hits = VEHICLES.filter((v) => v.is.test(q)).sort((a, b) => q.match(b.is)[0].length - q.match(a.is)[0].length).slice(0, 2); // (the most exact first: an electric car before a car)
+  if (!hits.length) return '';
+  return hits.map((v) => `About ${v.what} (draw it with the vehicle kit, kind "${v.kind}"): how it looks: ${v.views}. How it works: ${v.works} Its main parts, each in its real place: ${v.parts.join(', ')}.`).join('\n');
+}
 export function partBox3(spec, id) { const p = spec && spec.parts.find((q) => q.id === id); const bs = p ? p.shapes.map(box3).filter(Boolean) : []; return bs.length ? join3(bs) : null; }
 export function check(spec, asked = '') {
   const out = [];
@@ -592,7 +632,7 @@ export async function render(host, rawSpec, opts = {}) {
   let mv = null; const mvHost = spec.mode === '3d' ? el('div', 'ld-mv') : null;
   const machineOn = async () => {
     if (mv) return mv;
-    let m = null; try { m = await import('./isoview.js?v=325'); } catch (e) { return null; }
+    let m = null; try { m = await import('./isoview.js?v=326'); } catch (e) { return null; }
     mv = m.machine(mvHost, spec, { dark: !lightPage() });
     if (mv) {
       const row = el('div', 'ld-mv-acts');
@@ -945,13 +985,14 @@ function draw2d(stage, spec, { animate, setSay, hint }) {
 // One shape each ({"t":"tree","kind":"oak","x":200,"y":230,"h":160}), drawn the way the owner's guide pictures are: soft,
 // rounded, glossy like clay, every form outlined a shade darker, shaded underneath and lit from the top left. x and y are
 // where it stands on the ground (a cloud, the sun, the moon, a snowflake: its middle); h (or w, r) its size.
-const KIT = ['tree', 'flower', 'leaf', 'cloud', 'sun', 'moon', 'rainbow', 'snowflake', 'bolt', 'drops', 'grass', 'rock', 'log', 'mushroom'];
+const KIT = ['tree', 'flower', 'leaf', 'cloud', 'sun', 'moon', 'rainbow', 'snowflake', 'bolt', 'drops', 'grass', 'rock', 'log', 'mushroom', 'vehicle']; // (v326: and vehicles)
 const KIT_KINDS = {
   tree: ['round', 'oak', 'pine', 'bush', 'palm', 'blossom', 'fruit', 'autumn'],
   flower: ['sunflower', 'daisy', 'tulip', 'rose', 'lily', 'lavender', 'blossom', 'hydrangea'],
   leaf: ['oval', 'maple', 'oak', 'ginkgo', 'fern', 'heart'],
   cloud: ['white', 'rain', 'storm', 'snow', 'grey'],
   rock: ['stone', 'mossy'], log: ['log', 'stump'], grass: ['grass', 'flowers'],
+  get vehicle() { return VEH_KINDS; },
 };
 // the box a kit shape fills (for the checks and the labels): [[x0, y0], [x1, y1]]
 function kitBox(sh) {
@@ -962,6 +1003,7 @@ function kitBox(sh) {
     const mx = (b[0][0] + b[1][0]) / 2, my = (b[0][1] + b[1][1]) / 2, pts = [[mx, b[0][1]], [b[1][0], my], [mx, b[1][1]], [b[0][0], my]].map(([px, py]) => [x + (px - x) * c - (py - y) * s, y + (px - x) * s + (py - y) * c]);
     return [[Math.min(...pts.map((q) => q[0])), Math.min(...pts.map((q) => q[1]))], [Math.max(...pts.map((q) => q[0])), Math.max(...pts.map((q) => q[1]))]];
   }
+  if (t === 'vehicle') return vehBox(sh); // (v326)
   if (t === 'tree') return [[x - h * (sh.kind === 'pine' ? 0.32 : 0.46), y - h], [x + h * (sh.kind === 'pine' ? 0.32 : 0.46), y]];
   if (t === 'flower' || t === 'mushroom') return [[x - h * 0.36, y - h], [x + h * 0.36, y]];
   if (t === 'leaf') return [[x - h * 0.42, y - h], [x + h * 0.42, y]];
@@ -1000,7 +1042,7 @@ function ksmooth(pts) {
 function krand(seed) { let s = Math.abs(Math.floor(seed)) % 2147483647 || 7; return () => (s = (s * 48271) % 2147483647) / 2147483647; }
 
 // a list of layers: [d, fill, {stroke, w, op, line}]; built by the makers below
-function kitLayers(t, kind, x, y, S, base) {
+function kitLayers(t, kind, x, y, S, base, sh = {}) {
   const L = [], R = krand(x * 7 + y * 13 + S * 3);
   const put = (d, fill, o = {}) => L.push([d, fill, o]);
   // puffs: round lumps merged into one soft shape (a tree's crown, a bush, a cloud, a hydrangea): the outline under
@@ -1036,7 +1078,8 @@ function kitLayers(t, kind, x, y, S, base) {
   const ring = (cx, cy, n, dist, mk) => { for (let k = 0; k < n; k++) mk(cx + dist * Math.cos(k * 2 * Math.PI / n - Math.PI / 2), cy + dist * Math.sin(k * 2 * Math.PI / n - Math.PI / 2), k * 360 / n - 90); };
   const ground = (bx, by, w) => { put(ke(bx, by, w / 2, w * 0.09), '#86c25a', { stroke: kitDark('#86c25a', 0.35) }); put(ke(bx - w * 0.08, by - w * 0.02, w * 0.3, w * 0.04), kitLight('#86c25a', 0.35), { stroke: 'none', op: 0.7 }); };
 
-  if (t === 'tree') {
+  if (t === 'vehicle') vehLayers(kind, ['front', 'back', 'top'].includes(sh.view) ? sh.view : 'side', x, y, S, sh.facing === 'left' ? -1 : 1, base, put, puffs, R); // (v326)
+  else if (t === 'tree') {
     const h = S, crownCol = base || { blossom: '#f3a3c2', autumn: '#e8963a', pine: '#2f7d4a' }[kind] || '#4f9e3c';
     if (kind === 'pine') {
       ground(x, y, h * 0.62); trunk(x, y, h * 0.3, h * 0.07, '#8a5a34');
@@ -1218,18 +1261,288 @@ function kitShape(s, mk) {
   const t = String(s.t || '').toLowerCase(), list = KIT_KINDS[t], kind = list ? (list.includes(String(s.kind || '').toLowerCase()) ? String(s.kind).toLowerCase() : list[0]) : '';
   const N = (v, lo, hi, d) => { v = +v; return Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d; };
   const x = N(s.x ?? s.cx, -40, 440, 200), y = N(s.y ?? s.cy, -40, 300, 200);
-  const S = ['cloud', 'grass', 'rock', 'log', 'drops'].includes(t) ? N(s.w ?? s.size ?? s.h, 10, 400, 90)
+  const S = ['cloud', 'grass', 'rock', 'log', 'drops', 'vehicle'].includes(t) ? N(s.w ?? s.size ?? s.h, 10, 400, 90)
     : ['sun', 'moon', 'snowflake', 'rainbow'].includes(t) ? N(s.r ?? (s.size ? s.size / 2 : null), 4, 160, t === 'rainbow' ? 80 : 24) : N(s.h ?? s.size, 10, 260, 100);
   const base = typeof s.fill === 'string' && /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(s.fill) ? s.fill : null; // (its own colour, if one is given)
   const g = mk('g', { class: 'ld-kit' });
   const rot = N(s.rot, -180, 180, 0); if (rot) g.setAttribute('transform', `rotate(${rot} ${x} ${y})`); // (a leaf turned to lie the way it grows)
-  for (const [d, fill, o] of kitLayers(t, kind, x, y, S, base)) {
+  for (const [d, fill, o] of kitLayers(t, kind, x, y, S, base, s)) {
     const e = mk('path', { d, fill: fill || 'none', stroke: o.stroke || 'none', 'stroke-width': o.w || 1.6, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' });
     if (fill && fill !== 'none') e.setAttribute('fill-opacity', o.op != null ? o.op : 1);
     if (o.line && o.op != null) e.setAttribute('stroke-opacity', o.op);
     g.appendChild(e);
   }
   return g;
+}
+
+// ---------- (v326) the vehicle kit: cars, buses, trucks, trains, bikes, planes, boats and more, drawn whole ----------
+// {"t":"vehicle","kind":"sedan","x":200,"y":200,"w":220,"view":"side","facing":"right"}: x is its middle, y the ground
+// under its wheels (a plane's or boat's: its bottom; the sea is y), w its length. Cars, vans, buses and trucks can be
+// drawn from the "side", "front", "back" or "top". In the owner's guide pictures' style: soft, rounded, glossy, outlined
+// a shade darker, lit from the top left. VEH_SHAPES below is the one shared description of each road vehicle's body
+// (its side profile, wheels and windows, in parts of its length), used flat and in 3D, so both always agree.
+const VEH_KINDS = ['sedan', 'sports', 'hatchback', 'suv', 'pickup', 'van', 'taxi', 'police', 'classic', 'ambulance', 'bus', 'schoolbus', 'truck', 'dumptruck', 'firetruck', 'tractor', 'excavator', 'bulldozer', 'train', 'bicycle', 'motorcycle', 'scooter', 'airplane', 'helicopter', 'boat', 'ship', 'sailboat', 'rowboat', 'submarine', 'rocket', 'balloon', 'drone'];
+// u: along its length, -0.5 the back to 0.5 the front; v: height above the ground; both in parts of its length
+const VEH_SHAPES = {
+  sedan: { top: [[-0.5, 0.1], [-0.5, 0.21], [-0.44, 0.25], [-0.3, 0.27], [-0.17, 0.41], [0.07, 0.42], [0.22, 0.28], [0.42, 0.245], [0.5, 0.2], [0.5, 0.1]], wheels: [[-0.3, 0.1], [0.3, 0.1]], glass: [[[-0.27, 0.29], [-0.16, 0.395], [-0.05, 0.4], [-0.05, 0.29]], [[-0.02, 0.29], [-0.02, 0.4], [0.07, 0.405], [0.19, 0.29]]], belt: 0.28, wide: 0.42, col: '#c63a2f' },
+  sports: { top: [[-0.5, 0.1], [-0.5, 0.2], [-0.42, 0.23], [-0.25, 0.25], [-0.1, 0.34], [0.06, 0.345], [0.2, 0.25], [0.42, 0.19], [0.5, 0.15], [0.5, 0.09]], wheels: [[-0.32, 0.1], [0.32, 0.095]], glass: [[[-0.2, 0.258], [-0.09, 0.33], [0.04, 0.335], [0.16, 0.258]]], belt: 0.25, wide: 0.45, col: '#f06a1c' },
+  hatchback: { top: [[-0.5, 0.1], [-0.5, 0.3], [-0.44, 0.4], [-0.3, 0.45], [0.05, 0.45], [0.22, 0.3], [0.42, 0.26], [0.5, 0.2], [0.5, 0.1]], wheels: [[-0.32, 0.11], [0.3, 0.11]], glass: [[[-0.42, 0.31], [-0.37, 0.41], [-0.27, 0.43], [-0.08, 0.43], [-0.08, 0.31]], [[-0.05, 0.31], [-0.05, 0.43], [0.04, 0.43], [0.18, 0.31]]], belt: 0.3, wide: 0.45, col: '#3a7bd5' },
+  suv: { top: [[-0.5, 0.12], [-0.5, 0.42], [-0.47, 0.5], [0.1, 0.51], [0.22, 0.36], [0.44, 0.33], [0.5, 0.27], [0.5, 0.12]], wheels: [[-0.3, 0.13], [0.3, 0.13]], glass: [[[-0.45, 0.37], [-0.44, 0.47], [-0.18, 0.475], [-0.18, 0.37]], [[-0.15, 0.37], [-0.15, 0.475], [0.08, 0.475], [0.18, 0.37]]], belt: 0.36, wide: 0.44, col: '#2f4558' },
+  pickup: { top: [[-0.5, 0.12], [-0.5, 0.3], [-0.08, 0.3], [-0.08, 0.48], [0.1, 0.48], [0.22, 0.34], [0.44, 0.31], [0.5, 0.25], [0.5, 0.12]], wheels: [[-0.31, 0.12], [0.3, 0.12]], glass: [[[-0.05, 0.345], [-0.05, 0.45], [0.09, 0.45], [0.19, 0.345]]], belt: 0.33, wide: 0.42, col: '#55703f' },
+  van: { top: [[-0.5, 0.11], [-0.5, 0.56], [-0.46, 0.6], [0.22, 0.6], [0.36, 0.42], [0.47, 0.34], [0.5, 0.27], [0.5, 0.11]], wheels: [[-0.32, 0.11], [0.32, 0.11]], glass: [[[0.04, 0.43], [0.04, 0.56], [0.21, 0.56], [0.32, 0.43]]], belt: 0.42, wide: 0.4, col: '#eef0f2' },
+  classic: { top: [[-0.5, 0.12], [-0.5, 0.26], [-0.44, 0.29], [-0.3, 0.27], [-0.2, 0.4], [0.06, 0.41], [0.17, 0.28], [0.44, 0.26], [0.5, 0.2], [0.5, 0.12]], wheels: [[-0.3, 0.1], [0.3, 0.1]], glass: [[[-0.27, 0.29], [-0.18, 0.39], [-0.05, 0.395], [-0.05, 0.29]], [[-0.02, 0.29], [-0.02, 0.395], [0.06, 0.4], [0.15, 0.29]]], belt: 0.28, wide: 0.38, col: '#c8382f' },
+  bus: { top: [[-0.5, 0.08], [-0.5, 0.35], [-0.48, 0.37], [0.47, 0.37], [0.5, 0.33], [0.5, 0.08]], wheels: [[-0.31, 0.065], [0.32, 0.065]], glass: [], belt: 0.2, wide: 0.21, col: '#f2b51a' },
+  schoolbus: { top: [[-0.5, 0.08], [-0.5, 0.35], [-0.48, 0.37], [0.32, 0.37], [0.34, 0.3], [0.36, 0.22], [0.48, 0.2], [0.5, 0.17], [0.5, 0.08]], wheels: [[-0.3, 0.065], [0.38, 0.065]], glass: [], belt: 0.2, wide: 0.21, col: '#f7c11e' },
+  truck: { top: [[0.18, 0.1], [0.18, 0.45], [0.34, 0.45], [0.42, 0.31], [0.5, 0.27], [0.5, 0.1]], wheels: [[-0.36, 0.08], [-0.2, 0.08], [0.34, 0.08]], glass: [[[0.25, 0.3], [0.25, 0.42], [0.33, 0.42], [0.4, 0.3]]], belt: 0.3, wide: 0.3, col: '#2f6fd1' },
+  dumptruck: { top: [[0.18, 0.1], [0.18, 0.47], [0.34, 0.47], [0.42, 0.33], [0.5, 0.29], [0.5, 0.1]], wheels: [[-0.32, 0.1], [-0.12, 0.1], [0.34, 0.1]], glass: [[[0.25, 0.32], [0.25, 0.44], [0.33, 0.44], [0.4, 0.32]]], belt: 0.32, wide: 0.34, col: '#f2a21c' },
+  firetruck: { top: [[-0.5, 0.09], [-0.5, 0.36], [0.2, 0.36], [0.2, 0.4], [0.42, 0.4], [0.48, 0.3], [0.5, 0.24], [0.5, 0.09]], wheels: [[-0.35, 0.075], [-0.22, 0.075], [0.33, 0.075]], glass: [[[0.23, 0.26], [0.23, 0.37], [0.34, 0.37], [0.34, 0.26]], [[0.37, 0.26], [0.37, 0.37], [0.42, 0.37], [0.46, 0.26]]], belt: 0.26, wide: 0.26, col: '#d6302a' },
+  train: { top: [[-0.5, 0.05], [-0.5, 0.25], [-0.49, 0.27], [0.28, 0.27], [0.4, 0.24], [0.48, 0.16], [0.5, 0.09], [0.48, 0.05]], wheels: [[-0.4, 0.025], [-0.32, 0.025], [0.26, 0.025], [0.34, 0.025]], glass: [[[0.37, 0.17], [0.42, 0.235], [0.47, 0.18], [0.45, 0.16]]], belt: 0.16, wide: 0.12, col: '#e3e6ea' },
+};
+const VEH_OF = { taxi: 'sedan', police: 'sedan', ambulance: 'van' };
+// the box it fills (for the checks and the labels)
+function vehBox(sh) {
+  const x = +sh.x, y = +sh.y, w = +sh.w || 200, k = String(sh.kind || 'sedan'), view = sh.view;
+  const P = VEH_SHAPES[VEH_OF[k] || k];
+  if (P && (view === 'front' || view === 'back')) { const W = w, H = Math.max(...P.top.map((q) => q[1])) / P.wide * W; return [[x - W / 2, y - H], [x + W / 2, y]]; }
+  if (P && view === 'top') return [[x - w / 2, y - w * P.wide / 2], [x + w / 2, y + w * P.wide / 2]];
+  const tall = P ? Math.max(...P.top.map((q) => q[1])) + (k === 'police' || k === 'taxi' || k === 'ambulance' ? 0.05 : 0) + (k === 'firetruck' ? 0.07 : 0)
+    : ({ bicycle: 0.6, motorcycle: 0.55, scooter: 0.6, airplane: 0.42, helicopter: 0.42, boat: 0.32, ship: 0.42, sailboat: 1.0, rowboat: 0.2, submarine: 0.3, tractor: 0.6, excavator: 0.75, bulldozer: 0.5, balloon: 1.4, drone: 0.3, rocket: 1 })[k] || 0.5;
+  if (k === 'rocket') return [[x - w * 0.16, y - w], [x + w * 0.16, y]];
+  if (k === 'balloon') return [[x - w * 0.5, y - w * 1.4], [x + w * 0.5, y]];
+  return [[x - w / 2, y - w * tall], [x + w / 2, y]];
+}
+// the layers of one vehicle, in the nature kit's put() style
+function vehLayers(kind, view, x, y, w, dir, base, put, puffs, R) {
+  const P = VEH_SHAPES[VEH_OF[kind] || kind];
+  const X = (u) => x + dir * u * w, Y = (v) => y - v * w;
+  const col = base || { taxi: '#f6c21c', police: '#f4f6f8', ambulance: '#f7f8fa' }[kind] || (P ? P.col : '#c63a2f');
+  const dark = (c, k = 0.4) => kitDark(c, k), lite = (c, k = 0.45) => kitLight(c, k);
+  const glassC = '#2a3644', tyre = '#23262c', rim = '#c9ced6';
+  const poly = (pts) => ksmooth(pts.map(([u, v]) => [X(u), Y(v)]));
+  const sharp = (pts) => kpts(pts.map(([u, v]) => [X(u), Y(v)]));
+  const rr = (u0, v0, u1, v1, rad = 0.008) => { const xa = Math.min(X(u0), X(u1)), xb = Math.max(X(u0), X(u1)), ya = Math.min(Y(v0), Y(v1)), yb = Math.max(Y(v0), Y(v1)), r = Math.min(rad * w, (xb - xa) / 2, (yb - ya) / 2);
+    return `M${(xa + r).toFixed(1)},${ya.toFixed(1)}L${(xb - r).toFixed(1)},${ya.toFixed(1)}Q${xb.toFixed(1)},${ya.toFixed(1)} ${xb.toFixed(1)},${(ya + r).toFixed(1)}L${xb.toFixed(1)},${(yb - r).toFixed(1)}Q${xb.toFixed(1)},${yb.toFixed(1)} ${(xb - r).toFixed(1)},${yb.toFixed(1)}L${(xa + r).toFixed(1)},${yb.toFixed(1)}Q${xa.toFixed(1)},${yb.toFixed(1)} ${xa.toFixed(1)},${(yb - r).toFixed(1)}L${xa.toFixed(1)},${(ya + r).toFixed(1)}Q${xa.toFixed(1)},${ya.toFixed(1)} ${(xa + r).toFixed(1)},${ya.toFixed(1)}Z`; };
+  const line = (pts, c, wd = 1.2, op) => put('M' + pts.map(([u, v]) => `${X(u).toFixed(1)},${Y(v).toFixed(1)}`).join('L'), 'none', { stroke: c, w: wd, line: true, ...(op != null ? { op } : {}) });
+  const wheel = (u, r, white = false) => {
+    put(kc(X(u), Y(r), r * w), tyre, { stroke: '#111317' });
+    if (white) put(kc(X(u), Y(r), r * w * 0.72), '#f2efe6', { stroke: 'none' });
+    put(kc(X(u), Y(r), r * w * 0.56), rim, { stroke: dark(rim, 0.3) });
+    for (let k = 0; k < 5; k++) { const a = k * Math.PI * 2 / 5 + 0.3; put(`M${X(u).toFixed(1)},${Y(r).toFixed(1)}L${(X(u) + Math.cos(a) * r * w * 0.5).toFixed(1)},${(Y(r) + Math.sin(a) * r * w * 0.5).toFixed(1)}`, 'none', { stroke: dark(rim, 0.35), w: Math.max(1, r * w * 0.12), line: true }); }
+    put(kc(X(u), Y(r), r * w * 0.16), dark(rim, 0.2), { stroke: 'none' });
+    put(ke(X(u) - r * w * 0.25, Y(r) - r * w * 0.3, r * w * 0.16, r * w * 0.08, -30), '#ffffff', { stroke: 'none', op: 0.35 });
+  };
+  const ground = () => put(ke(x, y + 1, w * 0.52, Math.max(2, w * 0.03)), '#000000', { stroke: 'none', op: 0.14 });
+
+  if (P && (view === 'front' || view === 'back')) { // ---- from the front or the back: w is its width
+    const W = w, s = W / P.wide, roof = Math.max(...P.top.map((q) => q[1])) * s, belt = P.belt * s, clear = P.wheels[0][1] * s * 0.55, cx = x;
+    const B = (fx, v) => [cx + fx * W / 2, y - v]; // (fx: -1 left side to 1 right side)
+    ground();
+    [-0.78, 0.78].forEach((fx) => put(`M${B(fx - 0.14, 0)}L${B(fx + 0.14, 0)}L${B(fx + 0.14, clear * 2.2)}L${B(fx - 0.14, clear * 2.2)}Z`, tyre, { stroke: '#111317' }));
+    const body = [B(-1, clear), B(-1, belt * 0.92), B(-0.92, belt), B(0.92, belt), B(1, belt * 0.92), B(1, clear)];
+    put(ksmooth(body), col, { stroke: dark(col) });
+    const cab = [B(-0.82, belt), B(-0.66, roof * 0.97), B(-0.6, roof), B(0.6, roof), B(0.66, roof * 0.97), B(0.82, belt)];
+    put(ksmooth(cab), col, { stroke: dark(col) });
+    put(ksmooth([B(-0.74, belt + (roof - belt) * 0.08), B(-0.62, roof * 0.93), B(0.62, roof * 0.93), B(0.74, belt + (roof - belt) * 0.08)]), view === 'back' ? '#33404f' : glassC, { stroke: dark(glassC, 0.3) });
+    put(ksmooth([B(-0.6, roof * 0.9), B(-0.45, roof * 0.9), B(-0.62, belt + (roof - belt) * 0.2)]), '#ffffff', { stroke: 'none', op: 0.22 });
+    [-1, 1].forEach((sd) => put(ke(cx + sd * W * 0.56, y - belt * 0.98, W * 0.06, W * 0.035), col, { stroke: dark(col) }));
+    if (view === 'front') {
+      [-1, 1].forEach((sd) => { put(ke(cx + sd * W * 0.36, y - belt * 0.72, W * 0.11, W * 0.045, sd * 6), '#fff6d8', { stroke: dark('#d8d0b0', 0.3) }); put(ke(cx + sd * W * 0.34, y - belt * 0.74, W * 0.04, W * 0.018), '#ffffff', { stroke: 'none' }); });
+      put(ksmooth([B(-0.32, belt * 0.42), B(-0.3, belt * 0.62), B(0.3, belt * 0.62), B(0.32, belt * 0.42)]), '#2b2f36', { stroke: '#15171b' });
+      [0.48, 0.55].forEach((f) => put(`M${B(-0.28, belt * f)}L${B(0.28, belt * f)}`, 'none', { stroke: '#4a515b', w: 1, line: true }));
+    } else {
+      [-1, 1].forEach((sd) => put(ksmooth([B(sd * 0.95, belt * 0.62), B(sd * 0.95, belt * 0.85), B(sd * 0.6, belt * 0.85), B(sd * 0.6, belt * 0.68)]), '#d7262b', { stroke: '#8f1416' }));
+      put(`M${B(-0.18, belt * 0.32)}L${B(0.18, belt * 0.32)}L${B(0.18, belt * 0.5)}L${B(-0.18, belt * 0.5)}Z`, '#f4f1e6', { stroke: '#8e8a7c' });
+    }
+    { const a = B(-0.97, clear), b = B(0.97, clear + belt * 0.16), r = belt * 0.06; put(`M${a[0] + r},${b[1]}L${b[0] - r},${b[1]}Q${b[0]},${b[1]} ${b[0]},${b[1] + r}L${b[0]},${a[1] - r}Q${b[0]},${a[1]} ${b[0] - r},${a[1]}L${a[0] + r},${a[1]}Q${a[0]},${a[1]} ${a[0]},${a[1] - r}L${a[0]},${b[1] + r}Q${a[0]},${b[1]} ${a[0] + r},${b[1]}Z`, dark(col, 0.25), { stroke: dark(col) }); }
+    if (kind === 'taxi') put(`M${B(-0.18, roof)}L${B(0.18, roof)}L${B(0.15, roof + W * 0.07)}L${B(-0.15, roof + W * 0.07)}Z`, '#ffe27a', { stroke: '#b8961c' });
+    if (kind === 'police' || kind === 'ambulance') { put(`M${B(-0.4, roof)}L${B(0, roof)}L${B(0, roof + W * 0.05)}L${B(-0.4, roof + W * 0.05)}Z`, '#d8262b', { stroke: '#8f1416' }); put(`M${B(0, roof)}L${B(0.4, roof)}L${B(0.4, roof + W * 0.05)}L${B(0, roof + W * 0.05)}Z`, '#2463d6', { stroke: '#163f8a' }); }
+    return;
+  }
+  if (P && view === 'top') { // ---- from above: the roof, the glass, the hood and the boot
+    const L = w, Wd = w * P.wide, x0 = x - L / 2, y0 = y - Wd / 2, T = (u, f) => [x + dir * u * L, y + f * Wd / 2];
+    put(ksmooth([T(-0.5, -0.8), T(-0.48, -0.97), T(-0.3, -1), T(0.35, -1), T(0.48, -0.95), T(0.5, -0.7), T(0.5, 0.7), T(0.48, 0.95), T(0.35, 1), T(-0.3, 1), T(-0.48, 0.97), T(-0.5, 0.8)]), col, { stroke: dark(col) });
+    P.wheels.forEach(([u, r]) => [-1, 1].forEach((f) => put(ksmooth([T(u - r * 0.9, f * 1.02), T(u + r * 0.9, f * 1.02), T(u + r * 0.9, f * 0.86), T(u - r * 0.9, f * 0.86)]), tyre, { stroke: '#111317' })));
+    put(ksmooth([T(-0.5, -0.8), T(-0.48, -0.97), T(-0.3, -1), T(0.35, -1), T(0.48, -0.95), T(0.5, -0.7), T(0.5, 0.7), T(0.48, 0.95), T(0.35, 1), T(-0.3, 1), T(-0.48, 0.97), T(-0.5, 0.8)]), col, { stroke: dark(col) });
+    const gx = P.glass.length ? P.glass : [[[-0.3, 0], [0.2, 0]]], g0 = Math.min(...gx.flat().map((q) => q[0])), g1 = Math.max(...gx.flat().map((q) => q[0]));
+    put(ksmooth([T(g0, -0.78), T(g1, -0.78), T(g1 + 0.04, -0.6), T(g1 + 0.04, 0.6), T(g1, 0.78), T(g0, 0.78), T(g0 - 0.03, 0.6), T(g0 - 0.03, -0.6)]), glassC, { stroke: dark(glassC, 0.3) });
+    put(ksmooth([T(g0 + 0.06, -0.7), T(g1 - 0.08, -0.7), T(g1 - 0.08, 0.7), T(g0 + 0.06, 0.7)]), col, { stroke: dark(col, 0.3) });
+    put(ksmooth([T(g0 + 0.1, -0.55), T(g1 - 0.15, -0.6), T(g1 - 0.2, -0.3), T(g0 + 0.15, -0.3)]), lite(col, 0.6), { stroke: 'none', op: 0.45 });
+    [-1, 1].forEach((f) => put(ke(...T(g1 - 0.01, f * 1.06), L * 0.02, L * 0.012), col, { stroke: dark(col) }));
+    [-1, 1].forEach((f) => { put(ke(...T(0.48, f * 0.72), L * 0.015, L * 0.04), '#fff6d8', { stroke: '#b8ae88' }); put(ke(...T(-0.49, f * 0.75), L * 0.012, L * 0.035), '#d7262b', { stroke: '#8f1416' }); });
+    return;
+  }
+  if (P) { // ---- from the side: the body with its wheel arches, glass, doors, lights and wheels
+    ground();
+    const arches = P.wheels.map(([u, r]) => [u, r * 1.22]).sort((a, b) => b[0] - a[0]);
+    const pts = [...P.top];
+    const bottom = []; // (from the front, back along the bottom, up and over each wheel)
+    const front = P.top[P.top.length - 1], back = P.top[0], clear = Math.min(front[1], back[1]);
+    arches.forEach(([u, ar]) => { for (let k = 0; k <= 10; k++) { const a = k / 10 * Math.PI; bottom.push([u + Math.cos(a) * ar, Math.max(clear, P.wheels[0][1] + Math.sin(a) * ar * 0.92)]); } });
+    if (kind === 'truck' || kind === 'dumptruck') { // the load behind the cab
+      if (kind === 'truck') { put(sharp([[-0.5, 0.11], [-0.5, 0.52], [0.16, 0.52], [0.16, 0.11]]), base ? lite(base, 0.75) : '#eceef0', { stroke: '#9aa0a8' }); line([[-0.5, 0.48], [0.16, 0.48]], '#c3c8cf', 1); put(ksmooth([[-0.46, 0.49], [0.1, 0.49], [0.1, 0.45], [-0.46, 0.45]].map(([u, v]) => [X(u), Y(v)])), '#ffffff', { stroke: 'none', op: 0.5 }); }
+      else { put(sharp([[-0.52, 0.2], [-0.48, 0.5], [0.15, 0.5], [0.15, 0.2]]), dark(col, 0.08), { stroke: dark(col) }); [-0.3, -0.1].forEach((u) => line([[u, 0.22], [u, 0.48]], dark(col, 0.3), 1.2)); put(sharp([[-0.5, 0.48], [0.13, 0.48], [0.13, 0.52], [-0.46, 0.52]]), '#8a6a44', { stroke: '#5a4428' }); }
+      put(sharp([[-0.5, 0.1], [0.2, 0.1], [0.2, 0.14], [-0.5, 0.14]]), '#3a3f47', { stroke: '#1d2026' });
+    }
+    if (kind === 'firetruck') { // its ladder on top
+      line([[-0.46, 0.415], [0.3, 0.415]], '#c7ccd3', 2.4); line([[-0.46, 0.445], [0.3, 0.445]], '#c7ccd3', 2.4);
+      for (let k = 0; k <= 15; k++) line([[-0.46 + k * 0.05, 0.415], [-0.46 + k * 0.05, 0.445]], '#c7ccd3', 1.2);
+    }
+    put(ksmooth([...pts.map(([u, v]) => [X(u), Y(v)]), ...bottom.map(([u, v]) => [X(u), Y(v)])]), col, { stroke: dark(col) });
+    // a darker lower body and a lit shoulder, so it reads round
+    put(rr(back[0] + 0.1, P.belt - 0.035, front[0] - 0.16, P.belt - 0.018, 0.008), lite(col, 0.65), { stroke: 'none', op: 0.6 });
+    // glass
+    P.glass.forEach((g) => { put(poly(g), glassC, { stroke: dark(glassC, 0.3) }); const g0 = g[0], g1 = g[g.length - 1]; put(poly([[g0[0] + 0.02, g0[1] + 0.01], [g0[0] + 0.05, (g0[1] + g[1][1]) / 2 + 0.03], [g0[0] + 0.09, (g0[1] + g[1][1]) / 2 + 0.03], [g0[0] + 0.05, g0[1] + 0.01]]), '#ffffff', { stroke: 'none', op: 0.25 }); });
+    if (kind === 'bus' || kind === 'schoolbus' || kind === 'train') { // a row of windows and a door
+      const v0 = kind === 'train' ? 0.15 : 0.21, v1 = kind === 'train' ? 0.235 : 0.32, end = kind === 'schoolbus' ? 0.26 : kind === 'train' ? 0.3 : 0.36;
+      const n = kind === 'train' ? 9 : 7, from = -0.46, step = (end - from) / n;
+      for (let k = 0; k < n; k++) { const u0 = from + k * step + 0.008, u1 = u0 + step - 0.016; if (kind !== 'train' && k === n - 1) continue; put(rr(u0, v0, u1, v1, 0.008), glassC, { stroke: dark(glassC, 0.3), w: 1 }); }
+      const d0 = kind === 'train' ? -0.02 : end - step + 0.01, d1 = d0 + (kind === 'train' ? 0.05 : step - 0.02);
+      put(rr(d0, 0.06, d1, v1, 0.006), kind === 'train' ? dark(col, 0.12) : glassC, { stroke: dark(col, 0.45) }); line([[(d0 + d1) / 2, 0.07], [(d0 + d1) / 2, v1 - 0.01]], dark(col, 0.45), 1);
+      if (kind !== 'train') put(rr(kind === 'schoolbus' ? 0.27 : 0.44, kind === 'schoolbus' ? 0.22 : 0.18, kind === 'schoolbus' ? 0.32 : 0.49, kind === 'schoolbus' ? 0.33 : 0.34, 0.006), glassC, { stroke: dark(glassC, 0.3) });
+      if (kind === 'train') { line([[-0.5, 0.135], [0.46, 0.135]], '#d6302a', 2.4); line([[-0.55, 0.0], [0.55, 0.0]], '#6b6f76', 2); line([[0.0, 0.27], [0.06, 0.32], [0.12, 0.27]], '#555b64', 1.6); }
+      if (kind === 'schoolbus') line([[-0.5, 0.175], [0.32, 0.175]], '#2b2b2b', 2.2);
+    }
+    // doors and handles, for cars and vans
+    if (['sedan', 'taxi', 'police', 'hatchback', 'suv', 'classic', 'pickup', 'sports'].includes(VEH_OF[kind] || kind) || kind === 'sports') {
+      const ds = (P.glass[0] || [[0, 0]])[0][0], de = P.glass.length > 1 ? P.glass[1][P.glass[1].length - 1][0] : ((P.glass[0] || [[0, 0]]).slice(-1)[0][0]);
+      const mid = P.glass.length > 1 ? (P.glass[0][3][0] + P.glass[1][0][0]) / 2 : (ds + de) / 2;
+      line([[mid, P.belt + 0.1], [mid, clear + 0.04]], dark(col, 0.45), 1.1, 0.8);
+      line([[ds - 0.01, P.belt], [ds - 0.01, clear + 0.04]], dark(col, 0.45), 1.1, 0.6);
+      [mid - 0.05, de - 0.06].forEach((u) => put(rr(u - 0.025, P.belt - 0.04, u + 0.025, P.belt - 0.027, 0.004), dark(col, 0.3), { stroke: 'none' }));
+      put(poly([[P.glass[P.glass.length - 1].slice(-1)[0][0] - 0.02, P.belt + 0.005], [P.glass[P.glass.length - 1].slice(-1)[0][0] + 0.025, P.belt + 0.03], [P.glass[P.glass.length - 1].slice(-1)[0][0] + 0.03, P.belt + 0.005]]), dark(col, 0.2), { stroke: dark(col) });
+    }
+    if (kind === 'van' || kind === 'ambulance') { line([[0.0, 0.42], [0.0, 0.13]], dark(col, 0.4), 1.1); line([[-0.2, 0.55], [-0.2, 0.13]], dark(col, 0.4), 1.1); }
+    // lights
+    put(poly([[front[0] - 0.035, P.belt - 0.045], [front[0] - 0.003, P.belt - 0.06], [front[0] - 0.003, P.belt - 0.09], [front[0] - 0.04, P.belt - 0.075]].map(([u, v]) => [u, Math.max(clear + 0.03, v)])), '#fff6d8', { stroke: '#b8ae88' });
+    put(poly([[back[0] + 0.003, P.belt - 0.05], [back[0] + 0.03, P.belt - 0.05], [back[0] + 0.03, P.belt - 0.085], [back[0] + 0.003, P.belt - 0.085]].map(([u, v]) => [u, Math.max(clear + 0.03, v)])), '#d7262b', { stroke: '#8f1416' });
+    // the kind's own marks
+    if (kind === 'taxi') { put(poly([[-0.06, 0.42], [0.06, 0.42], [0.05, 0.47], [-0.05, 0.47]]), '#ffe27a', { stroke: '#b8961c' }); for (let k = 0; k < 10; k++) put(rr(-0.36 + k * 0.07, 0.2, -0.33 + k * 0.07, 0.22, 0.002), '#222222', { stroke: 'none' }); }
+    if (kind === 'police') { put(rr(-0.26, 0.13, 0.2, 0.265, 0.01), '#1f3f8f', { stroke: 'none', op: 0.92 }); put(rr(-0.08, 0.42, 0, 0.46, 0.006), '#d8262b', { stroke: '#8f1416' }); put(rr(0, 0.42, 0.08, 0.46, 0.006), '#2463d6', { stroke: '#163f8a' }); }
+    if (kind === 'ambulance') { line([[-0.5, 0.3], [0.45, 0.3]], '#d6302a', 3); put(rr(-0.3, 0.36, -0.25, 0.45, 0.002), '#d6302a', { stroke: 'none' }); put(rr(-0.32, 0.385, -0.23, 0.425, 0.002), '#d6302a', { stroke: 'none' }); put(rr(-0.12, 0.6, 0.06, 0.63, 0.006), '#d8262b', { stroke: '#8f1416' }); }
+    if (kind === 'classic') { line([[back[0], 0.13], [back[0] + 0.06, 0.13]], '#d8dbe0', 3); line([[front[0] - 0.06, 0.13], [front[0], 0.13]], '#d8dbe0', 3); line([[-0.42, 0.22], [0.4, 0.2]], '#e9e3d6', 1.6); }
+    if (kind === 'firetruck') { for (let k = 0; k < 4; k++) { put(rr(-0.46 + k * 0.16, 0.14, -0.33 + k * 0.16, 0.32, 0.006), dark(col, 0.1), { stroke: dark(col, 0.4) }); line([[-0.4 + k * 0.16, 0.22], [-0.39 + k * 0.16, 0.22]], '#d8dbe0', 2); } line([[-0.5, 0.12], [0.5, 0.12]], '#f0f0f0', 2); }
+    P.wheels.forEach(([u, r]) => wheel(u, r, kind === 'classic'));
+    if (kind === 'truck' || kind === 'dumptruck' || kind === 'firetruck') line([[0.47, 0.09], [0.5, 0.09]], '#cfd3d8', 3);
+    return;
+  }
+  // ---- the rest, from the side
+  const V = (u, v) => `${X(u).toFixed(1)},${Y(v).toFixed(1)}`;
+  if (kind === 'bicycle' || kind === 'motorcycle' || kind === 'scooter') {
+    ground();
+    const r = kind === 'scooter' ? 0.12 : kind === 'motorcycle' ? 0.17 : 0.19, ub = kind === 'scooter' ? -0.33 : -0.31, uf = kind === 'scooter' ? 0.33 : 0.31, frame = base || (kind === 'bicycle' ? '#2d6fd6' : kind === 'scooter' ? '#e8742a' : '#d32f2f');
+    wheel(ub, r); wheel(uf, r);
+    if (kind === 'bicycle') {
+      const crank = [0.0, r * 0.95], seat = [-0.08, r + 0.25], head = [0.22, r + 0.22];
+      [[[ub, r], crank], [[ub, r], seat], [seat, crank], [crank, head], [seat, [head[0] - 0.02, head[1] - 0.01]], [head, [uf, r]]].forEach(([a, b]) => line([a, b], frame, Math.max(2, w * 0.022)));
+      line([[head[0], head[1]], [head[0] - 0.02, head[1] + 0.08], [head[0] + 0.05, head[1] + 0.09]], '#2b2f36', Math.max(2, w * 0.018));
+      put(ke(X(seat[0] - 0.01), Y(seat[1] + 0.03), w * 0.06, w * 0.016), '#2b2f36', { stroke: '#111' });
+      line([[seat[0], seat[1]], [seat[0] - 0.01, seat[1] + 0.03]], '#555', 2);
+      put(kc(X(crank[0]), Y(crank[1]), w * 0.04), '#9aa1aa', { stroke: '#555' }); line([[crank[0], crank[1]], [crank[0] + 0.05, crank[1] - 0.08]], '#3a3f47', 2.2); line([[crank[0], crank[1] + 0.035], [ub, r + 0.012]], '#3a3f47', 1.2); line([[crank[0], crank[1] - 0.035], [ub, r - 0.012]], '#3a3f47', 1.2);
+    } else {
+      const body = kind === 'motorcycle'
+        ? [[ub + 0.05, r + 0.1], [-0.12, r + 0.22], [0.02, r + 0.27], [0.18, r + 0.25], [0.26, r + 0.16], [0.12, r + 0.05], [-0.02, r + 0.02], [-0.18, r + 0.05]]
+        : [[ub + 0.02, r + 0.08], [ub + 0.04, r + 0.22], [-0.08, r + 0.25], [-0.04, r + 0.08], [0.18, r + 0.08], [0.2, r + 0.38], [0.24, r + 0.38], [uf + 0.02, r + 0.06], [0.1, r - 0.02], [-0.2, r - 0.02]];
+      put(ksmooth(body.map(([u, v]) => [X(u), Y(v)])), frame, { stroke: dark(frame) });
+      put(ksmooth([[-0.04, r + 0.24], [0.1, r + 0.255], [0.12, r + 0.24], [0.0, r + 0.225]].map(([u, v]) => [X(u), Y(v)])), lite(frame, 0.6), { stroke: 'none', op: 0.6 });
+      put(ksmooth((kind === 'motorcycle' ? [[-0.24, r + 0.2], [-0.05, r + 0.24], [-0.05, r + 0.27], [-0.25, r + 0.23]] : [[-0.27, r + 0.25], [-0.05, r + 0.26], [-0.05, r + 0.29], [-0.27, r + 0.28]]).map(([u, v]) => [X(u), Y(v)])), '#2b2f36', { stroke: '#111' });
+      line([[uf, r], [kind === 'motorcycle' ? 0.22 : 0.22, kind === 'motorcycle' ? r + 0.3 : r + 0.44]], '#9aa1aa', Math.max(2, w * 0.02));
+      line([[0.2, kind === 'motorcycle' ? r + 0.32 : r + 0.46], [0.13, kind === 'motorcycle' ? r + 0.34 : r + 0.47]], '#2b2f36', Math.max(2, w * 0.016));
+      put(ke(X(0.26), Y(kind === 'motorcycle' ? r + 0.22 : r + 0.4), w * 0.02, w * 0.025), '#fff6d8', { stroke: '#b8ae88' });
+      if (kind === 'motorcycle') { line([[-0.02, r + 0.02], [-0.3, r + 0.04], [-0.42, r + 0.08]], '#b8bec6', Math.max(2.4, w * 0.024)); put(kc(X(-0.02), Y(r + 0.06), w * 0.06), '#5a5f68', { stroke: '#2b2f36' }); }
+    }
+  } else if (kind === 'airplane') {
+    const c = base || '#f4f6f8';
+    put(sharp([[-0.42, 0.24], [-0.5, 0.42], [-0.44, 0.42], [-0.32, 0.26]]), '#2463d6', { stroke: '#163f8a' });
+    put(ksmooth([[-0.5, 0.23], [-0.3, 0.3], [0.3, 0.31], [0.44, 0.3], [0.5, 0.25], [0.46, 0.2], [0.3, 0.18], [-0.3, 0.18], [-0.48, 0.21]].map(([u, v]) => [X(u), Y(v)])), c, { stroke: dark(c, 0.3) });
+    put(ksmooth([[-0.45, 0.205], [0.3, 0.185], [0.46, 0.205], [0.3, 0.2], [-0.4, 0.215]].map(([u, v]) => [X(u), Y(v)])), '#2463d6', { stroke: 'none', op: 0.9 });
+    put(ksmooth([[0.42, 0.275], [0.47, 0.268], [0.47, 0.258], [0.42, 0.262]].map(([u, v]) => [X(u), Y(v)])), glassC, { stroke: 'none' });
+    for (let k = 0; k < 16; k++) put(kc(X(-0.3 + k * 0.042), Y(0.268), w * 0.006), glassC, { stroke: 'none' });
+    put(ksmooth([[-0.05, 0.21], [0.12, 0.21], [0.0, 0.12], [-0.12, 0.12]].map(([u, v]) => [X(u), Y(v)])), lite('#c9ced6', 0.2), { stroke: '#8a919b' });
+    put(ksmooth([[-0.02, 0.15], [0.12, 0.15], [0.12, 0.1], [-0.02, 0.1]].map(([u, v]) => [X(u), Y(v)])), '#c9ced6', { stroke: '#7d848e' }); put(ke(X(0.12), Y(0.125), w * 0.008, w * 0.024), '#3a3f47', { stroke: 'none' });
+    put(sharp([[-0.44, 0.27], [-0.32, 0.27], [-0.44, 0.3]]), '#c9ced6', { stroke: '#8a919b' });
+    line([[0.32, 0.18], [0.32, 0.03]], '#555', 1.6); put(kc(X(0.32), Y(0.025), w * 0.022), tyre, { stroke: '#111' });
+    line([[-0.02, 0.18], [-0.02, 0.03]], '#555', 1.6); put(kc(X(-0.02), Y(0.025), w * 0.022), tyre, { stroke: '#111' });
+    put(ksmooth([[-0.3, 0.3], [0.3, 0.305], [0.3, 0.295], [-0.3, 0.292]].map(([u, v]) => [X(u), Y(v)])), '#ffffff', { stroke: 'none', op: 0.6 });
+  } else if (kind === 'helicopter') {
+    const c = base || '#2f7d4a';
+    ground();
+    line([[-0.2, 0.02], [0.25, 0.02]], '#3a3f47', 2.2); [-0.12, 0.15].forEach((u) => line([[u, 0.02], [u - 0.02, 0.1]], '#3a3f47', 1.6));
+    put(sharp([[-0.5, 0.22], [-0.1, 0.17], [-0.1, 0.21], [-0.5, 0.25]]), c, { stroke: dark(c) });
+    put(sharp([[-0.5, 0.25], [-0.46, 0.36], [-0.42, 0.36], [-0.44, 0.24]]), c, { stroke: dark(c) });
+    put(kc(X(-0.46), Y(0.3), w * 0.06), '#9aa1aa', { stroke: '#555', op: 0.35 });
+    put(ksmooth([[-0.15, 0.13], [-0.12, 0.27], [0.05, 0.31], [0.22, 0.27], [0.3, 0.17], [0.24, 0.1], [0.0, 0.09]].map(([u, v]) => [X(u), Y(v)])), c, { stroke: dark(c) });
+    put(ksmooth([[0.08, 0.27], [0.21, 0.255], [0.28, 0.17], [0.2, 0.15], [0.1, 0.2]].map(([u, v]) => [X(u), Y(v)])), '#bfe3f2', { stroke: '#5c8ca0' });
+    put(ksmooth([[-0.06, 0.25], [0.04, 0.25], [0.04, 0.16], [-0.06, 0.16]].map(([u, v]) => [X(u), Y(v)])), glassC, { stroke: 'none' });
+    line([[0.03, 0.31], [0.03, 0.35]], '#3a3f47', 2.4); line([[-0.42, 0.36], [0.48, 0.36]], '#3a3f47', Math.max(2, w * 0.012));
+  } else if (kind === 'boat' || kind === 'ship' || kind === 'sailboat' || kind === 'rowboat' || kind === 'submarine') {
+    const water = () => put(`M${V(-0.6, 0)}Q${V(-0.45, 0.02)} ${V(-0.3, 0)}T${V(0, 0)}T${V(0.3, 0)}T${V(0.6, 0)}L${V(0.6, -0.08)}L${V(-0.6, -0.08)}Z`, '#5aa9e6', { stroke: '#2b78bd', op: 0.85 });
+    if (kind === 'submarine') {
+      const c = base || '#3c4f63';
+      put(ksmooth([[-0.46, 0.08], [-0.3, 0.16], [0.3, 0.165], [0.46, 0.12], [0.5, 0.08], [0.46, 0.04], [0.3, 0.0], [-0.3, 0.0], [-0.46, 0.05]].map(([u, v]) => [X(u), Y(v)])), c, { stroke: dark(c) });
+      put(sharp([[0.02, 0.16], [0.06, 0.27], [0.2, 0.27], [0.22, 0.16]]), c, { stroke: dark(c) }); line([[0.12, 0.27], [0.12, 0.34], [0.15, 0.34]], '#3a3f47', 1.6);
+      for (let k = 0; k < 6; k++) put(kc(X(-0.25 + k * 0.08), Y(0.09), w * 0.012), '#f2d36b', { stroke: 'none' });
+      put(ke(X(-0.5), Y(0.08), w * 0.012, w * 0.05), '#b8a46a', { stroke: '#6a5a2a' });
+      put(ksmooth([[-0.3, 0.14], [0.3, 0.15], [0.28, 0.13], [-0.3, 0.12]].map(([u, v]) => [X(u), Y(v)])), lite(c, 0.5), { stroke: 'none', op: 0.5 });
+    } else if (kind === 'sailboat') {
+      const c = base || '#f4f6f8'; water();
+      put(ksmooth([[-0.4, 0.1], [0.45, 0.12], [0.3, -0.03], [-0.3, -0.03]].map(([u, v]) => [X(u), Y(v)])), c, { stroke: dark(c, 0.3) }); line([[-0.38, 0.06], [0.38, 0.08]], '#2463d6', 2);
+      line([[0.0, 0.1], [0.0, 0.95]], '#7a5a3a', 2.4);
+      put(sharp([[0.02, 0.92], [0.02, 0.15], [0.38, 0.15]]), '#fbf7ee', { stroke: '#a8a294' }); put(sharp([[-0.02, 0.8], [-0.02, 0.18], [-0.3, 0.18]]), '#f2ede2', { stroke: '#a8a294' });
+      put(sharp([[0.0, 0.95], [0.1, 0.92], [0.0, 0.89]]), '#d8262b', { stroke: 'none' });
+    } else if (kind === 'rowboat') {
+      const c = base || '#c99a5a'; water();
+      put(ksmooth([[-0.48, 0.17], [0.48, 0.17], [0.34, -0.02], [-0.36, -0.02]].map(([u, v]) => [X(u), Y(v)])), c, { stroke: dark(c) });
+      [0.11, 0.05].forEach((v) => line([[-0.44, v], [0.44, v]], dark(c, 0.3), 1.1)); line([[-0.1, 0.32], [0.2, -0.04]], '#a87a44', 2.4); put(ke(X(0.22), Y(-0.06), w * 0.04, w * 0.015, 30), '#a87a44', { stroke: '#6a4a24' });
+    } else {
+      const c = base || (kind === 'ship' ? '#f4f6f8' : '#f4f6f8'); water();
+      const hull = kind === 'ship' ? [[-0.5, 0.16], [0.5, 0.2], [0.42, 0.0], [-0.46, 0.0]] : [[-0.48, 0.14], [0.5, 0.15], [0.3, -0.02], [-0.44, 0.0]];
+      put(sharp(hull), c, { stroke: dark(c, 0.3) });
+      put(sharp(kind === 'ship' ? [[-0.48, 0.06], [0.46, 0.08], [0.43, 0.02], [-0.47, 0.02]] : [[-0.46, 0.06], [0.42, 0.07], [0.33, 0.02], [-0.44, 0.02]]), kind === 'ship' ? '#1d3f73' : '#e8742a', { stroke: 'none' });
+      if (kind === 'ship') {
+        for (let d = 0; d < 3; d++) { const v0 = 0.17 + d * 0.065, u0 = -0.42 + d * 0.06, u1 = 0.3 - d * 0.06; put(sharp([[u0, v0], [u1, v0 + 0.005], [u1, v0 + 0.06], [u0, v0 + 0.06]]), '#fbfcfd', { stroke: '#9aa3ad' }); for (let k = 0; k < 14 - d * 2; k++) put(sharp([[u0 + 0.02 + k * 0.05, v0 + 0.02], [u0 + 0.045 + k * 0.05, v0 + 0.02], [u0 + 0.045 + k * 0.05, v0 + 0.04], [u0 + 0.02 + k * 0.05, v0 + 0.04]]), glassC, { stroke: 'none' }); }
+        put(sharp([[-0.2, 0.36], [-0.12, 0.36], [-0.11, 0.44], [-0.21, 0.44]]), '#d6302a', { stroke: '#8f1416' }); for (let k = 0; k < 8; k++) put(ke(X(-0.4 + k * 0.1), Y(0.1), w * 0.006, w * 0.006), glassC, { stroke: 'none' });
+      } else {
+        put(ksmooth([[-0.25, 0.15], [-0.2, 0.25], [0.05, 0.26], [0.2, 0.15]].map(([u, v]) => [X(u), Y(v)])), '#fbfcfd', { stroke: '#9aa3ad' }); put(ksmooth([[-0.15, 0.17], [-0.12, 0.23], [0.04, 0.235], [0.14, 0.17]].map(([u, v]) => [X(u), Y(v)])), glassC, { stroke: 'none' });
+      }
+    }
+  } else if (kind === 'tractor' || kind === 'excavator' || kind === 'bulldozer') {
+    const c = base || (kind === 'tractor' ? '#3f8f3a' : '#f2b51a'); ground();
+    if (kind === 'tractor') {
+      put(ksmooth([[-0.25, 0.2], [-0.25, 0.32], [0.35, 0.3], [0.42, 0.22], [0.4, 0.14], [-0.2, 0.14]].map(([u, v]) => [X(u), Y(v)])), c, { stroke: dark(c) });
+      line([[-0.3, 0.32], [-0.28, 0.6], [0.0, 0.6], [0.02, 0.3]], '#2b2f36', 2.4); put(sharp([[-0.27, 0.35], [-0.26, 0.56], [-0.02, 0.56], [-0.01, 0.35]]), '#bfe3f2', { stroke: 'none', op: 0.5 }); line([[0.22, 0.3], [0.22, 0.42]], '#3a3f47', 3);
+      wheel(-0.26, 0.24); wheel(0.32, 0.13);
+    } else {
+      put(ksmooth([[-0.4, 0.0], [-0.44, 0.06], [-0.4, 0.13], [0.3, 0.13], [0.34, 0.06], [0.3, 0.0]].map(([u, v]) => [X(u), Y(v)])), '#3a3f47', { stroke: '#1d2026' });
+      for (let k = 0; k < 6; k++) put(kc(X(-0.35 + k * 0.13), Y(0.065), w * 0.04), '#6b7079', { stroke: '#2b2f36' });
+      put(sharp([[-0.38, 0.14], [-0.38, 0.3], [0.28, 0.3], [0.28, 0.14]]), c, { stroke: dark(c) });
+      put(sharp([[-0.12, 0.3], [-0.12, 0.55], [0.12, 0.55], [0.18, 0.3]]), c, { stroke: dark(c) }); put(sharp([[-0.08, 0.33], [-0.08, 0.51], [0.1, 0.51], [0.14, 0.33]]), glassC, { stroke: 'none' });
+      if (kind === 'excavator') {
+        put(`M${V(0.18, 0.32)}L${V(0.42, 0.72)}L${V(0.47, 0.7)}L${V(0.26, 0.3)}Z`, c, { stroke: dark(c) });
+        put(`M${V(0.42, 0.72)}L${V(0.58, 0.32)}L${V(0.54, 0.3)}L${V(0.4, 0.66)}Z`, c, { stroke: dark(c) });
+        put(`M${V(0.52, 0.32)}Q${V(0.5, 0.18)} ${V(0.62, 0.14)}L${V(0.64, 0.3)}Z`, '#5a5f68', { stroke: '#2b2f36' });
+      } else { put(sharp([[0.32, 0.0], [0.4, 0.0], [0.44, 0.3], [0.36, 0.32]]), '#5a5f68', { stroke: '#2b2f36' }); line([[0.28, 0.2], [0.37, 0.18]], '#3a3f47', 2.4); }
+    }
+  } else if (kind === 'rocket') { // standing up: w is its height
+    const c = base || '#f4f6f8', H = w, Xr = (f) => x + f * H, Yr = (f) => y - f * H;
+    put(`M${Xr(-0.06)},${Yr(0.15)}Q${Xr(0)},${Yr(-0.1)} ${Xr(0.06)},${Yr(0.15)}Z`, '#ffb21f', { stroke: '#e0601a', op: 0.95 });
+    put(ksmooth([[Xr(-0.07), Yr(0.12)], [Xr(-0.08), Yr(0.6)], [Xr(-0.05), Yr(0.85)], [Xr(0), Yr(1)], [Xr(0.05), Yr(0.85)], [Xr(0.08), Yr(0.6)], [Xr(0.07), Yr(0.12)]]), c, { stroke: dark(c, 0.3) });
+    put(ksmooth([[Xr(-0.05), Yr(0.85)], [Xr(0), Yr(1)], [Xr(0.05), Yr(0.85)], [Xr(0), Yr(0.82)]]), '#d6302a', { stroke: '#8f1416' });
+    [-1, 1].forEach((sd) => put(kpts([[Xr(sd * 0.07), Yr(0.32)], [Xr(sd * 0.16), Yr(0.1)], [Xr(sd * 0.16), Yr(0.02)], [Xr(sd * 0.07), Yr(0.14)]]), '#d6302a', { stroke: '#8f1416' }));
+    put(kc(Xr(0), Yr(0.62), H * 0.035), '#6fc3ea', { stroke: '#2b78bd' }); put(kpts([[Xr(-0.045), Yr(0.13)], [Xr(0.045), Yr(0.13)], [Xr(0.04), Yr(0.08)], [Xr(-0.04), Yr(0.08)]]), '#5a5f68', { stroke: '#2b2f36' });
+  } else if (kind === 'balloon') { // w is its width
+    const c = base || '#e8574f', H = w, Xb = (f) => x + f * H, Yb = (f) => y - f * H;
+    put(kpts([[Xb(-0.08), Yb(0.12)], [Xb(0.08), Yb(0.12)], [Xb(0.07), Yb(0)], [Xb(-0.07), Yb(0)]]), '#a87a44', { stroke: '#6a4a24' });
+    [-0.07, 0.07].forEach((f) => put(`M${Xb(f)},${Yb(0.12)}L${Xb(f * 1.8)},${Yb(0.4)}`, 'none', { stroke: '#6a4a24', w: 1, line: true }));
+    put(ksmooth([[Xb(-0.15), Yb(0.42)], [Xb(-0.48), Yb(0.85)], [Xb(-0.42), Yb(1.25)], [Xb(0), Yb(1.4)], [Xb(0.42), Yb(1.25)], [Xb(0.48), Yb(0.85)], [Xb(0.15), Yb(0.42)]]), c, { stroke: dark(c) });
+    [-0.28, 0, 0.28].forEach((f) => put(`M${Xb(f * 0.4)},${Yb(0.43)}Q${Xb(f * 1.5)},${Yb(0.95)} ${Xb(f * 0.6)},${Yb(1.38)}`, 'none', { stroke: dark(c, 0.3), w: 1.4, line: true }));
+    put(ksmooth([[Xb(-0.4), Yb(0.82)], [Xb(0.4), Yb(0.82)], [Xb(0.35), Yb(0.7)], [Xb(-0.35), Yb(0.7)]]), '#f6c21c', { stroke: 'none', op: 0.9 });
+    put(ke(Xb(-0.2), Yb(1.15), H * 0.1, H * 0.05, -30), '#ffffff', { stroke: 'none', op: 0.35 });
+  } else if (kind === 'drone') {
+    const c = base || '#e8742a';
+    put(ksmooth([[-0.18, 0.12], [-0.15, 0.2], [0.15, 0.2], [0.18, 0.12], [0.12, 0.08], [-0.12, 0.08]].map(([u, v]) => [X(u), Y(v)])), c, { stroke: dark(c) });
+    [-1, 1].forEach((sd) => { line([[sd * 0.12, 0.17], [sd * 0.4, 0.22]], '#3a3f47', 3); line([[sd * 0.4, 0.22], [sd * 0.4, 0.26]], '#3a3f47', 2); put(ke(X(sd * 0.4), Y(0.265), w * 0.14, w * 0.015), '#9aa1aa', { stroke: '#555', op: 0.7 }); line([[sd * 0.1, 0.08], [sd * 0.14, 0.0]], '#3a3f47', 1.6); });
+    put(kc(X(0.12), Y(0.11), w * 0.025), glassC, { stroke: '#111' });
+  }
 }
 
 function shape2d(s, p) {
@@ -1673,17 +1986,24 @@ function finishMat(T, colour, finish, { real, matte, glow }) {
 // tree, a flower or a rock stands at y 0; clouds, the sun and the moon float high above; roots grow below it). Surfaces
 // are bent by noise so nothing is a perfect ball: lumpy leafy crowns, rough bark, jagged pine tiers, faceted rocks;
 // every clump a slightly different green, and matte natural materials that catch the light like the real thing.
-const KIT3 = ['tree', 'flower', 'leaf', 'cloud', 'sun', 'moon', 'rainbow', 'rock', 'grass', 'log', 'mushroom', 'ground', 'drops', 'snowflake', 'bolt'];
+const KIT3 = ['tree', 'flower', 'leaf', 'cloud', 'sun', 'moon', 'rainbow', 'rock', 'grass', 'log', 'mushroom', 'ground', 'drops', 'snowflake', 'bolt', 'vehicle']; // (v326: and vehicles)
 const KIT3_KINDS = {
   tree: ['round', 'oak', 'pine', 'bush', 'palm', 'blossom', 'fruit', 'autumn', 'bare'],
   flower: ['sunflower', 'daisy', 'tulip', 'rose', 'lily', 'lavender', 'blossom', 'hydrangea'],
   leaf: ['oval', 'maple', 'heart'], cloud: ['white', 'grey', 'rain', 'storm', 'snow'],
   rock: ['stone', 'mossy'], log: ['log', 'stump'], grass: ['grass', 'flowers'], ground: ['grass', 'soil', 'sand', 'snow'],
+  get vehicle() { return VEH_KINDS; },
 };
 // the box a kit model fills, from where it stands (for the model's checks and the camera)
 function kit3Box(s, pos) {
   const t = String(s.t || '').toLowerCase(), h = Math.abs(n3(s.h ?? s.size, t === 'tree' ? 3 : 1)), w = Math.abs(n3(s.w ?? s.r ?? s.size, 1)), r = Math.abs(n3(s.r ?? s.size, 0.6));
   const [x, y, z] = pos, sq = (a, lo, hi) => [x - a, y + lo, z - a, x + a, y + hi, z + a];
+  if (t === 'vehicle') { // (v326) its length along x (along z when it faces z), its height from its shape
+    const L = Math.abs(n3(s.w ?? s.size ?? s.len, 4)), k = String(s.kind || 'sedan'), P = VEH_SHAPES[VEH_OF[k] || k], along = s.facing === 'z' || s.facing === '-z';
+    const tall = P ? Math.max(...P.top.map((q) => q[1])) + 0.05 : ({ rocket: 1, balloon: 1.4, sailboat: 0.95, excavator: 0.75, tractor: 0.65, helicopter: 0.42, airplane: 0.42, bicycle: 0.65, motorcycle: 0.6, scooter: 0.65 })[k] || 0.45;
+    const half = k === 'rocket' ? 0.16 * L : k === 'balloon' ? 0.48 * L : L / 2, wide = k === 'airplane' || k === 'helicopter' ? 0.47 * L : P ? P.wide * L / 2 + 0.02 * L : 0.2 * L;
+    return along ? [x - wide, y, z - half, x + wide, y + tall * L, z + half] : [x - half, y, z - wide, x + half, y + tall * L, z + wide];
+  }
   if (t === 'tree' && s.only) return ({ roots: sq(h * 0.45, -h * 0.32, 0), trunk: sq(h * 0.12, 0, h * 0.56), branches: sq(h * 0.34, h * 0.3, h * 0.85), crown: sq(h * 0.42, h * 0.45, h) })[s.only] || sq(h * 0.42, 0, h); // (one part of a tree: where that part is)
   if (t === 'tree') return sq(h * (s.kind === 'pine' ? 0.3 : 0.42), 0, h);
   if (t === 'flower' || t === 'mushroom') return sq(h * 0.3, 0, h);
@@ -1877,9 +2197,140 @@ function kit3d(T, s, mat) {
     const h = Math.min(6, Math.max(0.1, H)), sh = new T.Shape();
     [[0.08, 0.5], [-0.12, 0.02], [0.02, 0.02], [-0.08, -0.5], [0.16, 0.06], [0.03, 0.06], [0.14, 0.5]].forEach(([x, y], k) => (k ? sh.lineTo(x * h, y * h) : sh.moveTo(x * h, y * h)));
     add(new T.ExtrudeGeometry(sh, { depth: h * 0.05, bevelEnabled: true, bevelSize: h * 0.01, bevelThickness: h * 0.01, bevelSegments: 2 }), M('#ffd23a', 0.4, { glow: '#ffc21a', gi: 1 }));
+  } else if (t === 'vehicle') { // (v326) a vehicle in 3D, its front toward +x, standing on the ground (y 0), w its length
+    const L = Math.min(14, Math.max(0.2, Math.abs(n3(s.w ?? s.size ?? s.len, 4)))), P = VEH_SHAPES[VEH_OF[kind] || kind];
+    const col = own || { taxi: '#f6c21c', police: '#f4f6f8', ambulance: '#f7f8fa' }[kind] || (P ? P.col : { bicycle: '#2d6fd6', motorcycle: '#d32f2f', scooter: '#e8742a', airplane: '#f4f6f8', helicopter: '#2f7d4a', boat: '#f4f6f8', ship: '#f4f6f8', sailboat: '#f4f6f8', rowboat: '#c99a5a', submarine: '#3c4f63', rocket: '#f4f6f8', balloon: '#e8574f', drone: '#e8742a', tractor: '#3f8f3a', excavator: '#f2b51a', bulldozer: '#f2b51a' }[kind] || '#c63a2f');
+    const paint = M(col, 0.32, { clear: true }), glass = M('#1d2733', 0.08, { clear: true }), tyre = M('#1f2125', 0.85), rimM = M('#c9ced6', 0.3), chrome = M('#dfe3e8', 0.18), black = M('#2b2f36', 0.6), red = M('#d7262b', 0.3, { glow: '#b01418', gi: 0.5 }), lamp = M('#fff6d8', 0.2, { glow: '#fff2c0', gi: 0.6 });
+    const box = (sx, sy, sz, m, x, y, z, ry = 0, rz = 0) => { const RB = T.RoundedBox, r = Math.min(sx, sy, sz) * 0.2; const e = add(RB && r > 0.004 ? new RB(sx, sy, sz, 2, r) : new T.BoxGeometry(sx, sy, sz), m, x, y, z, 0, ry, rz); return e; };
+    const wheel = (x, r, z, wd, m = rimM) => { const t1 = add(new T.CylinderGeometry(r, r, wd, 28), tyre, x, r, z, Math.PI / 2); const t2 = add(new T.CylinderGeometry(r * 0.6, r * 0.6, wd * 1.04, 20), m, x, r, z, Math.PI / 2); const t3 = add(new T.CylinderGeometry(r * 0.18, r * 0.18, wd * 1.1, 12), M('#8a919b', 0.4), x, r, z, Math.PI / 2); t1.userData.spin = 'z'; return [t1, t2, t3]; };
+    const extrudeSide = (pts, depth, m, bevel = 0) => { const sh = new T.Shape(); pts.forEach(([u, v], k) => (k ? sh.lineTo(u * L, v * L) : sh.moveTo(u * L, v * L))); const g = new T.ExtrudeGeometry(sh, { depth, bevelEnabled: bevel > 0, bevelSize: bevel, bevelThickness: bevel, bevelSegments: 3, curveSegments: 8 }); g.translate(0, 0, -depth / 2); return add(g, m); };
+    if (P) {
+      const W = P.wide * L, bev = Math.min(W * 0.12, L * 0.03), arches = P.wheels.map(([u, r]) => [u, r * 1.22]).sort((a, b) => b[0] - a[0]);
+      const front = P.top[P.top.length - 1], back = P.top[0], clear = Math.min(front[1], back[1]);
+      const bottom = []; arches.forEach(([u, ar]) => { for (let k = 0; k <= 12; k++) { const a = k / 12 * Math.PI; bottom.push([u + Math.cos(a) * ar, Math.max(clear, P.wheels[0][1] + Math.sin(a) * ar * 0.92)]); } });
+      // the body: its side profile, wheel arches cut in, pushed out to its width with soft rounded edges
+      const prof = [...P.top, ...bottom], nTop = P.top.length;
+      if (kind === 'truck' || kind === 'dumptruck') { // the load behind the cab, the chassis under it
+        if (kind === 'truck') box(0.66 * L, 0.4 * L, W * 0.98, M(own ? kitLight3(col) : '#eceef0', 0.5), -0.17 * L, 0.315 * L, 0);
+        else { const bed = extrudeSide([[-0.52, 0.2], [-0.48, 0.5], [0.15, 0.5], [0.15, 0.2]], W * 1.02, M(kitDark3b(col, 0.92), 0.5), bev * 0.5); add(new T.BoxGeometry(0.6 * L, 0.02 * L, W * 0.9), M('#8a6a44', 0.9), -0.17 * L, 0.5 * L, 0); }
+        box(0.72 * L, 0.04 * L, W * 0.7, black, -0.14 * L, 0.12 * L, 0);
+      }
+      { // (its top a smooth curve through the profile, as the flat drawing is; the bottom with its wheel arches)
+        const sh = new T.Shape(); sh.moveTo(prof[0][0] * L, prof[0][1] * L); sh.splineThru(P.top.slice(1).map(([u, v]) => new T.Vector2(u * L, v * L)));
+        bottom.forEach(([u, v]) => sh.lineTo(u * L, v * L)); sh.lineTo(prof[0][0] * L, prof[0][1] * L);
+        const g = new T.ExtrudeGeometry(sh, { depth: W - bev * 2, bevelEnabled: true, bevelSize: bev, bevelThickness: bev, bevelSegments: 4, curveSegments: 24 }); g.translate(0, 0, -(W - bev * 2) / 2); add(g, paint);
+      }
+      // glass: the side windows on both sides, the windshield and the back window along their slopes
+      P.glass.forEach((g) => { const e = extrudeSide(g, W + 0.004 * L, glass); e.scale.set(1, 1, 1); });
+      const tops = P.top, maxV = Math.max(...tops.map((q) => q[1]));
+      const slope = (a, b) => { const dx = (b[0] - a[0]) * L, dy = (b[1] - a[1]) * L, len = Math.hypot(dx, dy), e = add(new T.BoxGeometry(len * 0.92, 0.006 * L, W * 0.78), glass, (a[0] + b[0]) / 2 * L, (a[1] + b[1]) / 2 * L, 0); e.rotation.z = Math.atan2(dy, dx); const n = new T.Vector3(-dy, dx, 0).normalize().multiplyScalar(bev + 0.006 * L); if (n.y < 0) n.negate(); e.position.add(n); };
+      if (!['bus', 'schoolbus', 'truck', 'dumptruck', 'firetruck', 'train'].includes(kind)) {
+        let fi = tops.findIndex((q, k) => k > 0 && q[1] >= maxV - 0.02 && (!tops[k + 1] || tops[k + 1][1] < maxV - 0.02)); if (fi >= 0 && tops[fi + 1] && tops[fi + 1][1] > P.belt - 0.03) slope(tops[fi], tops[fi + 1]);
+        let ri = tops.findIndex((q) => q[1] >= maxV - 0.02); if (ri > 0 && tops[ri - 1][1] > P.belt - 0.05 && !['van', 'suv', 'pickup'].includes(VEH_OF[kind] || kind)) slope(tops[ri - 1], tops[ri]);
+      }
+      if (['bus', 'schoolbus', 'train'].includes(kind)) { // a row of windows on both sides, a windshield in front
+        const v0 = kind === 'train' ? 0.15 : 0.21, v1 = kind === 'train' ? 0.235 : 0.32, end = kind === 'schoolbus' ? 0.26 : kind === 'train' ? 0.3 : 0.36, n = kind === 'train' ? 9 : 7, step = (end + 0.46) / n;
+        for (let k = 0; k < n; k++) { const u0 = -0.46 + k * step + 0.008; add(new T.BoxGeometry((step - 0.016) * L, (v1 - v0) * L, W + 0.006 * L), glass, (u0 + (step - 0.016) / 2) * L, (v0 + v1) / 2 * L, 0); }
+        if (kind !== 'train') box(0.012 * L, 0.15 * L, W * 0.86, glass, (kind === 'schoolbus' ? 0.335 : 0.5) * L, 0.27 * L, 0);
+        if (kind === 'train') { add(new T.BoxGeometry(L * 0.96, 0.012 * L, W + 0.006 * L), M('#d6302a', 0.4), -0.02 * L, 0.135 * L, 0); [-0.65, 0.65].forEach((z) => add(new T.BoxGeometry(L * 1.2, 0.012 * L, 0.012 * L), M('#9aa0a8', 0.3), 0, 0.006 * L, z * W)); }
+        if (kind === 'schoolbus') add(new T.BoxGeometry(L * 0.8, 0.012 * L, W + 0.006 * L), black, -0.09 * L, 0.175 * L, 0);
+      }
+      if (kind === 'firetruck') { for (let k = 0; k < 2; k++) add(new T.BoxGeometry(0.78 * L, 0.012 * L, 0.012 * L), M('#c7ccd3', 0.3), -0.08 * L, (0.415 + k * 0.03) * L, (k ? 1 : -1) * W * 0.25); for (let k = 0; k <= 15; k++) add(new T.BoxGeometry(0.008 * L, 0.03 * L, W * 0.5), M('#c7ccd3', 0.3), (-0.46 + k * 0.05) * L, 0.43 * L, 0); }
+      // wheels, both sides
+      const tw = Math.min(W * 0.22, P.wheels[0][1] * L * 0.8);
+      P.wheels.forEach(([u, r]) => [-1, 1].forEach((sd) => wheel(u * L, r * L, sd * (W / 2 - tw * 0.35), tw)));
+      // lights, grille, mirrors
+      const fy = Math.max(clear + 0.04, P.belt - 0.07) * L;
+      [-1, 1].forEach((sd) => { box(0.03 * L, 0.03 * L, W * 0.2, lamp, (front[0] - 0.008) * L, fy, sd * W * 0.32); box(0.02 * L, 0.035 * L, W * 0.2, red, (back[0] + 0.006) * L, fy, sd * W * 0.32); });
+      box(0.02 * L, 0.04 * L, W * 0.36, black, (front[0] - 0.004) * L, Math.max(clear + 0.03, fy / L - 0.04) * L, 0);
+      if (!['bus', 'schoolbus', 'train', 'firetruck'].includes(kind)) [-1, 1].forEach((sd) => box(0.03 * L, 0.025 * L, 0.05 * L, paint, (P.glass.length ? P.glass[P.glass.length - 1].slice(-1)[0][0] - 0.02 : 0.2) * L, (P.belt + 0.015) * L, sd * (W / 2 + 0.02 * L)));
+      if (kind === 'taxi') box(0.12 * L, 0.04 * L, W * 0.3, M('#ffe27a', 0.4, { glow: '#ffd23a', gi: 0.3 }), 0, (maxV + 0.02) * L, 0);
+      if (kind === 'police' || kind === 'ambulance') { box(0.07 * L, 0.035 * L, W * 0.3, M('#d8262b', 0.3, { glow: '#d8262b', gi: 0.8 }), 0, (maxV + 0.02) * L, -W * 0.16); box(0.07 * L, 0.035 * L, W * 0.3, M('#2463d6', 0.3, { glow: '#2463d6', gi: 0.8 }), 0, (maxV + 0.02) * L, W * 0.16); }
+      if (kind === 'police') [-1, 1].forEach((sd) => add(new T.BoxGeometry(0.44 * L, 0.13 * L, 0.004 * L), M('#1f3f8f', 0.35), -0.03 * L, 0.195 * L, sd * (W / 2 + 0.001 * L)));
+      if (kind === 'ambulance') [-1, 1].forEach((sd) => add(new T.BoxGeometry(0.95 * L, 0.025 * L, 0.004 * L), M('#d6302a', 0.4), -0.02 * L, 0.3 * L, sd * (W / 2 + 0.001 * L)));
+      if (kind === 'taxi') [-1, 1].forEach((sd) => { for (let k = 0; k < 10; k++) add(new T.BoxGeometry(0.03 * L, 0.02 * L, 0.004 * L), black, (-0.345 + k * 0.07) * L, 0.21 * L, sd * (W / 2 + 0.001 * L)); });
+      if (kind === 'classic') [back[0] + 0.02, front[0] - 0.02].forEach((u) => box(0.04 * L, 0.04 * L, W * 1.02, chrome, u * L, 0.13 * L, 0));
+    } else if (kind === 'bicycle' || kind === 'motorcycle' || kind === 'scooter') {
+      const r = (kind === 'scooter' ? 0.12 : kind === 'motorcycle' ? 0.17 : 0.19) * L, ub = (kind === 'scooter' ? -0.33 : -0.31) * L, uf = -ub, tw = kind === 'bicycle' ? 0.025 * L : 0.06 * L;
+      [ub, uf].forEach((u) => { const e = add(new T.TorusGeometry(r * 0.9, kind === 'bicycle' ? r * 0.08 : r * 0.18, 12, 40), tyre, u, r, 0); add(new T.CylinderGeometry(r * (kind === 'bicycle' ? 0.08 : 0.55), r * (kind === 'bicycle' ? 0.08 : 0.55), tw, 20), rimM, u, r, 0, Math.PI / 2); if (kind === 'bicycle') for (let k = 0; k < 12; k++) { const sp = add(new T.CylinderGeometry(L * 0.002, L * 0.002, r * 1.7, 4), rimM, u, r, 0); sp.rotation.z = k * Math.PI / 12; } });
+      const fm = M(col, 0.35, { clear: true }), tb = L * (kind === 'bicycle' ? 0.012 : 0.02);
+      if (kind === 'bicycle') { const crank = [0, r * 0.95], seat = [-0.08 * L, r + 0.25 * L], head = [0.22 * L, r + 0.22 * L]; [[[ub, r], crank], [[ub, r], seat], [seat, crank], [crank, head], [seat, head], [head, [uf, r]]].forEach(([a, b]) => tube([[a[0], a[1], 0], [b[0], b[1], 0]], tb, fm)); tube([[head[0], head[1], 0], [head[0] - 0.02 * L, head[1] + 0.08 * L, 0]], tb, black); tube([[head[0] - 0.02 * L, head[1] + 0.08 * L, -0.1 * L], [head[0] - 0.02 * L, head[1] + 0.08 * L, 0.1 * L]], tb, black); box(0.12 * L, 0.025 * L, 0.05 * L, black, seat[0] - 0.01 * L, seat[1] + 0.03 * L, 0); add(new T.CylinderGeometry(0.04 * L, 0.04 * L, 0.01 * L, 24), rimM, 0, crank[1], 0.03 * L, Math.PI / 2); }
+      else {
+        const body = kind === 'motorcycle' ? [[ub / L + 0.05, 0.1], [-0.12, 0.22], [0.02, 0.27], [0.18, 0.25], [0.26, 0.16], [0.12, 0.05], [-0.02, 0.02], [-0.18, 0.05]] : [[ub / L + 0.02, 0.08], [ub / L + 0.04, 0.22], [-0.08, 0.25], [-0.04, 0.08], [0.18, 0.08], [0.2, 0.38], [0.24, 0.38], [uf / L + 0.02, 0.06], [0.1, -0.02], [-0.2, -0.02]];
+        const g = extrudeSide(body.map(([u, v]) => [u, v + r / L]), 0.16 * L, fm, 0.03 * L); g.position.z = 0;
+        box(0.22 * L, 0.03 * L, 0.12 * L, black, (kind === 'motorcycle' ? -0.15 : -0.16) * L, r + (kind === 'motorcycle' ? 0.24 : 0.27) * L, 0);
+        tube([[uf, r, 0], [0.22 * L, r + (kind === 'motorcycle' ? 0.3 : 0.44) * L, 0]], tb * 1.2, chrome); tube([[0.2 * L, r + (kind === 'motorcycle' ? 0.32 : 0.46) * L, -0.16 * L], [0.2 * L, r + (kind === 'motorcycle' ? 0.32 : 0.46) * L, 0.16 * L]], tb, black);
+        box(0.03 * L, 0.05 * L, 0.06 * L, lamp, 0.27 * L, r + (kind === 'motorcycle' ? 0.22 : 0.4) * L, 0);
+        if (kind === 'motorcycle') tube([[-0.02 * L, r + 0.02 * L, 0.08 * L], [-0.3 * L, r + 0.04 * L, 0.1 * L], [-0.42 * L, r + 0.08 * L, 0.1 * L]], tb * 1.4, chrome);
+      }
+    } else if (kind === 'airplane') {
+      const R0 = 0.06 * L, wm = paint, blue = M('#2463d6', 0.35, { clear: true });
+      const f = lathe([[0, -0.5 * L], [R0 * 0.35, -0.47 * L], [R0 * 0.8, -0.36 * L], [R0, -0.2 * L], [R0, 0.32 * L], [R0 * 0.85, 0.42 * L], [R0 * 0.5, 0.48 * L], [0, 0.5 * L]], wm, 32); f.rotation.z = -Math.PI / 2; f.position.y = 0.25 * L; // (it stands on its wheels at y 0)
+      const wing = new T.Shape(); [[0.08, 0], [-0.08, 0], [-0.2, 0.46], [-0.14, 0.47]].forEach(([u, zz], k) => (k ? wing.lineTo(u * L, zz * L) : wing.moveTo(u * L, zz * L)));
+      [-1, 1].forEach((sd) => { const g = new T.ExtrudeGeometry(wing, { depth: 0.012 * L, bevelEnabled: false }); const e = add(g, wm, 0.02 * L, 0.21 * L, 0); e.rotation.x = Math.PI / 2; e.scale.set(1, sd, 1); add(new T.CylinderGeometry(0.03 * L, 0.028 * L, 0.12 * L, 20), M('#c9ced6', 0.3), 0.04 * L, 0.18 * L, sd * 0.16 * L, 0, 0, Math.PI / 2); });
+      const fin = new T.Shape(); [[-0.5, 0], [-0.36, 0], [-0.46, 0.17], [-0.5, 0.17]].forEach(([u, v], k) => (k ? fin.lineTo(u * L, v * L) : fin.moveTo(u * L, v * L))); add(new T.ExtrudeGeometry(fin, { depth: 0.01 * L, bevelEnabled: false }), blue, 0, 0.29 * L, -0.005 * L);
+      const tail = new T.Shape(); [[0.04, 0], [-0.04, 0], [-0.08, 0.17], [-0.05, 0.17]].forEach(([u, zz], k) => (k ? tail.lineTo(u * L, zz * L) : tail.moveTo(u * L, zz * L))); [-1, 1].forEach((sd) => { const e = add(new T.ExtrudeGeometry(tail, { depth: 0.008 * L, bevelEnabled: false }), wm, -0.44 * L, 0.27 * L, 0); e.rotation.x = Math.PI / 2; e.scale.set(1, sd, 1); });
+      for (let k = 0; k < 16; k++) [-1, 1].forEach((sd) => add(new T.SphereGeometry(0.008 * L, 8, 6), glass, (-0.3 + k * 0.042) * L, 0.27 * L, sd * R0 * 0.98));
+      box(0.05 * L, 0.02 * L, R0 * 1.2, glass, 0.44 * L, 0.282 * L, 0, 0, -0.5);
+      [[0.32, 0], [-0.02, 0.06], [-0.02, -0.06]].forEach(([u, zz]) => { tube([[u * L, 0.2 * L, zz * L], [u * L, 0.04 * L, zz * L]], 0.006 * L, M('#8a919b', 0.4)); add(new T.CylinderGeometry(0.025 * L, 0.025 * L, 0.02 * L, 16), tyre, u * L, 0.025 * L, zz * L, Math.PI / 2); });
+    } else if (kind === 'helicopter') {
+      const body = add(new T.SphereGeometry(0.16 * L, 32, 24), paint, 0.05 * L, 0.2 * L, 0); body.scale.set(1.3, 0.85, 0.8);
+      const bubble = add(new T.SphereGeometry(0.12 * L, 28, 20, 0, Math.PI), M('#bfe3f2', 0.05, { clear: true }), 0.12 * L, 0.21 * L, 0, 0, Math.PI / 2, 0); bubble.scale.set(1, 0.9, 0.9);
+      tube([[-0.1 * L, 0.22 * L, 0], [-0.48 * L, 0.24 * L, 0]], 0.03 * L, paint, 0.015 * L);
+      const fin = add(new T.BoxGeometry(0.05 * L, 0.12 * L, 0.01 * L), paint, -0.47 * L, 0.3 * L, 0);
+      const tr = add(new T.BoxGeometry(0.004 * L, 0.11 * L, 0.012 * L), black, -0.47 * L, 0.3 * L, 0.012 * L); tr.userData.spin = 'z';
+      tube([[0.03 * L, 0.34 * L, 0], [0.03 * L, 0.38 * L, 0]], 0.012 * L, black);
+      const rot = new T.Group(); rot.position.set(0.03 * L, 0.385 * L, 0); for (let k = 0; k < 4; k++) { const b = new T.Mesh(new T.BoxGeometry(0.9 * L, 0.006 * L, 0.035 * L), black); b.rotation.y = k * Math.PI / 4 * 2; rot.add(b); } rot.userData.spin = 'y'; G.add(rot);
+      [-1, 1].forEach((sd) => { tube([[-0.2 * L, 0.02 * L, sd * 0.1 * L], [0.25 * L, 0.02 * L, sd * 0.1 * L], [0.3 * L, 0.05 * L, sd * 0.1 * L]], 0.008 * L, black); [-0.1, 0.15].forEach((u) => tube([[u * L, 0.02 * L, sd * 0.1 * L], [u * L, 0.1 * L, sd * 0.06 * L]], 0.006 * L, black)); });
+    } else if (['boat', 'ship', 'sailboat', 'rowboat', 'submarine'].includes(kind)) {
+      if (kind === 'submarine') { const c = lathe([[0, -0.5 * L], [0.06 * L, -0.45 * L], [0.085 * L, -0.3 * L], [0.085 * L, 0.3 * L], [0.07 * L, 0.42 * L], [0.03 * L, 0.49 * L], [0, 0.5 * L]], paint, 32); c.rotation.z = -Math.PI / 2; c.position.y = 0.09 * L; box(0.18 * L, 0.11 * L, 0.05 * L, paint, 0.12 * L, 0.21 * L, 0); tube([[0.12 * L, 0.26 * L, 0], [0.12 * L, 0.34 * L, 0], [0.15 * L, 0.34 * L, 0]], 0.006 * L, black); const pr = new T.Group(); pr.position.set(-0.51 * L, 0.09 * L, 0); for (let k = 0; k < 5; k++) { const b = new T.Mesh(new T.BoxGeometry(0.01 * L, 0.06 * L, 0.02 * L), M('#b8a46a', 0.3)); b.rotation.x = k * Math.PI * 2 / 5; pr.add(b); } pr.userData.spin = 'x'; G.add(pr); }
+      else {
+        const hullC = kind === 'rowboat' ? M('#c99a5a', 0.7) : paint, sea = kind !== 'rowboat';
+        const hw = (kind === 'ship' ? 0.11 : kind === 'rowboat' ? 0.2 : 0.16) * L, dep = (kind === 'ship' ? 0.18 : 0.14) * L;
+        // a hull: cross sections from the stern to a pointed bow, a deep V below the deck
+        const N = 24, M2 = 8, pos = [], idx = [];
+        for (let i = 0; i <= N; i++) { const u = i / N, x = (u - 0.5) * L, wd = hw * (u < 0.7 ? 1 - 0.15 * (1 - u / 0.7) ** 2 : Math.sqrt(Math.max(0, 1 - ((u - 0.7) / 0.3) ** 2))), keel = -dep * (0.4 + 0.6 * Math.sin(Math.min(1, u * 1.2) * Math.PI / 2));
+          for (let j = 0; j <= M2; j++) { const a = j / M2, zz = (a * 2 - 1) * wd, yy = (1 - Math.abs(a * 2 - 1) ** 1.6) * keel; pos.push(x, yy + dep * 0.6, zz); } }
+        for (let i = 0; i < N; i++) for (let j = 0; j < M2; j++) { const a = i * (M2 + 1) + j, b = a + M2 + 1; idx.push(a, b, a + 1, b, b + 1, a + 1); }
+        const hg = new T.BufferGeometry(); hg.setAttribute('position', new T.Float32BufferAttribute(pos, 3)); hg.setIndex(idx); hg.computeVertexNormals(); add(hg, hullC);
+        add(new T.BoxGeometry(L * 0.66, 0.01 * L, hw * 1.8), M(kind === 'rowboat' ? '#b8884a' : '#e9e4d8', 0.7), -0.12 * L, dep * 0.6, 0);
+        if (kind === 'ship') { for (let d = 0; d < 3; d++) { const e = box((0.72 - d * 0.12) * L, 0.065 * L, hw * (1.7 - d * 0.2), M('#fbfcfd', 0.4), (-0.06 - d * 0.02) * L, dep * 0.6 + (0.04 + d * 0.065) * L, 0); for (let k = 0; k < 12 - d * 2; k++) [-1, 1].forEach((sd) => add(new T.BoxGeometry(0.025 * L, 0.02 * L, 0.004 * L), glass, (-0.38 + d * 0.03 + k * 0.06) * L, dep * 0.6 + (0.04 + d * 0.065) * L, sd * hw * (0.85 - d * 0.1))); } box(0.07 * L, 0.1 * L, 0.06 * L, M('#d6302a', 0.4), -0.16 * L, dep * 0.6 + 0.27 * L, 0); add(new T.BoxGeometry(L * 0.98, 0.04 * L, hw * 2.02), M('#1d3f73', 0.4), 0, dep * 0.3, 0).scale.set(1, 1, 0.98); }
+        else if (kind === 'boat') { const c = add(new T.SphereGeometry(0.14 * L, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2), M('#fbfcfd', 0.35, { clear: true }), -0.02 * L, dep * 0.6, 0); c.scale.set(1.3, 0.6, 0.8); box(0.12 * L, 0.06 * L, hw * 1.1, glass, 0.05 * L, dep * 0.6 + 0.07 * L, 0, 0, -0.5); add(new T.BoxGeometry(L * 0.9, 0.025 * L, hw * 2.04), M('#e8742a', 0.4), -0.02 * L, dep * 0.45, 0).scale.set(1, 1, 0.95); }
+        else if (kind === 'sailboat') { tube([[0, dep * 0.6, 0], [0, 0.95 * L, 0]], 0.008 * L, M('#7a5a3a', 0.6)); const sail = new T.Shape(); sail.moveTo(0.01 * L, 0.18 * L); sail.lineTo(0.38 * L, 0.18 * L); sail.lineTo(0.01 * L, 0.92 * L); add(new T.ShapeGeometry(sail), M('#fbf7ee', 0.7)); const jib = new T.Shape(); jib.moveTo(-0.01 * L, 0.2 * L); jib.lineTo(-0.3 * L, 0.2 * L); jib.lineTo(-0.01 * L, 0.8 * L); add(new T.ShapeGeometry(jib), M('#f2ede2', 0.7)); }
+        else { tube([[-0.1 * L, 0.32 * L, 0.18 * L], [0.2 * L, -0.04 * L, 0.3 * L]], 0.01 * L, M('#a87a44', 0.6)); }
+        if (sea && s.water !== false) { const w = add(new T.CircleGeometry(L * 0.58, 48), M('#5aa9e6', 0.15, { clear: true }), 0, dep * 0.25, 0, -Math.PI / 2); w.material = w.material.clone(); w.material.transparent = true; w.material.opacity = 0.55; w.userData.keepOpacity = 0.55; }
+      }
+    } else if (kind === 'rocket') { // standing up: w is its height
+      const H = L; lathe([[0.07 * H, 0.12 * H], [0.08 * H, 0.6 * H], [0.05 * H, 0.85 * H], [0.02 * H, 0.96 * H], [0, H]], paint, 32);
+      lathe([[0.05 * H, 0.85 * H], [0.02 * H, 0.96 * H], [0, H], [0, 0.85 * H]], M('#d6302a', 0.35, { clear: true }), 32);
+      for (let k = 0; k < 4; k++) { const fin = new T.Shape(); fin.moveTo(0.07 * H, 0.32 * H); fin.lineTo(0.16 * H, 0.1 * H); fin.lineTo(0.16 * H, 0.02 * H); fin.lineTo(0.07 * H, 0.14 * H); const e = add(new T.ExtrudeGeometry(fin, { depth: 0.012 * H, bevelEnabled: false }), M('#d6302a', 0.35, { clear: true })); e.rotation.y = k * Math.PI / 2; }
+      add(new T.CylinderGeometry(0.035 * H, 0.035 * H, 0.012 * H, 24), M('#6fc3ea', 0.1, { clear: true }), 0, 0.62 * H, 0.076 * H, Math.PI / 2);
+      lathe([[0.03 * H, 0.12 * H], [0.05 * H, 0.06 * H], [0, 0.06 * H]], black, 20); lathe([[0.04 * H, 0.06 * H], [0.01 * H, -0.08 * H], [0, -0.08 * H]], M('#ffb21f', 0.5, { glow: '#ff8a1a', gi: 1 }), 20);
+    } else if (kind === 'balloon') { // w is its width
+      const H = L; add(new T.BoxGeometry(0.16 * H, 0.12 * H, 0.16 * H), M('#a87a44', 0.8), 0, 0.06 * H, 0);
+      [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([a, b]) => tube([[a * 0.07 * H, 0.12 * H, b * 0.07 * H], [a * 0.14 * H, 0.42 * H, b * 0.14 * H]], 0.003 * H, M('#6a4a24', 0.8)));
+      lathe([[0.12 * H, 0.42 * H], [0.2 * H, 0.5 * H], [0.36 * H, 0.66 * H], [0.47 * H, 0.86 * H], [0.5 * H, 1.04 * H], [0.45 * H, 1.22 * H], [0.32 * H, 1.35 * H], [0.16 * H, 1.41 * H], [0, 1.43 * H]], paint, 24);
+      lathe([[0.462 * H, 0.82 * H], [0.482 * H, 0.86 * H], [0.495 * H, 0.92 * H], [0.475 * H, 0.9 * H]], M('#f6c21c', 0.5), 24); for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2, c = new T.CatmullRomCurve3([[0.2, 0.5], [0.4, 0.7], [0.505, 1.0], [0.44, 1.24], [0.2, 1.4]].map(([r, y]) => new T.Vector3(Math.cos(a) * r * H, y * H, Math.sin(a) * r * H))); add(new T.TubeGeometry(c, 30, 0.006 * H, 6), M(kitDark3b(col, 0.7), 0.5)); }
+    } else if (kind === 'drone') {
+      box(0.36 * L, 0.1 * L, 0.26 * L, paint, 0, 0.15 * L, 0);
+      [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([a, b]) => { tube([[a * 0.1 * L, 0.17 * L, b * 0.08 * L], [a * 0.38 * L, 0.22 * L, b * 0.3 * L]], 0.015 * L, black); const pr = new T.Group(); pr.position.set(a * 0.38 * L, 0.25 * L, b * 0.3 * L); const bl = new T.Mesh(new T.BoxGeometry(0.3 * L, 0.006 * L, 0.03 * L), M('#9aa1aa', 0.4)); pr.add(bl); pr.userData.spin = 'y'; G.add(pr); });
+      add(new T.SphereGeometry(0.035 * L, 16, 12), glass, 0.17 * L, 0.1 * L, 0);
+    } else if (kind === 'tractor' || kind === 'excavator' || kind === 'bulldozer') {
+      if (kind === 'tractor') { box(0.6 * L, 0.16 * L, 0.26 * L, paint, 0.06 * L, 0.26 * L, 0); box(0.3 * L, 0.3 * L, 0.3 * L, M('#bfe3f2', 0.1, { clear: true }), -0.15 * L, 0.48 * L, 0); box(0.32 * L, 0.02 * L, 0.32 * L, black, -0.15 * L, 0.63 * L, 0); [-1, 1].forEach((sd) => { wheel(-0.26 * L, 0.24 * L, sd * 0.2 * L, 0.12 * L); wheel(0.32 * L, 0.13 * L, sd * 0.17 * L, 0.08 * L); }); tube([[0.22 * L, 0.33 * L, 0], [0.22 * L, 0.46 * L, 0]], 0.012 * L, black); }
+      else {
+        [-1, 1].forEach((sd) => { box(0.74 * L, 0.13 * L, 0.12 * L, M('#3a3f47', 0.8), -0.05 * L, 0.065 * L, sd * 0.2 * L); for (let k = 0; k < 6; k++) add(new T.CylinderGeometry(0.04 * L, 0.04 * L, 0.125 * L, 16), M('#6b7079', 0.5), (-0.35 + k * 0.12) * L, 0.065 * L, sd * 0.2 * L, Math.PI / 2); });
+        box(0.66 * L, 0.16 * L, 0.46 * L, paint, -0.05 * L, 0.22 * L, 0); box(0.26 * L, 0.24 * L, 0.24 * L, paint, 0.0, 0.42 * L, 0.08 * L); box(0.2 * L, 0.18 * L, 0.245 * L, glass, 0.03 * L, 0.43 * L, 0.08 * L);
+        if (kind === 'excavator') { tube([[0.2 * L, 0.32 * L, -0.08 * L], [0.42 * L, 0.72 * L, -0.08 * L]], 0.035 * L, paint); tube([[0.42 * L, 0.72 * L, -0.08 * L], [0.58 * L, 0.32 * L, -0.08 * L]], 0.028 * L, paint); const bk = add(new T.CylinderGeometry(0.08 * L, 0.08 * L, 0.14 * L, 20, 1, false, 0, Math.PI), M('#5a5f68', 0.5), 0.6 * L, 0.26 * L, -0.08 * L, Math.PI / 2); }
+        else { box(0.05 * L, 0.3 * L, 0.6 * L, M('#5a5f68', 0.5), 0.4 * L, 0.15 * L, 0); tube([[0.25 * L, 0.2 * L, 0], [0.38 * L, 0.18 * L, 0]], 0.02 * L, black); }
+      }
+    }
+    // facing: its front toward +x, or the way asked
+    G.rotation.y = ({ '-x': Math.PI, z: -Math.PI / 2, '-z': Math.PI / 2 })[s.facing] || 0;
   }
   return G;
 }
+function kitLight3(hex) { let h = hex.replace('#', ''); if (h.length === 3) h = h.split('').map((c) => c + c).join(''); return '#' + h.match(/../g).map((x) => Math.round(parseInt(x, 16) + (255 - parseInt(x, 16)) * 0.75).toString(16).padStart(2, '0')).join(''); }
+function kitDark3b(hex, k = 0.85) { let h = hex.replace('#', ''); if (h.length === 3) h = h.split('').map((c) => c + c).join(''); return '#' + h.match(/../g).map((x) => Math.round(parseInt(x, 16) * k).toString(16).padStart(2, '0')).join(''); }
 function kitDark3(hex) { let h = hex.replace('#', ''); if (h.length === 3) h = h.split('').map((c) => c + c).join(''); return '#' + h.match(/../g).map((x) => Math.round(parseInt(x, 16) * 0.65).toString(16).padStart(2, '0')).join(''); }
 
 function shape3d(T, s, mat, along, v3, AX) {
