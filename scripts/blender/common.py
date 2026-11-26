@@ -79,6 +79,7 @@ def lathe(name, profile, axis_from, axis_dir, mat, parent, seg=48, cap0=True, ca
     u = norm(cross(ref, a))
     v = cross(a, u)
     verts, faces = [], []
+    profile = [(q[0], q[1]) for q in profile]  # (a third value, the "smooth" mark, is for shading only)
     for (s, r) in profile:
         c = [axis_from[k] + a[k] * s for k in range(3)]
         if center_fn:

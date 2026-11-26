@@ -1026,7 +1026,7 @@ test('v320 Blender models and real materials: the book’s airplane and bicycle 
   const { ctx, page, errors } = await open(b, { book: true, lite: 'off', device: 'Desktop Chrome', viewport: { width: 1280, height: 860 }, scale: process.env.SHOTS ? 2 : 1, state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: (body) => { if (/explains by DRAWING/.test(JSON.stringify(body.messages || []))) drawCalls.push(1); return { text: 'Words.' }; } });
   page.on('request', (r) => { if (/\/models\/\w+\.glb/.test(r.url())) got.push(r.url().replace(/^.*\/models\//, '')); });
   try {
-    for (const [q, name, n] of [['show me an airplane in 3D', 'airplane', 7], ['show me a bicycle in 3D', 'bicycle', 11]]) {
+    for (const [q, name, n] of [['show me an airplane in 3D', 'airplane', 7], ['show me a bicycle in 3D', 'bicycle', 11], ['make a 3D of a dragon', 'dragon', 9]]) {
       await page.evaluate((q) => { chatLog.innerHTML = ''; state.messages = []; liveDrawReply(q, true); }, q);
       await page.waitForFunction(() => { const s = document.querySelector('#chat-log .ld-stage'); return s && s.dataset.model; }, null, { timeout: 30000 });
       await page.waitForFunction((n) => document.querySelectorAll('#chat-log .ld-tag').length >= n, n, { timeout: 30000 });
@@ -1035,6 +1035,7 @@ test('v320 Blender models and real materials: the book’s airplane and bicycle 
       if (process.env.SHOTS) { await page.waitForTimeout(1500); await page.locator('#chat-log .ld').last().screenshot({ path: `${process.env.SHOTS}/v320-${name}-blender.png` }); }
     }
     expect(!drawCalls.length, 'from the book: no AI asked');
+    expect(await page.evaluate(async () => { const bk = await liveBookLoad(); const f = bk.fromBook('draw a dragon'), d = bk.fromBook('make a 3D of a dragon', true); return f.mode === '2d' && d.mode === '3d' && d.glb === 'models/dragon.glb'; }), 'the dragon: drawn flat when drawing is asked, the Blender model when 3D is');
     // pulled apart and tapped: the Blender parts behave like built ones
     await page.click('#chat-log .ld .ld-btn >> text=Pull apart');
     await page.waitForTimeout(600);
