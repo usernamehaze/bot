@@ -1178,8 +1178,13 @@ function scheduleAntic() {
 // the left edge, so its words are never cut off by the screen
 function mascotBubbleFit() {
   mascotBubble.classList.remove('mb-left');
+  mascotBubble.style.translate = '';
   const r = mascotBubble.getBoundingClientRect();
   if (r.left < 8) mascotBubble.classList.add('mb-left');
+  // (v323) and wherever she is (even mid-glide, in the middle), it is moved back inside the screen, 8px from its edges
+  const q = mascotBubble.getBoundingClientRect(), over = q.right - (innerWidth - 8), under = 8 - q.left;
+  if (over > 0) mascotBubble.style.translate = `${-Math.ceil(Math.min(over, q.left - 8))}px 0`;
+  else if (under > 0) mascotBubble.style.translate = `${Math.ceil(under)}px 0`;
 }
 // ---- speech bubble ---- (ms === 0 keeps it up until something replaces it)
 function mascotSay(text, ms) {
