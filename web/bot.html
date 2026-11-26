@@ -16,7 +16,7 @@
   body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif; overflow-x: hidden;
     background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px); background-size: 40px 40px; }
   a { color: inherit; }
-  .wrap { width: min(1080px, 100%); margin: 0 auto; padding: 0 var(--sp-4, 16px); }
+  .wrap { width: min(1080px, 100%); margin: 0 auto; padding: 0 var(--sp-4, 16px); overflow-x: clip; } /* (the glow behind Cassie reaches past a phone screen: it is cut at the edge, so the page never zooms out) */
   header.top { display: flex; align-items: center; justify-content: space-between; padding: var(--sp-4, 16px) 0; }
   .brand { display: flex; gap: var(--sp-2, 8px); align-items: center; font-weight: 750; letter-spacing: -.01em; text-decoration: none; }
   .brand svg { width: 18px; height: 21px; }

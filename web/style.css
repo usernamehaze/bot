@@ -952,8 +952,10 @@ html.lite .hub-say { animation: none; }
 }
 .field.row span { margin-bottom: 0; }
 .field input[type="password"],
+.field input[type="text"],
 .field select {
   width: 100%;
+  box-sizing: border-box;
   padding: var(--sp-3, 12px) var(--sp-3, 12px);
   border-radius: 10px;
   border: 1px solid var(--border);

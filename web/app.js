@@ -12984,15 +12984,18 @@ requestAnimationFrame(() => {
 });
 receiveShare();
 // (v322) the address: open the page it names; then it follows the page (Back and Forward too)
+// (after every script on the page has run: native.js, after app.js, has to be listening to the phone's tab bar
+// before the address taps a tab; a timeout alone could run between two scripts while the next one downloads)
+const routeStart = (go) => (document.readyState === 'loading' ? addEventListener('DOMContentLoaded', () => setTimeout(go, 0), { once: true }) : setTimeout(go, 0));
 if (routeOn()) {
-  setTimeout(() => {
+  routeStart(() => {
     routeReady = true;
     if (/^\/app\/./.test(location.pathname)) routeOpen(location.pathname); else { try { history.replaceState({ cassie: 1 }, '', routeNow() + location.search + location.hash); } catch (e) { /* ignore */ } }
     addEventListener('popstate', () => routeOpen(location.pathname));
     new MutationObserver(routeLater).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     new MutationObserver(routeLater).observe(document.body, { attributes: true, attributeFilter: ['hidden'], subtree: true });
     new MutationObserver(routeLater).observe(chatLog, { childList: true });
-  }, 0);
+  });
 }
 
 if ('serviceWorker' in navigator) {
