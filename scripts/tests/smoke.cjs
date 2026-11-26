@@ -1341,7 +1341,7 @@ test('v274 (390x844 and 1280x800): the follow-up pills show after an explanation
       await page.waitForTimeout(600);
       if (phone) {
         const tabs = await page.$$eval('#tabbar .tab', (a) => a.map((x) => x.dataset.tab).join(','));
-        expect(tabs === 'home,chat,labs,games,you', `${size}: the tab bar has no Cards tab: ` + tabs);
+        expect(tabs === 'home,chat,draw,labs,games,you', `${size}: the tab bar has no Cards tab (and Draw It, v322): ` + tabs);
         const mb = await page.$eval('.hub-menu', (x) => { const r = x.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), label: x.getAttribute('aria-label'), left: r.right <= document.querySelector('.hub-who').getBoundingClientRect().left + 1, name: document.querySelector('.hub-me').scrollWidth <= document.querySelector('.hub-me').clientWidth + 1 }; });
         expect(mb.w >= 48 && mb.h >= 48 && mb.label === 'Open menu' && mb.left && mb.name, `${size}: Home has the menu button, before the greeting, 48px, and the greeting is not cut off: ` + JSON.stringify(mb));
         await page.click('.hub-menu');
@@ -1999,7 +1999,7 @@ test('computer Home is a study dashboard: Hi and the two main buttons, four real
     if (scheme === 'light') {
       // the sidebar and the top bar
       const side = await page.evaluate(() => ({ groups: [...document.querySelectorAll('.side-group')].map((x) => x.textContent), nav: [...document.querySelectorAll('.side-nav [data-page], .side-nav a')].filter((x) => !x.hidden).map((x) => x.querySelector('span').textContent.trim()), badge: document.querySelector('#side-nav [data-page="plan"] .side-badge').textContent, apps: [...document.querySelectorAll('#side-apps .side-tool')].map((x) => x.dataset.tip).join(), general: [...document.querySelectorAll('#side-general .side-tool')].filter((x) => !x.hidden).map((x) => x.dataset.tip).join(), topIcons: [...document.querySelectorAll('.topbar-actions > button')].filter((x) => x.getClientRects().length).map((x) => x.id).join(), ask: getComputedStyle(document.getElementById('composer')).display, ext: document.querySelector('.side-ext').getAttribute('href'), pomo: getComputedStyle(document.getElementById('pomo')).display }));
-      expect(side.groups.join() === 'Menu,General' && side.nav.join() === 'Home,Chats,Study plan,Lessons,Calendar,Progress,Help' && side.apps === 'Learn,Games,Board' && side.general === 'Settings,Memory,Help' && side.badge === '1' && side.ext === 'https://chromewebstore.google.com/detail/hnafgijhojdheggkcjliffbgpdhikbpj' && side.pomo === 'none', 'the sidebar: ' + JSON.stringify(side));
+      expect(side.groups.join() === 'Menu,General' && side.nav.join() === 'Home,Chats,Draw It,Study plan,Lessons,Calendar,Progress,Help' && side.apps === 'Learn,Games,Board' && side.general === 'Settings,Memory,Help' && side.badge === '1' && side.ext === 'https://chromewebstore.google.com/detail/hnafgijhojdheggkcjliffbgpdhikbpj' && side.pomo === 'none', 'the sidebar: ' + JSON.stringify(side));
       expect(await page.locator('#side-nav [data-page="home"]').getAttribute('aria-current') === 'page', 'Home is the page you are on');
       expect(side.topIcons === 'top-theme,top-bell,top-me' && side.ask === 'none', 'like the reference: only light or dark, the bell and you in the top bar, and no ask box on Home: ' + JSON.stringify(side));
       // search: Ctrl K, then pages, tools and chats as you type
