@@ -3826,6 +3826,9 @@ function placeApps() {
 placeApps();
 sideWide.addEventListener('change', () => { placeApps(); deskChrome(); });
 document.getElementById('top-timer').addEventListener('click', goHome);
+// the top search is centred on the bar: it is told how wide the buttons on its right are, so it never slides under them
+{ const acts = document.querySelector('.topbar-actions'), bar = acts && acts.closest('.topbar');
+  if (acts && bar && window.ResizeObserver) new ResizeObserver(() => bar.style.setProperty('--top-act-w', Math.ceil(acts.getBoundingClientRect().width) + 'px')).observe(acts); }
 document.getElementById('top-me').addEventListener('click', () => openSettings('profile'));
 // the bell: today's reminders (the same list the phone's Home has)
 const topBell = document.getElementById('top-bell'), topRemind = document.getElementById('top-remind');
@@ -12203,7 +12206,7 @@ const authStill = () => document.documentElement.classList.contains('lite') || !
 function authArt(still, wait) {
   const TRAIL = 'M150 26 C 190 10, 236 40, 226 92 S 270 150, 282 170';
   // (no star in the top left corner: the Cassie name sits there on a phone, and a star under its letters made them hard to read)
-  const stars = [[118, 24], [100, 62], [150, 18], [204, 52], [228, 22], [126, 82], [62, 96]].map(([x, y], i) => `<circle class="aa-star" cx="${x}" cy="${y}" r="${i % 3 ? 1.4 : 2}" style="--i:${i}"/>`).join('');
+  const stars = [[176, 36], [100, 62], [150, 18], [204, 52], [228, 22], [126, 82], [62, 96]].map(([x, y], i) => `<circle class="aa-star" cx="${x}" cy="${y}" r="${i % 3 ? 1.4 : 2}" style="--i:${i}"/>`).join(''); /* (none behind the Cassie name on a phone: the first sat on its "e") */
   const mark = `<g class="aa-curgo"><g class="aa-curin"><g transform="scale(.06) translate(-108 -90)">${CASSIE_MARK}</g></g></g>`;
   const cur = still ? `<g class="aa-cur" transform="translate(282 170)">${mark}</g>`
     : `<g class="aa-cur" transform="translate(150 26)">${mark}<animateMotion dur="3s" begin="${wait}s" fill="freeze" calcMode="spline" keyTimes="0;1" keySplines=".42 0 .2 1" path="M0 0 C 40 -16, 86 14, 76 66 S 120 124, 132 144"/></g>`;

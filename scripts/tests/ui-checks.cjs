@@ -147,7 +147,7 @@ async function contrastIssues(page, sel = 'body') {
     }
     return out;
   }, sel);
-  const hide = await page.addStyleTag({ content: '*, *::before, *::after { color: transparent !important; -webkit-text-fill-color: transparent !important; text-shadow: none !important; caret-color: transparent !important; } ::placeholder { color: transparent !important; }' });
+  const hide = await page.addStyleTag({ content: '*, *::before, *::after { color: transparent !important; -webkit-text-fill-color: transparent !important; text-shadow: none !important; caret-color: transparent !important; transition: none !important; } /* (no fade: a word that fades its colour would still show in the shot) */ ::placeholder { color: transparent !important; }' });
   await page.waitForTimeout(150);
   const shot = (await page.screenshot()).toString('base64');
   await hide.evaluate((n) => n.remove());

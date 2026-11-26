@@ -4554,7 +4554,7 @@ label.notif-top { cursor: pointer; min-height: 44px; }
   .side-toggle svg { position: relative; width: 14px; height: 14px; }
 }
 @media (min-width: 1101px) {
-  .topbar .top-search { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(480px, 36vw); flex: none; z-index: 2; }
+  .topbar .top-search { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(480px, 36vw, calc(100% - 2 * var(--top-act-w, 260px) - 2 * var(--sp-6, 32px))); flex: none; z-index: 2; } /* (centred, but never over the buttons on the right: --top-act-w is their width, kept by app.js, so it shrinks when the window is narrower or the focus timer shows) */
 }
 
 /* (v306) older phones (iOS 15, Android browsers from before 2023) can't read color-mix(): without this, card edges and

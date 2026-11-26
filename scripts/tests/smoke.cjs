@@ -8103,12 +8103,12 @@ test('v312 drawings never sit for minutes: past the time limit she stops and off
     const diagram = await looksLikeNotice(await card((g) => { g.fillStyle = '#fff'; g.fillRect(0, 0, 400, 300); g.strokeStyle = '#c33'; g.lineWidth = 6; g.beginPath(); g.arc(200, 150, 80, 0, 7); g.stroke(); }));
     const photo = await looksLikeNotice(await card((g) => { const gr = g.createLinearGradient(0, 0, 400, 300); gr.addColorStop(0, '#2a5'); gr.addColorStop(0.5, '#a83'); gr.addColorStop(1, '#36c'); g.fillStyle = gr; g.fillRect(0, 0, 400, 300); }));
     const bk = await liveBookLoad(), m = await liveDrawLoad();
-    const keys = ['build a camera in 3D', 'draw me a 3d of how washing machine works', 'how does a washing machine work', 'draw a phone camera', 'how does a dishwasher work'].map((q) => { const x = bk.fromBook(q, /3d/i.test(q)); return x ? x.book + ':' + x.mode + ':' + m.check3d(m.clean(x)).length : '-'; }).join(' ');
+    const keys = ['build a camera in 3D', 'draw me a 3d of how washing machine works', 'how does a washing machine work', 'draw a phone camera', 'how does a dishwasher work'].map((q) => { const x = bk.fromBook(q, /3d/i.test(q)); if (!x) return '-'; const sp = m.clean(x); return x.book + ':' + x.mode + ':' + (sp.mode === '3d' ? m.check3d(sp) : m.check(sp, q)).length; }).join(' ');
     return { ask, notice, diagram, photo, keys };
   });
   expect(u.ask.every(Boolean), '"illustrations of how" and "a diagram showing how" are drawings: ' + JSON.stringify(u.ask));
   expect(u.notice === true && u.diagram === false && u.photo === false, 'the yellow limit card is caught; a white diagram and a photo are not: ' + JSON.stringify(u));
-  expect(u.keys === 'camera:3d:0 washer:3d:0 washer:3d:0 - -', 'the book’s camera and washing machine pass the model checks; a phone camera and a dishwasher go to the AI: ' + u.keys);
+  expect(u.keys === 'camera:3d:0 washer:3d:0 washer:2d:0 - -', 'the book’s camera and washing machine pass the model checks (flat unless 3D is asked, v328); a phone camera and a dishwasher go to the AI: ' + u.keys);
   // the time limit (shortened for the test): a slow drawing ends in Try again and Just explain, not an endless "sketching"
   await page.evaluate(() => { window.CASSIE_DRAW_MS = 2500; });
   await page.fill('#prompt-input', 'draw how a washing machine lint filter catches fluff'); await page.click('#send-btn'); await pickWay(page);
