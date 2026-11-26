@@ -26,8 +26,8 @@ const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ---------- the spec: what the AI wrote, made safe ----------
-const KINDS2 = ['line', 'arrow', 'rect', 'circle', 'ellipse', 'poly', 'path', 'text', 'vehicle', 'tree', 'flower', 'leaf', 'cloud', 'sun', 'moon', 'rainbow', 'snowflake', 'bolt', 'drops', 'grass', 'rock', 'log', 'mushroom']; // (v324: and the nature kit)
-const KINDS3 = ['cylinder', 'tube', 'disc', 'cone', 'torus', 'ring', 'blades', 'sphere', 'box', 'capsule', 'pipe', 'arrow', 'lathe', 'plate', 'tree', 'flower', 'leaf', 'cloud', 'sun', 'moon', 'rainbow', 'rock', 'grass', 'log', 'mushroom', 'ground', 'drops', 'snowflake', 'bolt', 'vehicle']; // (v325: and the nature kit in 3D; v326: vehicles)
+const KINDS2 = ['line', 'arrow', 'rect', 'circle', 'ellipse', 'poly', 'path', 'text', 'vehicle', 'tree', 'flower', 'leaf', 'cloud', 'sun', 'moon', 'rainbow', 'snowflake', 'bolt', 'drops', 'grass', 'rock', 'log', 'mushroom', 'animal']; // (v324: and the nature kit; v327: animals)
+const KINDS3 = ['cylinder', 'tube', 'disc', 'cone', 'torus', 'ring', 'blades', 'sphere', 'box', 'capsule', 'pipe', 'arrow', 'lathe', 'plate', 'tree', 'flower', 'leaf', 'cloud', 'sun', 'moon', 'rainbow', 'rock', 'grass', 'log', 'mushroom', 'ground', 'drops', 'snowflake', 'bolt', 'vehicle', 'animal']; // (v325: and the nature kit in 3D; v326: vehicles; v327: animals)
 const has = (x, k) => x[k] != null && x[k] !== '';
 // (v320) what a 3D part is really made of, with photographically grounded values from the Blender skills pack
 // (github.com/arjun988/blender-skills, realistic-style/references/pbr-values.md): metals are fully metallic, everything
@@ -632,7 +632,7 @@ export async function render(host, rawSpec, opts = {}) {
   let mv = null; const mvHost = spec.mode === '3d' ? el('div', 'ld-mv') : null;
   const machineOn = async () => {
     if (mv) return mv;
-    let m = null; try { m = await import('./isoview.js?v=326'); } catch (e) { return null; }
+    let m = null; try { m = await import('./isoview.js?v=327'); } catch (e) { return null; }
     mv = m.machine(mvHost, spec, { dark: !lightPage() });
     if (mv) {
       const row = el('div', 'ld-mv-acts');
@@ -880,17 +880,18 @@ function draw2d(stage, spec, { animate, setSay, hint }) {
   const view = {
     hintText,
     // (v314) moving parts: move() starts them once the drawing is there (move(true) even with Reduce Motion); pause() stops them
-    motion: flowEls.length > 0 || spec.parts.some((p) => p.beat || p.spin),
+    motion: flowEls.length > 0 || spec.parts.some((p) => p.beat || p.spin) || !!svg.querySelector('.ld-anim'), // (v327: and animals)
     get moving() { return moving; },
     move(force) {
       if (!view.motion) return false;
       flowG.style.display = ''; motionSetup(); lay();
       if (still() && !force) return false;
       moving = true; lastT = 0; if (io2) io2.observe(svg);
+      svg.classList.add('ld-go'); svg.classList.toggle('ld-force', !!force && still()); // (v327) the animals walk, fly and swim
       if (!raf2) raf2 = requestAnimationFrame(frame);
       return true;
     },
-    pause() { moving = false; if (raf2) cancelAnimationFrame(raf2); raf2 = 0; },
+    pause() { moving = false; if (raf2) cancelAnimationFrame(raf2); raf2 = 0; svg.classList.remove('ld-go'); },
     // (v314) one step at a time: the next part is picked out, with what it does and what moves through it
     stepNext() { const i = (picked + 1) % groups.length; picked = -1; pick(i); if (!moving) lay(); return i; },
     // (v306) the part a follow-up is about: the others dim, without changing what she says (a tap shows them all again)
@@ -985,7 +986,7 @@ function draw2d(stage, spec, { animate, setSay, hint }) {
 // One shape each ({"t":"tree","kind":"oak","x":200,"y":230,"h":160}), drawn the way the owner's guide pictures are: soft,
 // rounded, glossy like clay, every form outlined a shade darker, shaded underneath and lit from the top left. x and y are
 // where it stands on the ground (a cloud, the sun, the moon, a snowflake: its middle); h (or w, r) its size.
-const KIT = ['tree', 'flower', 'leaf', 'cloud', 'sun', 'moon', 'rainbow', 'snowflake', 'bolt', 'drops', 'grass', 'rock', 'log', 'mushroom', 'vehicle']; // (v326: and vehicles)
+const KIT = ['tree', 'flower', 'leaf', 'cloud', 'sun', 'moon', 'rainbow', 'snowflake', 'bolt', 'drops', 'grass', 'rock', 'log', 'mushroom', 'vehicle', 'animal']; // (v326: and vehicles; v327: animals)
 const KIT_KINDS = {
   tree: ['round', 'oak', 'pine', 'bush', 'palm', 'blossom', 'fruit', 'autumn'],
   flower: ['sunflower', 'daisy', 'tulip', 'rose', 'lily', 'lavender', 'blossom', 'hydrangea'],
@@ -993,6 +994,7 @@ const KIT_KINDS = {
   cloud: ['white', 'rain', 'storm', 'snow', 'grey'],
   rock: ['stone', 'mossy'], log: ['log', 'stump'], grass: ['grass', 'flowers'],
   get vehicle() { return VEH_KINDS; },
+  get animal() { return ANIMAL_KINDS; },
 };
 // the box a kit shape fills (for the checks and the labels): [[x0, y0], [x1, y1]]
 function kitBox(sh) {
@@ -1004,6 +1006,7 @@ function kitBox(sh) {
     return [[Math.min(...pts.map((q) => q[0])), Math.min(...pts.map((q) => q[1]))], [Math.max(...pts.map((q) => q[0])), Math.max(...pts.map((q) => q[1]))]];
   }
   if (t === 'vehicle') return vehBox(sh); // (v326)
+  if (t === 'animal') return animalBox(sh); // (v327)
   if (t === 'tree') return [[x - h * (sh.kind === 'pine' ? 0.32 : 0.46), y - h], [x + h * (sh.kind === 'pine' ? 0.32 : 0.46), y]];
   if (t === 'flower' || t === 'mushroom') return [[x - h * 0.36, y - h], [x + h * 0.36, y]];
   if (t === 'leaf') return [[x - h * 0.42, y - h], [x + h * 0.42, y]];
@@ -1545,6 +1548,558 @@ function vehLayers(kind, view, x, y, w, dir, base, put, puffs, R) {
   }
 }
 
+// ---------- (v327) the animal kit: mammals, dinosaurs, birds, sea animals, reptiles, amphibians and insects, alive ----------
+// {"t":"animal","kind":"lion","x":200,"y":220,"w":180,"facing":"right"}: x its middle, y the ground under its feet (a
+// flying bird's or a fish's middle), w its length nose to tail. Drawn from the side in the owner's guide style (soft,
+// shaded, real colours and real coat patterns), and moving: legs walk, wings flap, tails sway, fins swim. "still": true
+// keeps one still. ANIMALS is one description of each, used flat, in 3D and in Cassie's animal guide.
+// The numbers are in parts of its length: leg (ground to belly), bh (body depth), tilt (front higher), neck [length,
+// angle], hr (head size), sn (snout), drop (snout down), legT (leg thickness).
+const ANIMALS = {
+  lion: { b: 'quad', tuck: .22, col: '#c8954f', col2: '#ead2a2', dk: '#5a3a22', leg: .3, bh: .27, tilt: .01, neck: [.1, 35], hr: .11, sn: .07, ear: 'round', tail: 'tuft', foot: 'paw', legT: .085, mane: '#7a4a24' },
+  tiger: { b: 'quad', tuck: .22, col: '#e0782a', col2: '#f6ead6', dk: '#1d1a18', leg: .28, bh: .26, neck: [.08, 25], hr: .11, sn: .06, ear: 'round', tail: 'long', foot: 'paw', legT: .08, pat: 'stripes' },
+  leopard: { b: 'quad', tuck: .22, col: '#d9a957', col2: '#f2e2c0', dk: '#2b2219', leg: .27, bh: .23, neck: [.1, 30], hr: .1, sn: .05, ear: 'round', tail: 'long', foot: 'paw', legT: .07, pat: 'rosettes' },
+  jaguar: { b: 'quad', tuck: .22, col: '#d49a48', col2: '#f2e2c0', dk: '#2b2219', leg: .25, bh: .27, neck: [.08, 25], hr: .11, sn: .05, ear: 'round', tail: 'long', foot: 'paw', legT: .085, pat: 'rosettes' },
+  cheetah: { b: 'quad', tuck: .22, col: '#dcb36e', col2: '#f4e6c8', dk: '#2b2219', leg: .36, bh: .2, tilt: .02, neck: [.12, 35], hr: .09, sn: .045, ear: 'round', tail: 'long', foot: 'paw', legT: .055, pat: 'spots', tear: true },
+  smilodon: { b: 'quad', tuck: .22, col: '#c48a4a', col2: '#ecd2a8', dk: '#5a3a22', leg: .29, bh: .29, tilt: .03, neck: [.08, 25], hr: .115, sn: .05, ear: 'round', tail: 'stub', foot: 'paw', legT: .095, sabre: true },
+  elephant: { b: 'quad', col: '#8d8b86', col2: '#a8a6a0', dk: '#5e5c58', leg: .42, bh: .45, tilt: .02, neck: [0, 0], hr: .17, sn: .02, ear: 'big', tail: 'thin', foot: 'pad', legT: .14, trunk: true, tusks: 'straight' },
+  mammoth: { b: 'quad', col: '#5e3b26', col2: '#7a5038', dk: '#3a2418', leg: .38, bh: .46, tilt: .06, neck: [0, 0], hr: .17, sn: .02, ear: 'small', tail: 'thin', foot: 'pad', legT: .14, trunk: true, tusks: 'curl', hair: true, hump: .06 },
+  rhino: { b: 'quad', col: '#8e8c86', col2: '#a8a6a0', dk: '#5e5c58', leg: .22, bh: .36, neck: [.05, 10], hr: .13, sn: .12, drop: .05, ear: 'pointed', tail: 'thin', foot: 'pad', legT: .12, horn: 'rhino' },
+  hippo: { b: 'quad', col: '#7d5a5e', col2: '#c8949a', dk: '#4a3236', leg: .14, bh: .36, neck: [.04, 10], hr: .15, sn: .14, drop: .02, ear: 'small', tail: 'stub', foot: 'pad', legT: .13 },
+  giraffe: { b: 'quad', tuck: .22, col: '#f2dcab', col2: '#f6e8c8', dk: '#a35f28', leg: .62, bh: .26, tilt: .06, neck: [.62, 72], hr: .07, sn: .07, drop: .03, ear: 'pointed', tail: 'tuft', foot: 'hoof', legT: .05, pat: 'patches', ossicones: true, mane: 'short' },
+  zebra: { b: 'quad', tuck: .22, col: '#f4f2ee', col2: '#f4f2ee', dk: '#1e1e1e', leg: .38, bh: .26, neck: [.2, 48], hr: .09, sn: .11, drop: .04, ear: 'pointed', tail: 'tuft', foot: 'hoof', legT: .06, pat: 'stripes', mane: 'stiff' },
+  horse: { b: 'quad', tuck: .22, col: '#8a5530', col2: '#a8714a', dk: '#2e1e14', leg: .42, bh: .27, neck: [.22, 50], hr: .09, sn: .13, drop: .04, ear: 'pointed', tail: 'horse', foot: 'hoof', legT: .06, mane: 'flow' },
+  buffalo: { b: 'quad', col: '#3d3a38', col2: '#55514e', dk: '#1e1c1b', leg: .3, bh: .34, tilt: .03, neck: [.04, 15], hr: .1, sn: .07, drop: .06, ear: 'pointed', tail: 'tuft', foot: 'hoof', legT: .085, horn: 'buffalo', hump: .03 },
+  wildebeest: { b: 'quad', col: '#6b6257', col2: '#867c70', dk: '#2a2622', leg: .36, bh: .3, tilt: .05, neck: [.1, 30], hr: .09, sn: .1, drop: .06, ear: 'pointed', tail: 'horse', foot: 'hoof', legT: .06, horn: 'buffalo', mane: 'stiff', beard: true },
+  cow: { b: 'quad', col: '#f4f1ea', col2: '#f4f1ea', dk: '#2a2522', leg: .3, bh: .34, neck: [.06, 15], hr: .1, sn: .09, drop: .05, ear: 'pointed', tail: 'tuft', foot: 'hoof', legT: .075, pat: 'cow', horn: 'cow', udder: true },
+  pig: { b: 'quad', col: '#f2b8b0', col2: '#f6ccc6', dk: '#c27a72', leg: .16, bh: .3, neck: [.03, 5], hr: .1, sn: .07, ear: 'flop', tail: 'curl', foot: 'hoof', legT: .07, snout: true },
+  warthog: { b: 'quad', col: '#7a6a5e', col2: '#8c7c70', dk: '#3a3028', leg: .22, bh: .27, neck: [.04, 10], hr: .11, sn: .1, drop: .02, ear: 'pointed', tail: 'thin', foot: 'hoof', legT: .06, tusks: 'warthog', mane: 'stiff', snout: true },
+  goat: { b: 'quad', tuck: .22, col: '#e8e2d6', col2: '#f2eee6', dk: '#6a6258', leg: .3, bh: .24, neck: [.1, 40], hr: .08, sn: .08, drop: .04, ear: 'pointed', tail: 'stub', foot: 'hoof', legT: .05, horn: 'goat', beard: true },
+  sheep: { b: 'quad', col: '#2b2b2b', col2: '#3a3a3a', dk: '#1a1a1a', leg: .26, bh: .32, neck: [.06, 30], hr: .08, sn: .07, drop: .04, ear: 'flop', tail: 'stub', foot: 'hoof', legT: .045, wool: '#f3efe6' },
+  deer: { b: 'quad', tuck: .22, col: '#a6703f', col2: '#f0e2cc', dk: '#4a2e1a', leg: .4, bh: .24, neck: [.18, 55], hr: .08, sn: .08, drop: .03, ear: 'pointed', tail: 'stub', foot: 'hoof', legT: .045, horn: 'antlers' },
+  camel: { b: 'quad', col: '#c99d63', col2: '#dcb884', dk: '#7a5a34', leg: .5, bh: .26, neck: [.3, 32], hr: .08, sn: .08, drop: .02, ear: 'small', tail: 'tuft', foot: 'pad', legT: .055, hump: .12 },
+  hyena: { b: 'quad', tuck: .22, col: '#b8915e', col2: '#d4b88a', dk: '#4a3220', leg: .32, bh: .27, tilt: .07, neck: [.1, 30], hr: .11, sn: .08, ear: 'round', tail: 'bushy', foot: 'paw', legT: .07, pat: 'spots', mane: 'stiff' },
+  wolf: { b: 'quad', tuck: .22, col: '#8c8a86', col2: '#e8e4dc', dk: '#3a3836', leg: .32, bh: .24, neck: [.12, 35], hr: .095, sn: .1, drop: .03, ear: 'pointed', tail: 'bushy', foot: 'paw', legT: .06 },
+  fox: { b: 'quad', tuck: .22, col: '#d8722e', col2: '#f6f0e8', dk: '#2e2420', leg: .24, bh: .2, neck: [.1, 35], hr: .09, sn: .09, ear: 'pointed', tail: 'bushy', foot: 'paw', legT: .045, tip: '#f6f0e8' },
+  dog: { b: 'quad', tuck: .22, col: '#d9a85c', col2: '#ecc88e', dk: '#3a2a1a', leg: .3, bh: .25, neck: [.12, 40], hr: .1, sn: .08, drop: .03, ear: 'flop', tail: 'feather', foot: 'paw', legT: .06 },
+  corgi: { b: 'quad', col: '#d98a3e', col2: '#f6f0e8', dk: '#2e2420', leg: .14, bh: .24, neck: [.1, 40], hr: .09, sn: .07, ear: 'pointed', tail: 'stub', foot: 'paw', legT: .06 },
+  cat: { b: 'quad', tuck: .22, col: '#e8dccb', col2: '#f2eadc', dk: '#4a3428', leg: .26, bh: .2, neck: [.08, 40], hr: .095, sn: .035, ear: 'pointed', tail: 'long', foot: 'paw', legT: .045, points: true },
+  bear: { b: 'quad', col: '#5b3a24', col2: '#6e4a30', dk: '#2a1a10', leg: .3, bh: .38, tilt: .02, neck: [.06, 20], hr: .11, sn: .08, drop: .02, ear: 'round', tail: 'stub', foot: 'paw', legT: .11, hump: .03 },
+  polarbear: { b: 'quad', col: '#f2efe6', col2: '#f6f4ee', dk: '#2a2a2a', leg: .3, bh: .36, neck: [.12, 25], hr: .1, sn: .09, drop: .02, ear: 'round', tail: 'stub', foot: 'paw', legT: .11 },
+  panda: { b: 'quad', col: '#f4f2ee', col2: '#f4f2ee', dk: '#1e1e1e', leg: .24, bh: .36, neck: [.04, 20], hr: .12, sn: .05, ear: 'round', tail: 'stub', foot: 'paw', legT: .1, panda: true },
+  rabbit: { b: 'quad', col: '#b9a690', col2: '#f4f0ea', dk: '#5a4a3a', leg: .1, bh: .32, neck: [.03, 40], hr: .12, sn: .04, ear: 'long', tail: 'puff', foot: 'paw', legT: .06 },
+  mouse: { b: 'quad', col: '#9c9ca2', col2: '#d8d8dc', dk: '#4a4a50', leg: .06, bh: .24, neck: [0, 0], hr: .1, sn: .07, ear: 'mouse', tail: 'rat', foot: 'paw', legT: .03 },
+  hamster: { b: 'quad', col: '#e0a050', col2: '#f6efe4', dk: '#5a3a1a', leg: .05, bh: .42, neck: [0, 0], hr: .15, sn: .03, ear: 'round', tail: 'none', foot: 'paw', legT: .05 },
+  guineapig: { b: 'quad', col: '#a86a3a', col2: '#f6efe4', dk: '#3a2418', leg: .05, bh: .38, neck: [0, 0], hr: .15, sn: .04, ear: 'round', tail: 'none', foot: 'paw', legT: .05, pat: 'saddle' },
+  hedgehog: { b: 'quad', col: '#c4b29a', col2: '#e8dccb', dk: '#2a2018', leg: .05, bh: .34, neck: [0, 0], hr: .1, sn: .08, ear: 'round', tail: 'none', foot: 'paw', legT: .04, spikes: '#5e4a38' },
+  ferret: { b: 'quad', col: '#e8dcc6', col2: '#f2eadc', dk: '#3a2e26', leg: .1, bh: .16, neck: [.1, 25], hr: .07, sn: .06, ear: 'round', tail: 'long', foot: 'paw', legT: .04, mask: true },
+  // dinosaurs
+  trex: { b: 'quad', biped: true, col: '#6f7a4e', col2: '#b9b78a', dk: '#3a4228', leg: .42, bh: .26, tilt: .04, neck: [.06, 35], hr: .16, sn: .1, ear: 'none', tail: 'dino', foot: 'claw', legT: .1, teeth: true },
+  raptor: { b: 'quad', biped: true, col: '#8a7a5a', col2: '#c8b88e', dk: '#3a3226', leg: .34, bh: .17, tilt: .04, neck: [.1, 35], hr: .1, sn: .1, ear: 'none', tail: 'dino', foot: 'claw', legT: .06, pat: 'stripes', teeth: true },
+  triceratops: { b: 'quad', col: '#7d7462', col2: '#a89c84', dk: '#4a4234', leg: .24, bh: .36, neck: [.02, 10], hr: .16, sn: .12, drop: .04, ear: 'none', tail: 'dino', foot: 'pad', legT: .1, frill: true, horn: 'tri' },
+  stegosaurus: { b: 'quad', col: '#7d8a5a', col2: '#a8b07e', dk: '#4a5232', leg: .26, bh: .34, tilt: -.05, neck: [.06, 10], hr: .06, sn: .06, drop: .02, ear: 'none', tail: 'dino', foot: 'pad', legT: .09, plates: '#b0583a' },
+  brachiosaurus: { b: 'quad', col: '#8a8a86', col2: '#a8a8a2', dk: '#5a5a56', leg: .48, bh: .3, tilt: .06, neck: [.72, 68], hr: .06, sn: .05, ear: 'none', tail: 'dino', foot: 'pad', legT: .1 },
+  // upright
+  meerkat: { b: 'upright', col: '#c8a878', col2: '#e8d8b8', dk: '#3a2a1a', hr: .17, tail: 'thin', mask: true },
+  monkey: { b: 'upright', col: '#7a5432', col2: '#d8b892', dk: '#2a1a10', hr: .17, tail: 'monkey', sit: true },
+  sloth: { b: 'upright', col: '#8c7a62', col2: '#c8b8a0', dk: '#3a2e22', hr: .17, tail: 'none', sit: true, mask: true },
+  gorilla: { b: 'upright', col: '#2e2c2c', col2: '#4a4644', dk: '#121212', hr: .17, tail: 'none', sit: true },
+  kangaroo: { b: 'upright', col: '#b07a4a', col2: '#dcc0a0', dk: '#3a2418', hr: .14, tail: 'kanga', hop: true },
+  // birds
+  eagle: { b: 'bird', col: '#4a3426', head: '#f6f4ee', belly: '#4a3426', wing: '#3a281c', beak: 'hook', bc: '#f2c230', tail: 'fan', tc: '#f6f4ee', leg: .1, lc: '#f2c230' },
+  falcon: { b: 'bird', col: '#6e7480', head: '#3a3e46', belly: '#ece6da', wing: '#5a606c', beak: 'hook', bc: '#f2c230', tail: 'fan', leg: .1, lc: '#f2c230', bars: true },
+  hawk: { b: 'bird', col: '#8a5a3a', head: '#6e4428', belly: '#f2e8d8', wing: '#6e4428', beak: 'hook', bc: '#3a3a3a', tail: 'fan', tc: '#c4502a', leg: .1, lc: '#f2c230' },
+  owl: { b: 'bird', upright: true, col: '#a07850', head: '#a07850', belly: '#d8c098', wing: '#86603c', beak: 'owl', bc: '#3a3a3a', tail: 'short', leg: .05, lc: '#d8c098', tufts: true, disc: '#e0cca8' },
+  macaw: { b: 'bird', col: '#d8262b', head: '#d8262b', belly: '#d8262b', wing: '#2a6fd6', band: '#f2c21c', beak: 'parrot', bc: '#f2efe6', tail: 'long', tc: '#d8262b', leg: .07, lc: '#5a5a5a', face: '#f6f2ea' },
+  bluemacaw: { b: 'bird', col: '#2a6fd6', head: '#2a6fd6', belly: '#f2c21c', wing: '#2a6fd6', beak: 'parrot', bc: '#2a2a2a', tail: 'long', tc: '#2a6fd6', leg: .07, lc: '#5a5a5a', face: '#f6f2ea' },
+  parrot: { b: 'bird', col: '#3aa84a', head: '#3aa84a', belly: '#7ac74a', wing: '#2a8a3a', beak: 'parrot', bc: '#f2efe6', tail: 'long', tc: '#2a6fd6', leg: .07, lc: '#7a7a7a' },
+  budgie: { b: 'bird', col: '#7ac74a', head: '#f2e23a', belly: '#7ac74a', wing: '#4a8a3a', beak: 'parrot', bc: '#e8d8a8', tail: 'long', tc: '#2a6fd6', leg: .06, lc: '#8a8aa0', bars: true },
+  toucan: { b: 'bird', col: '#1d1b1b', head: '#1d1b1b', belly: '#1d1b1b', throat: '#f6f2ea', wing: '#1d1b1b', beak: 'toucan', bc: '#f28a1a', tail: 'short', leg: .07, lc: '#3a6ad6' },
+  hummingbird: { b: 'bird', col: '#3a9a5a', head: '#3a9a5a', belly: '#e8eee6', throat: '#c8264a', wing: '#5a6a5e', beak: 'needle', bc: '#2a2a2a', tail: 'short', leg: .04, lc: '#2a2a2a', fast: true },
+  penguin: { b: 'bird', upright: true, col: '#1e2228', head: '#1e2228', belly: '#f6f4ee', wing: '#1e2228', beak: 'cone', bc: '#2a2a2a', tail: 'short', leg: .04, lc: '#f28a2a', neck: '#f2b21c', flightless: true },
+  flamingo: { b: 'bird', col: '#f2869a', head: '#f2869a', belly: '#f498a8', wing: '#e8607a', beak: 'flamingo', bc: '#2a2a2a', tail: 'short', leg: .5, lc: '#e8607a', sneck: true },
+  chicken: { b: 'bird', col: '#f2ece2', head: '#f2ece2', belly: '#f2ece2', wing: '#e6dccc', beak: 'cone', bc: '#f2c230', tail: 'hen', tc: '#e6dccc', leg: .12, lc: '#f2c230', comb: true, flightless: true },
+  duck: { b: 'bird', col: '#8a7a68', head: '#2e7a3a', belly: '#a8988a', wing: '#6a5a48', beak: 'duck', bc: '#f2c230', tail: 'short', leg: .05, lc: '#f28a2a', ring: true, swim: true },
+  dodo: { b: 'bird', col: '#8a8a8a', head: '#9a9a9a', belly: '#a8a8a8', wing: '#7a7a7a', beak: 'dodo', bc: '#c8b88a', tail: 'puff', leg: .1, lc: '#e8c84a', flightless: true, fat: true },
+  crow: { b: 'bird', col: '#1e1e22', head: '#1e1e22', belly: '#1e1e22', wing: '#2a2a32', beak: 'cone', bc: '#1e1e22', tail: 'fan', leg: .08, lc: '#1e1e22' },
+  bat: { b: 'bat', col: '#4a3a36', wing: '#3a2c2a' },
+  pteranodon: { b: 'bat', col: '#b07a5a', wing: '#9a6248', crest: true },
+  // water
+  fish: { b: 'fish', col: '#4a8fd6', col2: '#d8e8f6', fin: '#3a76b8' },
+  goldfish: { b: 'fish', col: '#f28a2a', col2: '#f6c88a', fin: '#f2a24a', fancy: true },
+  clownfish: { b: 'fish', col: '#f27a1a', col2: '#f6a24a', fin: '#f27a1a', bands: true },
+  shark: { b: 'fish', col: '#7d8a99', col2: '#f2f4f6', fin: '#6a7686', shark: true },
+  whale: { b: 'fish', col: '#3e566e', col2: '#c8d4de', fin: '#34495e', whale: true },
+  dolphin: { b: 'fish', col: '#7d93a8', col2: '#e8eef4', fin: '#6a7f94', dolphin: true },
+  dunkleosteus: { b: 'fish', col: '#6e6e72', col2: '#a8a8ac', fin: '#5a5a5e', armor: true },
+  octopus: { b: 'octopus', col: '#d2563a', col2: '#f0a080' },
+  jellyfish: { b: 'jelly', col: '#c8a8e8', col2: '#f0e0fa' },
+  seaturtle: { b: 'turtle', col: '#6a8a4a', shell: '#7a6a3a', sea: true },
+  crab: { b: 'crab', col: '#d8452a' },
+  // reptiles and amphibians
+  turtle: { b: 'turtle', col: '#7a8a4a', shell: '#5a4a2a' },
+  crocodile: { b: 'croc', col: '#5a6a3a', col2: '#c8c08a', leg: .07, sn: .22 },
+  lizard: { b: 'croc', col: '#6a9a3a', col2: '#c8d88a', leg: .06, sn: .08, small: true },
+  gecko: { b: 'croc', col: '#d8a03a', col2: '#f2d88a', leg: .07, sn: .07, small: true, dots: true },
+  snake: { b: 'snake', col: '#4a7a3a', col2: '#c8c88a', dk: '#1e2a18' },
+  frog: { b: 'frog', col: '#5aa83a', col2: '#d8e88a', dk: '#2a4a1a' },
+  dartfrog: { b: 'frog', col: '#2a6fd6', col2: '#4a8af0', dk: '#111111', spots: true },
+  // insects and spiders
+  butterfly: { b: 'butterfly', col: '#f28a1a', dk: '#1e1a16' },
+  morpho: { b: 'butterfly', col: '#2a8ae8', dk: '#141a2a' },
+  bee: { b: 'bee', col: '#f2b51c', dk: '#1e1a16' },
+  ladybug: { b: 'beetle', col: '#d8262b', dk: '#141414', spots: true },
+  beetle: { b: 'beetle', col: '#3a2a1e', dk: '#141414', horn: true },
+  ant: { b: 'ant', col: '#3a1e14' },
+  spider: { b: 'spider', col: '#2a2420' },
+};
+const ANIMAL_KINDS = Object.keys(ANIMALS);
+const AN_NAMES = { trex: 'T. rex', bluemacaw: 'blue macaw', polarbear: 'polar bear', guineapig: 'guinea pig', seaturtle: 'sea turtle', dartfrog: 'poison dart frog' };
+// (v327) What Cassie knows about each animal the kit can draw: its class, home, food, how it moves and one fact to tell.
+const ANIMAL_FACTS = [
+  ["lion", /\b(lions?|leon)\b/i, "mammal", "African savanna grassland", "meat (zebra, wildebeest, buffalo)", "walks on four legs, sprints in short bursts to pounce", "The only cats that live in groups (prides); the male has a mane"],
+  ["tiger", /\b(tigers?)\b/i, "mammal", "Asian forests and grasslands", "meat (deer, wild pigs)", "stalks quietly on four legs, a strong swimmer", "The biggest cat; no two tigers have the same stripes"],
+  ["leopard", /\b(leopards?)\b/i, "mammal", "African and Asian forests and savanna", "meat", "climbs trees and drags its food up a branch", "Its spots are rosettes, rings with a darker centre"],
+  ["jaguar", /\b(jaguars?)\b/i, "mammal", "South and Central American rainforest", "meat (caimans, capybaras, fish)", "walks, climbs and swims well", "It has the strongest bite of any big cat for its size"],
+  ["cheetah", /\b(cheetahs?)\b/i, "mammal", "African savanna", "meat (gazelles)", "the fastest land runner, about 100 km per hour in short sprints", "Black tear lines under its eyes cut the sun glare"],
+  ["smilodon", /\b(smilodons?|saber.?tooth(ed)? (cats?|tigers?))\b/i, "mammal (extinct)", "Ice Age Americas, grasslands and woods", "meat (bison, horses)", "walked on four strong legs and ambushed prey", "Its long canine teeth were up to 28 cm; it lived until about 10,000 years ago"],
+  ["elephant", /\b(elephants?|elepante)\b/i, "mammal", "African savanna and Asian forests", "plants (grass, leaves, bark, fruit)", "walks on four pillar legs on soft padded feet", "Its trunk is a nose and an upper lip joined, with about 40,000 muscles"],
+  ["mammoth", /\b((woolly )?mammoths?)\b/i, "mammal (extinct)", "Ice Age tundra", "grass and shrubs", "walked on four legs like an elephant", "It had thick fur and a fat hump to keep warm; it lived until about 4,000 years ago"],
+  ["rhino", /\b(rhinos?|rhinoceros(es)?)\b/i, "mammal", "African and Asian grassland and bush", "grass and leaves", "walks on four short legs, can charge fast", "Its horn is made of keratin, the same stuff as your nails"],
+  ["hippo", /\b(hippos?|hippopotam(us|i|uses))\b/i, "mammal", "African rivers and lakes", "grass (grazes at night)", "walks along the river bottom, cannot really swim", "It spends the day in water to keep its skin cool and wet"],
+  ["giraffe", /\b(giraffes?)\b/i, "mammal", "African savanna", "leaves from tall acacia trees", "walks moving both legs on one side together", "The tallest animal; its neck has only seven bones, like ours"],
+  ["zebra", /\b(zebras?)\b/i, "mammal", "African savanna", "grass", "walks, trots and gallops on hooves", "Each zebra's stripes are different; they may keep biting flies away"],
+  ["horse", /\b(horses?|kabayo)\b/i, "mammal", "grasslands (now farms everywhere)", "grass and hay", "walks, trots, canters and gallops on one-toed hooves", "A horse can sleep standing up"],
+  ["buffalo", /\b(buffalo(es)?|bison|kalabaw|carabao)\b/i, "mammal", "grasslands and wetlands", "grass", "walks on hooves in big herds", "Buffalo wallow in mud to keep cool and keep insects off"],
+  ["wildebeest", /\b(wildebeests?|gnus?)\b/i, "mammal", "African savanna", "grass", "walks and runs in huge herds", "Over a million wildebeest migrate across the Serengeti every year"],
+  ["cow", /\b(cows?|cattle|bulls?|calf|calves|baka)\b/i, "mammal", "farms", "grass and hay", "walks on split hooves", "It has one stomach with four parts and chews its food twice (cud)"],
+  ["pig", /\b(pigs?|piglets?|hogs?|baboy)\b/i, "mammal", "farms and forests", "almost anything (omnivore)", "walks on four short legs with split hooves", "Pigs roll in mud to cool down because they hardly sweat"],
+  ["warthog", /\b(warthogs?)\b/i, "mammal", "African savanna", "grass, roots and bulbs", "trots with its tail straight up", "It kneels on its front legs to graze"],
+  ["goat", /\b(goats?|kambing)\b/i, "mammal", "mountains and farms", "grass, leaves and shrubs", "climbs steep rocks on split hooves", "A goat's pupils are rectangles so it sees almost all round"],
+  ["sheep", /\b(sheep|lambs?|tupa)\b/i, "mammal", "farms and hills", "grass", "walks on split hooves in flocks", "Its woolly coat keeps growing and is cut once a year"],
+  ["deer", /\b(deer|reindeer|moose|elk|stags?|usa)\b/i, "mammal", "forests and grasslands", "leaves, grass and twigs", "walks and leaps on long thin legs", "A male deer grows new antlers every year"],
+  ["camel", /\b(camels?)\b/i, "mammal", "deserts", "dry plants and thorns", "walks moving both legs on one side together", "Its hump stores fat, not water, and it can go weeks without drinking"],
+  ["hyena", /\b(hyenas?)\b/i, "mammal", "African savanna", "meat (hunts and scavenges)", "lopes with long front legs and short back legs", "Its laugh like call tells others where it is"],
+  ["wolf", /\b(wolves|wolf)\b/i, "mammal", "forests, tundra and mountains", "meat (deer, moose)", "trots for hours, hunts as a pack", "Wolves howl to keep their pack together"],
+  ["fox", /\b(fox(es)?)\b/i, "mammal", "forests, fields and towns", "small animals, fruit and insects", "trots and pounces on mice under snow", "It uses its bushy tail as a blanket"],
+  ["dog", /\b(dogs?|pupp(y|ies)|aso)\b/i, "mammal", "homes (tamed from wolves)", "meat and dog food", "walks, runs and swims", "A dog's nose smells about 10,000 times better than ours"],
+  ["corgi", /\b(corgis?)\b/i, "mammal", "homes (a herding dog)", "dog food", "walks on short legs", "Corgis were bred to herd cows by nipping at their heels"],
+  ["cat", /\b(cats?|kittens?|pusa)\b/i, "mammal", "homes", "meat (cat food, mice)", "walks silently on its toes, jumps high", "A cat can turn in the air to land on its feet"],
+  ["bear", /\b(bears?|grizzl(y|ies)|brown bears?)\b/i, "mammal", "forests and mountains", "omnivore (berries, fish, roots)", "walks flat footed, can stand on two legs", "Many bears sleep through winter (hibernate)"],
+  ["polarbear", /\b(polar bears?)\b/i, "mammal", "Arctic sea ice", "meat (seals)", "walks on ice and swims far", "Its fur looks white but its skin is black to soak up heat"],
+  ["panda", /\b((giant )?pandas?)\b/i, "mammal", "Chinese mountain bamboo forests", "bamboo (12 hours of eating a day)", "walks slowly, climbs trees", "It has an extra thumb like wrist bone to grip bamboo"],
+  ["rabbit", /\b(rabbits?|bunn(y|ies)|kuneho|hares?)\b/i, "mammal", "meadows, fields and homes", "grass and vegetables", "hops on long back legs", "Its teeth never stop growing"],
+  ["mouse", /\b(mice|mouse|daga|rats?)\b/i, "mammal", "fields and homes", "seeds and grain", "scurries on four legs, climbs", "Mice talk in squeaks too high for us to hear"],
+  ["hamster", /\b(hamsters?)\b/i, "mammal", "deserts (wild) and homes", "seeds and grain", "scurries and runs on a wheel", "It carries food in stretchy cheek pouches"],
+  ["guineapig", /\b(guinea ?pigs?|cav(y|ies))\b/i, "mammal", "homes (from South American grasslands)", "hay, grass and vegetables", "scurries, jumps when happy (popcorning)", "It must eat vitamin C every day like us"],
+  ["hedgehog", /\b(hedgehogs?)\b/i, "mammal", "gardens and woods", "insects and worms", "scurries, rolls into a ball when scared", "It has about 5,000 spines made of keratin"],
+  ["ferret", /\b(ferrets?)\b/i, "mammal", "homes (tamed from polecats)", "meat", "bounds with a long bendy body", "Ferrets sleep about 15 hours a day"],
+  ["trex", /\b(t\.? ?rex|tyrannosaur(us)?( rex)?)\b/i, "reptile (dinosaur, extinct)", "Late Cretaceous North American forests and plains, 66 million years ago", "meat", "walked on two strong back legs, balanced by its tail", "Its bite was the strongest of any land animal ever"],
+  ["raptor", /\b(raptors?|velociraptors?)\b/i, "reptile (dinosaur, extinct)", "Cretaceous Asian deserts", "meat (small animals)", "ran on two legs, slashing with a big toe claw", "It was turkey sized and had feathers"],
+  ["triceratops", /\b(triceratops(es)?)\b/i, "reptile (dinosaur, extinct)", "Cretaceous North American plains", "plants (cut with its beak)", "walked on four sturdy legs", "Its three horns and frill may have protected it and shown off to others"],
+  ["stegosaurus", /\b(stegosaur(us|uses)?)\b/i, "reptile (dinosaur, extinct)", "Jurassic plains, 150 million years ago", "low plants", "walked on four legs, the back legs longer", "The spikes on its tail (the thagomizer) were for defence"],
+  ["brachiosaurus", /\b(brachiosaur(us|uses)?|sauropods?|long.?neck(ed)? dinosaurs?)\b/i, "reptile (dinosaur, extinct)", "Jurassic forests", "leaves from tall trees", "walked on four pillar legs, front ones longer", "It was as tall as a four storey building"],
+  ["meerkat", /\b(meerkats?)\b/i, "mammal", "Kalahari desert", "insects, scorpions and lizards", "scurries, stands on its back legs to watch", "One meerkat stands guard while the others dig for food"],
+  ["monkey", /\b(monkeys?|chimp(anzee)?s?|unggoy|matsing)\b/i, "mammal (primate)", "tropical forests", "fruit, leaves and insects", "climbs and swings with hands, feet and tail", "Monkeys groom each other to stay friends"],
+  ["sloth", /\b(sloths?)\b/i, "mammal", "Central and South American rainforest", "leaves", "hangs upside down and moves very slowly", "Algae grows in its fur and helps it hide"],
+  ["gorilla", /\b(gorillas?|apes?)\b/i, "mammal (primate)", "African rainforest", "leaves, stems and fruit", "knuckle walks on four limbs", "The largest primate; it shares about 98 percent of our DNA"],
+  ["kangaroo", /\b(kangaroos?|wallab(y|ies))\b/i, "mammal (marsupial)", "Australian grassland and bush", "grass", "hops on big back legs, using its tail for balance", "Its baby (joey) grows in a pouch"],
+  ["eagle", /\b(eagles?|agila)\b/i, "bird", "mountains, forests and coasts", "meat (fish, rabbits)", "soars on wide wings, dives to grab with its talons", "An eagle sees about four times sharper than we do"],
+  ["falcon", /\b(falcons?)\b/i, "bird", "cliffs, open land and cities", "birds caught in the air", "flies fast; the peregrine dives over 300 km per hour", "The peregrine falcon is the fastest animal on Earth"],
+  ["hawk", /\b(hawks?|lawin)\b/i, "bird", "open fields and woods", "small animals", "circles high, then swoops down", "A hawk's eyes face forward to judge distance when it strikes"],
+  ["owl", /\b(owls?|kuwago)\b/i, "bird", "forests, barns and deserts", "mice, insects and small animals", "flies silently on soft edged feathers", "It can turn its head about three quarters of the way round"],
+  ["macaw", /\b(macaws?|scarlet macaws?)\b/i, "bird (parrot)", "South American rainforest", "nuts, seeds and fruit", "flies in pairs and climbs with beak and feet", "Macaws eat clay from river banks to help digest seeds"],
+  ["bluemacaw", /\b(blue (and (yellow|gold) )?macaws?|hyacinth macaws?)\b/i, "bird (parrot)", "South American rainforest and palm swamps", "palm nuts", "flies and climbs", "Its beak can crack nuts too hard for a hammer"],
+  ["parrot", /\b(parrots?|loros?)\b/i, "bird", "tropical forests", "seeds, nuts and fruit", "flies and climbs, two toes forward and two back", "Many parrots can copy words"],
+  ["budgie", /\b(budgies?|budgerigars?|parakeets?)\b/i, "bird", "Australian grassland and homes", "seeds", "flies fast in flocks", "Wild budgies are always green and yellow"],
+  ["toucan", /\b(toucans?)\b/i, "bird", "South American rainforest", "fruit", "hops between branches, short flights", "Its huge beak is light (hollow) and helps it lose heat"],
+  ["hummingbird", /\b(humming ?birds?)\b/i, "bird", "the Americas, gardens and forests", "flower nectar and tiny insects", "hovers by beating its wings up to 80 times a second", "The only bird that can fly backwards"],
+  ["penguin", /\b(penguins?)\b/i, "bird", "Antarctic ice and southern coasts", "fish and krill", "waddles on land, flies under water with flipper wings", "It cannot fly in the air; its wings are flippers"],
+  ["flamingo", /\b(flamingos?|flamingoes)\b/i, "bird", "salty lakes and lagoons", "shrimp and algae (which make it pink)", "wades on long legs, flies in flocks", "It often stands on one leg to stay warm"],
+  ["chicken", /\b(chickens?|hens?|roosters?|chicks?|manok)\b/i, "bird", "farms", "seeds, grain and insects", "walks and scratches, flutters short distances", "Chickens come from the red junglefowl of Asian forests"],
+  ["duck", /\b(ducks?|ducklings?|pato)\b/i, "bird", "ponds, lakes and rivers", "water plants, seeds and insects", "swims with webbed feet, flies, waddles", "Its feathers are waterproofed with oil"],
+  ["dodo", /\b(dodos?)\b/i, "bird (extinct)", "the island of Mauritius", "fruit and seeds", "walked; it could not fly", "It died out about 1681, soon after people arrived"],
+  ["crow", /\b(crows?|ravens?|uwak)\b/i, "bird", "almost everywhere", "almost anything", "walks, hops and flies", "Crows use sticks as tools and remember faces"],
+  ["bat", /\b(bats?|paniki)\b/i, "mammal", "caves and forests", "insects or fruit", "the only mammal that truly flies, on skin wings over long fingers", "Many bats find food in the dark by echolocation (echoes of their squeaks)"],
+  ["pteranodon", /\b(pteranodons?|pterosaurs?|pterodactyls?)\b/i, "reptile (flying, extinct, not a dinosaur)", "Cretaceous seas and coasts", "fish", "glided and soared on skin wings", "Its wings were about 7 metres across"],
+  ["fish", /\b(fish(es)?|isda)\b/i, "fish", "rivers, lakes and seas", "plants, insects or other fish", "swims by waving its tail; fins steer", "Fish breathe with gills that take oxygen out of water"],
+  ["goldfish", /\b(goldfish)\b/i, "fish", "ponds and tanks", "flakes, plants and insects", "swims by waving its tail", "Goldfish can see more colours than we can"],
+  ["clownfish", /\b(clown ?fish)\b/i, "fish", "coral reefs", "algae and tiny animals", "swims in and out of a sea anemone", "A slime coat stops the anemone stinging it"],
+  ["shark", /\b(sharks?|pating)\b/i, "fish", "oceans", "fish, seals and squid", "swims by sweeping its tail side to side", "Its skeleton is cartilage, not bone, and it regrows lost teeth"],
+  ["whale", /\b(whales?|balyena)\b/i, "mammal", "oceans", "krill and fish", "swims by beating its tail up and down", "It breathes air through a blowhole on top of its head"],
+  ["dolphin", /\b(dolphins?|lumba.?lumba)\b/i, "mammal", "oceans and some rivers", "fish and squid", "swims by beating its tail up and down, leaps", "Dolphins call each other by signature whistles, like names"],
+  ["dunkleosteus", /\b(dunkleosteus|armou?red fish)\b/i, "fish (extinct)", "Devonian seas, 360 million years ago", "other fish", "swam with a long body", "Its head was covered in bony armour plates that made sharp jaws"],
+  ["octopus", /\b(octop(us|uses|i)|pugita)\b/i, "invertebrate (mollusc)", "oceans, rocks and reefs", "crabs and shellfish", "crawls on eight arms or jets water to shoot backwards", "It has three hearts and changes colour in a blink"],
+  ["jellyfish", /\b(jelly ?fish(es)?|dikya)\b/i, "invertebrate", "oceans", "tiny animals caught with stinging tentacles", "pulses its bell to swim, drifts with currents", "It has no brain, heart or bones"],
+  ["seaturtle", /\b(sea turtles?|pawikan)\b/i, "reptile", "warm oceans and beaches", "sea grass and jellyfish", "swims with flipper legs", "It comes back to the beach where it hatched to lay eggs"],
+  ["crab", /\b(crabs?|alimango|alimasag)\b/i, "invertebrate (crustacean)", "seashores and the sea floor", "almost anything", "walks sideways on eight legs", "It sheds its hard shell to grow"],
+  ["turtle", /\b(turtles?|tortoises?|pagong)\b/i, "reptile", "ponds and land", "plants and small animals", "walks slowly, some swim", "Its shell is part of its skeleton and grows with it"],
+  ["crocodile", /\b(crocodiles?|alligators?|buwaya)\b/i, "reptile", "rivers and swamps", "meat (fish, animals at the water's edge)", "swims with its tail, walks or crawls on short legs", "It has been around since the time of the dinosaurs"],
+  ["lizard", /\b(lizards?|iguanas?|butiki|bayawak)\b/i, "reptile", "deserts, forests and rocks", "insects and plants", "runs on four legs with a side to side wiggle", "Many lizards can drop their tail to escape and grow it back"],
+  ["gecko", /\b(geckos?|tuko)\b/i, "reptile", "warm places, walls of houses", "insects", "climbs walls with sticky toe pads", "Millions of tiny hairs on its toes let it walk upside down"],
+  ["snake", /\b(snakes?|ahas|python|cobra)\b/i, "reptile", "almost everywhere but very cold places", "meat (mice, eggs, frogs)", "slides by curving its body in S waves", "It smells with its tongue and swallows food whole"],
+  ["frog", /\b(frogs?|toads?|palaka)\b/i, "amphibian", "ponds, rivers and wet forests", "insects", "hops and swims with long webbed back legs", "It starts life as a tadpole in water and breathes through its skin too"],
+  ["dartfrog", /\b((poison )?dart frogs?|poison frogs?)\b/i, "amphibian", "Central and South American rainforest", "ants and tiny insects", "hops", "Its bright colours warn that its skin is poisonous"],
+  ["butterfly", /\b(butterfl(y|ies)|monarchs?|paru.?paro)\b/i, "invertebrate (insect)", "gardens, meadows and forests", "flower nectar", "flies by flapping two pairs of wings", "It changes from caterpillar to chrysalis to butterfly (metamorphosis)"],
+  ["morpho", /\b((blue )?morphos?)\b/i, "invertebrate (insect)", "South and Central American rainforest", "rotting fruit", "flies flashing its blue wings", "Its blue comes from tiny scales that bend light, not paint"],
+  ["bee", /\b(bees?|bumble ?bees?|bubuyog)\b/i, "invertebrate (insect)", "gardens, meadows, hives", "nectar and pollen", "flies, beating its wings about 200 times a second", "Bees carry pollen from flower to flower so plants can make seeds"],
+  ["ladybug", /\b(lady ?bugs?|lady ?birds?)\b/i, "invertebrate (insect, a beetle)", "gardens", "aphids", "crawls, flies with wings under its spotted case", "One ladybug eats thousands of aphids"],
+  ["beetle", /\b(beetles?|salagubang)\b/i, "invertebrate (insect)", "almost everywhere", "plants, wood or dead things", "crawls on six legs, flies with wings under hard covers", "There are more kinds of beetle than any other animal"],
+  ["ant", /\b(ants?|langgam)\b/i, "invertebrate (insect)", "almost everywhere on land", "seeds, sugar and other insects", "walks fast on six legs", "An ant can carry many times its own weight"],
+  ["spider", /\b(spiders?|gagamba|tarantulas?)\b/i, "invertebrate (arachnid, not an insect)", "homes, gardens and forests", "insects caught in webs", "walks on eight legs, spins silk", "Spider silk is stronger than steel of the same thickness"],
+];
+const HABITATS = { 'sky': 'eagle, falcon, hawk, hummingbird, bat, crow', 'forest and rainforest': 'tiger, jaguar, gorilla, monkey, sloth, macaw, toucan, owl, dartfrog, morpho, snake', 'savanna and grassland': 'lion, cheetah, elephant, giraffe, zebra, rhino, wildebeest, hyena, warthog', 'desert': 'camel, meerkat, lizard, snake, hawk', 'ocean': 'whale, dolphin, shark, octopus, jellyfish, seaturtle, clownfish, crab', 'rivers and wetlands': 'hippo, crocodile, frog, duck, flamingo, buffalo', 'polar': 'polarbear, penguin', 'farm and home': 'cow, pig, sheep, goat, horse, chicken, duck, dog, cat, rabbit, hamster' };
+const AN_CLASS = 'Animals with a backbone (vertebrates): mammals (hair, feed babies milk: lion, whale, bat), birds (feathers, beaks, lay eggs: eagle, penguin), reptiles (dry scales, lay eggs on land: snake, crocodile, turtle), amphibians (moist skin, start life in water: frog), fish (gills and fins: shark, clownfish). Animals without a backbone (invertebrates): insects (six legs: bee, butterfly, ant), arachnids (eight legs: spider), crustaceans (crab), molluscs (octopus), jellyfish.';
+export function animalGuide(asked = '') {
+  const q = String(asked || ''), out = [];
+  const hits = ANIMAL_FACTS.filter((a) => a[1].test(q)).sort((a, b) => q.match(b[1])[0].length - q.match(a[1])[0].length).slice(0, 3);
+  hits.forEach(([kind, , cls, home, food, moves, fact]) => out.push(`About the ${AN_NAMES[kind] || kind} (draw it with the animal kit, kind "${kind}", and it moves on its own): class: ${cls}. Home: ${home}. Food: ${food}. How it moves: ${moves}. ${fact}.`));
+  if (/\b(habitats?|ecosystems?|biomes?|where (do|does) .* live|tirahan)\b/i.test(q)) out.push('Animal habitats, each with the animal kit kinds that live there: ' + Object.entries(HABITATS).map(([h, k]) => `${h}: ${k}`).join('; ') + '. Draw each habitat as its own band or layer (sky on top, then forest, desert, savanna, and the ocean at the bottom), each with its own ground and the right animals on it.');
+  if (/\b(classif\w*|vertebrates?|invertebrates?|mammals?|reptiles?|amphibians?|kinds of animals|types of animals|animal groups?)\b/i.test(q)) out.push(AN_CLASS);
+  return out.join('\n');
+}
+// its box (for the checks and the labels), from where it stands
+function animalTall(A) {
+  if (A.b === 'quad') return A.leg + A.bh + Math.max(A.tilt || 0, 0) + Math.max(0, Math.sin((A.neck[1]) * Math.PI / 180) * A.neck[0]) + A.hr * 1.4 + (A.horn === 'antlers' ? .12 : 0) + (A.hump || 0);
+  return ({ upright: .9, bird: A.upright ? .9 : (A.leg || .1) + .55, bat: .4, fish: A.whale ? .4 : .42, octopus: .7, jelly: .9, turtle: .32, crab: .35, croc: .2, snake: .22, frog: .55, butterfly: .7, bee: .45, beetle: .4, ant: .3, spider: .35 })[A.b] || .5;
+}
+function animalBox(sh) {
+  const x = +sh.x, y = +sh.y, w = +sh.w || 160, A = ANIMALS[String(sh.kind)] || ANIMALS.lion, tall = animalTall(A) * w;
+  if (A.b === 'fish' || A.b === 'jelly' || A.b === 'octopus' || (A.b === 'bird' && sh.pose === 'fly') || A.b === 'bat') return [[x - w / 2, y - tall / 2], [x + w / 2, y + tall / 2]];
+  return [[x - w / 2, y - tall], [x + w / 2, y]];
+}
+let animalN = 0;
+function animalShape(s, mk) {
+  const kind = ANIMALS[String(s.kind || '').toLowerCase()] ? String(s.kind).toLowerCase() : 'lion', A = ANIMALS[kind];
+  const N = (v, lo, hi, d) => { v = +v; return Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d; };
+  const x = N(s.x ?? s.cx, -40, 440, 200), y = N(s.y ?? s.cy, -40, 300, 200), w = N(s.w ?? s.size ?? s.h, 8, 400, 140);
+  const id = `ldan${++animalN}`, moving = !s.still;
+  const root = mk('g', { class: 'ld-kit ld-animal' });
+  const top = mk('g', s.facing === 'left' ? { transform: `translate(${2 * x},0) scale(-1,1)` } : {}); root.appendChild(top);
+  const P = (u, v) => [x + u * w, y - v * w], fx = (n) => n.toFixed(1);
+  const path = (parent, d, fill, o = {}) => { const e = mk('path', { d, fill: fill || 'none', stroke: o.stroke || 'none', 'stroke-width': o.w || Math.max(1.1, w * .009), 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }); if (o.op != null) e.setAttribute(fill && fill !== 'none' ? 'fill-opacity' : 'stroke-opacity', o.op); parent.appendChild(e); return e; };
+  const blob = (pts) => ksmooth(pts.map(([u, v]) => P(u, v)));
+  const circ = (u, v, r) => kc(...P(u, v), r * w), oval = (u, v, rx, ry, rot = 0) => ke(...P(u, v), rx * w, ry * w, rot);
+  const line = (pts) => 'M' + pts.map(([u, v]) => P(u, v).map(fx).join(',')).join('L');
+  const curve = (pts) => { const q = pts.map(([u, v]) => P(u, v)); let d = `M${fx(q[0][0])},${fx(q[0][1])}`; for (let i = 1; i < q.length - 1; i++) { const mx = (q[i][0] + q[i + 1][0]) / 2, my = (q[i][1] + q[i + 1][1]) / 2; d += `Q${fx(q[i][0])},${fx(q[i][1])} ${i === q.length - 2 ? fx(q[i + 1][0]) : fx(mx)},${i === q.length - 2 ? fx(q[i + 1][1]) : fx(my)}`; } return d; };
+  // a limb: an outline round points with widths, smooth
+  const limb = (pts, wd) => { const L = [], R = []; pts.forEach((p, i) => { const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)]; let tx = b[0] - a[0], ty = b[1] - a[1]; const l = Math.hypot(tx, ty) || 1; tx /= l; ty /= l; const h = wd[i] / 2; L.push([p[0] - ty * h, p[1] + tx * h]); R.push([p[0] + ty * h, p[1] - tx * h]); }); return blob([...L, ...R.reverse()]); };
+  const edge = (c, k = .42) => kitDark(c, k), lite = (c, k = .45) => kitLight(c, k);
+  // a moving part: its own group, turning about a point
+  const mover = (parent, cls, u, v, delay = 0, extra = '') => { const [ox, oy] = P(u, v); const g = mk('g', moving ? { class: `ld-anim ${cls}`, style: `transform-origin:${fx(ox)}px ${fx(oy)}px;animation-delay:${delay}s;${extra}` } : {}); parent.appendChild(g); return g; };
+  // a pattern clipped to an outline
+  const clipTo = (d) => { const cid = `${id}c${top.querySelectorAll('clipPath').length}`; const cp = mk('clipPath', { id: cid }); const pe = mk('path', { d }); cp.appendChild(pe); top.appendChild(cp); const g = mk('g', { 'clip-path': `url(#${cid})` }); return g; };
+  const R = krand(kind.length * 977 + Math.round(x) * 7 + Math.round(y) * 13);
+  const pattern = (g, A, u0, v0, u1, v1) => {
+    const dk = A.dk || '#222';
+    if (A.pat === 'stripes') for (let u = u0; u < u1; u += .038 + R() * .016) { // (from the back down, each one tapering to a point, leaning, some forked, none the same)
+      const wd = .01 + R() * .012, len = (v1 - v0) * (.55 + R() * .45), lean = (R() - .4) * .04, end = v1 + .02 - len;
+      path(g, blob([[u - wd * .5, v1 + .03], [u + wd * .5, v1 + .03], [u + wd * .4 + lean * .5, (v1 + end) / 2], [u + lean + .003, end], [u - wd * .3 + lean * .5, (v1 + end) / 2]]), dk, { op: .92 });
+      if (R() < .35) path(g, blob([[u + lean * .5, (v1 + end) / 2], [u + lean * .5 + .025, end + .01], [u + lean * .5 + .006, (v1 + end) / 2 - .01]]), dk, { op: .92 });
+    }
+    const area = Math.max(.002, (u1 - u0) * (v1 - v0)) / .08;
+    if (A.pat === 'spots') for (let k = 0; k < 90 * area; k++) path(g, circ(u0 + R() * (u1 - u0), v0 + R() * (v1 - v0), .006 + R() * .005), dk, { op: .85 });
+    if (A.pat === 'rosettes') for (let k = 0; k < 45 * area; k++) { const cu = u0 + R() * (u1 - u0), cv = v0 + R() * (v1 - v0), r = .014 + R() * .008; for (let j = 0; j < 5; j++) { const a = j / 5 * Math.PI * 2 + R(); path(g, circ(cu + Math.cos(a) * r, cv + Math.sin(a) * r, .0045 + R() * .002), dk, { op: .88 }); } path(g, circ(cu, cv, r * .6), edge(A.col, .18), { op: .6 }); }
+    if (A.pat === 'patches') for (let u = u0; u < u1; u += .05) for (let v = v0; v < v1; v += .05) { const cu = u + R() * .012, cv = v + R() * .012; path(g, blob([[cu - .02, cv], [cu - .012, cv + .02], [cu + .015, cv + .019], [cu + .021, cv - .002], [cu + .01, cv - .02], [cu - .015, cv - .018]]), dk, { op: .92 }); }
+    if (A.pat === 'cow') for (let k = 0; k < 6; k++) { const cu = u0 + R() * (u1 - u0), cv = v0 + R() * (v1 - v0), r = .05 + R() * .04; path(g, blob(Array.from({ length: 7 }, (_, j) => { const a = j / 7 * Math.PI * 2; return [cu + Math.cos(a) * r * (.7 + R() * .5), cv + Math.sin(a) * r * (.7 + R() * .5)]; })), dk, { op: .95 }); }
+    if (A.pat === 'saddle') path(g, blob([[u0 + .1, v1], [u0 + .25, v1 + .02], [u0 + .3, v0 + .1], [u0 + .15, v0 + .05]]), A.col2, {});
+  };
+  const eye = (parent, u, v, r = .012, col = '#1a1412') => { path(parent, circ(u, v, r), col, {}); path(parent, circ(u + r * .3, v + r * .35, r * .35), '#ffffff', { op: .85 }); };
+  const shadow = () => path(top, ke(x, y + 1, w * .42, Math.max(2, w * .03)), '#000000', { op: .13 });
+
+  if (A.b === 'quad') {
+    const { leg, bh } = A, t = A.tilt || 0, legT = A.legT || .07, hump = A.hump || 0, col = A.col, dk = A.dk || edge(col);
+    const back = leg + bh, bot = leg;
+    // the body outline
+    const torso = A.biped
+      ? [[-.36, back - .04], [-.28, back + .01], [-.05, back + t], [.16, back + t + .01], [.26, bot + bh * .55 + t], [.2, bot + .02], [.0, bot - .02], [-.2, bot + .02], [-.32, bot + bh * .45]]
+      : [[-.3, back - t * .8 - .015], [-.35, bot + bh * .55], [-.27, bot + bh * (A.tuck ? .3 : .05)], [-.12, bot + bh * (A.tuck || 0) * .9], [.06, bot - .01], [.2, bot + .005], [.32, bot + bh * .5 + t * .5], [.24, back + t + hump * (A.trunk ? 1 : .4)], [.0, back + (A.hump && !A.trunk ? hump : 0)], [-.18, back - t * .4]];
+    const neckBase = A.biped ? [.2, back + t - bh * .15] : [.25, back + t - bh * .25], na = A.neck[1] * Math.PI / 180, nl = A.neck[0];
+    const h0 = [neckBase[0] + Math.cos(na) * nl + A.hr * .5, neckBase[1] + Math.sin(na) * nl + (A.trunk ? bh * .1 : 0)];
+    shadow();
+    // the tail (behind the body)
+    const tailG = mover(top, 'ld-a-tail', torso[0][0] - .02, torso[0][1] - .03, -R());
+    const ts = [torso[0][0] - .02, torso[0][1] - .03];
+    if (A.tail === 'dino') path(tailG, limb([[ts[0] + .06, ts[1] - .01], [ts[0] - .15, ts[1] - .06], [ts[0] - .36, ts[1] - .14], [ts[0] - .5, ts[1] - .17]], [bh * .7, bh * .4, bh * .15, .01]), col, { stroke: edge(col) });
+    else if (A.tail === 'tuft' || A.tail === 'thin' || A.tail === 'long' || A.tail === 'rat') { const len = A.tail === 'long' ? .36 : A.tail === 'rat' ? .45 : .24, droop = A.tail === 'long' ? .05 : .2; path(tailG, curve([ts, [ts[0] - len * .35, ts[1] - droop * .6], [ts[0] - len * .7, ts[1] - droop], [ts[0] - len, ts[1] - droop * (A.tail === 'long' ? -1 : 1.1)]]), 'none', { stroke: A.tail === 'rat' ? '#e8b8b8' : A.tip || col, w: Math.max(1.5, w * (A.tail === 'long' ? .022 : .012)) }); if (A.tail === 'tuft') path(tailG, oval(ts[0] - len, ts[1] - droop * 1.1 - .02, .018, .03, 20), dk, {}); if (A.tail === 'long' && A.pat === 'stripes') for (let k = 1; k < 5; k++) path(tailG, circ(ts[0] - len * k / 5, ts[1] - droop * (k / 5) + .0, .011), dk, { op: .9 }); }
+    else if (A.tail === 'bushy' || A.tail === 'feather' || A.tail === 'horse') { const end = A.tail === 'horse' ? [ts[0] - .1, ts[1] - .3] : [ts[0] - .26, ts[1] - .1]; path(tailG, limb([ts, [(ts[0] + end[0]) / 2 - .03, (ts[1] + end[1]) / 2], end], [.03, A.tail === 'bushy' ? .085 : .06, .02]), A.tail === 'horse' ? dk : col, { stroke: edge(col) }); if (A.tip) path(tailG, oval(end[0] + .02, end[1] + .01, .035, .025, 20), A.tip, {}); }
+    else if (A.tail === 'curl') path(tailG, `M${P(ts[0], ts[1]).map(fx)}q${-w * .03},${-w * .03} ${-w * .02},${w * .02}q${w * .02},${w * .02} ${w * .03},${-w * .005}`, 'none', { stroke: edge(col, .2), w: Math.max(1.5, w * .01) });
+    else if (A.tail === 'puff') path(tailG, circ(ts[0] - .01, ts[1] - .03, .04), A.col2, { stroke: edge(A.col2, .25) });
+    else if (A.tail === 'stub') path(tailG, oval(ts[0] - .02, ts[1] - .03, .03, .018, -30), col, { stroke: edge(col) });
+    // a leg: from its top in the body down to the ground, hind legs bending back at the hock
+    const legAt = (u, far, hind, delay) => {
+      const g = mover(top, 'ld-a-leg', u, bot + bh * .45, delay);
+      const c0 = A.panda ? A.dk : col, c = far ? edge(c0, .16) : c0, L = leg + bh * .45, tw = legT * (A.biped && !hind ? .4 : 1);
+      if (A.biped && !hind) { path(g, limb([[u, bot + bh * .6], [u + .04, bot + bh * .4], [u + .06, bot + bh * .38]], [.03, .02, .012]), c, { stroke: edge(col) }); return; }
+      const pts = hind ? [[u, bot + bh * .45], [u + .035, L * .5], [u - .02, L * .25], [u + .005, .015]] : [[u, bot + bh * .45], [u - .005, L * .55], [u + .005, L * .22], [u + .01, .015]];
+      path(g, limb(pts, [tw * (hind ? 1.6 : 1.3), tw * .95, tw * .7, tw * .66]), c, { stroke: edge(col) });
+      if (A.pat === 'stripes' && A.dk === '#1e1e1e') for (let k = 1; k < 6; k++) path(g, line([[u - tw * .4, L * k / 7], [u + tw * .45, L * k / 7 + .006]]), 'none', { stroke: A.dk, w: Math.max(1.4, w * .008) });
+      const fu = pts[3][0];
+      if (A.foot === 'hoof') path(g, blob([[fu - tw * .38, .025], [fu + tw * .42, .025], [fu + tw * .45, 0], [fu - tw * .4, 0]]), '#2a2422', {});
+      else if (A.foot === 'pad') path(g, oval(fu, .012, tw * .44, .014), edge(col, .1), { stroke: edge(col) });
+      else if (A.foot === 'claw') { path(g, oval(fu + .02, .012, tw * .6, .014), c, { stroke: edge(col) }); for (let k = 0; k < 3; k++) path(g, line([[fu + .03 + k * .012, .01], [fu + .045 + k * .012, 0]]), 'none', { stroke: '#e8e0cc', w: Math.max(1, w * .006) }); }
+      else path(g, oval(fu + .01, .012, tw * .5, .015), A.kind === 'fox' ? dk : c, { stroke: edge(col) });
+      if (kind === 'fox') path(g, limb([[u, L * .35], [fu + .005, .02]], [tw * .7, tw * .66]), dk, {});
+    };
+    const fore = A.biped ? .16 : .2, hind = A.biped ? -.08 : -.22;
+    legAt(fore + .03, true, false, -.45); legAt(hind + .03, true, true, 0);
+    legAt(fore, false, false, 0); legAt(hind, false, true, -.45);
+    // the body, its shading and its coat
+    const bodyD = blob(torso);
+    // the neck and a hump behind the body, so they grow out of it with no seam
+    const neckD = nl > 0.01 ? limb([[neckBase[0] - .02, neckBase[1] - bh * .1], [neckBase[0] + Math.cos(na) * nl * .5, neckBase[1] + Math.sin(na) * nl * .5], [h0[0] - A.hr * .45, h0[1] - A.hr * .1]], [bh * .62, Math.max(A.hr * 1.1, bh * .4), A.hr * 1.15]) : null;
+    if (neckD) path(top, neckD, col, { stroke: edge(col) });
+    if (A.hump && !A.trunk) path(top, oval(0, back + hump * .4, .11, hump * .75), col, { stroke: edge(col) });
+    path(top, bodyD, col, { stroke: edge(col) });
+    if (neckD) { const nk = clipTo(neckD); top.appendChild(nk); path(nk, neckD, col, {}); }
+    if (A.mane === 'flow' || A.mane === 'stiff' || A.mane === 'short') { const m = [[neckBase[0] - .02, neckBase[1] + bh * .25], [h0[0] - A.hr * .5, h0[1] + A.hr * .6]]; path(top, limb([m[0], [(m[0][0] + m[1][0]) / 2 - .01, (m[0][1] + m[1][1]) / 2 + .02], m[1]], [A.mane === 'flow' ? .05 : .025, A.mane === 'flow' ? .05 : .03, .02]), A.mane === 'short' ? A.dk : dk, {}); }
+    const coat = clipTo([bodyD, neckD].filter(Boolean).join(' '));
+    top.appendChild(coat);
+    path(coat, oval(0, bot + bh * .05, .38, bh * .28), A.col2, { op: .75 });
+    pattern(coat, A, -.4, bot, .34, back + .12 + (nl > .3 ? nl : 0) * .9);
+    if (A.pat === 'patches' && nl > .3) for (let k = 0; k < 9; k++) { const f = k / 9, cu = neckBase[0] + Math.cos(na) * nl * f, cv = neckBase[1] + Math.sin(na) * nl * f; path(coat, blob([[cu - .02, cv], [cu, cv + .02], [cu + .02, cv], [cu, cv - .02]]), A.dk, { op: .92 }); }
+    path(coat, oval(-.02, back + t * .5, .3, bh * .16), lite(col, .4), { op: .28 });
+    path(coat, oval(0, bot - bh * .05, .36, bh * .16), edge(col, .25), { op: .22 });
+    if (A.udder) path(top, oval(-.1, bot - .01, .04, .025), '#f2b8b0', { stroke: edge('#f2b8b0') });
+    if (A.panda) path(coat, blob([[.04, back + .1], [.2, back + .1], [.22, bot - .05], [.08, bot - .05]]), A.dk, {}); // (a panda's black shoulder band)
+    if (A.hair) for (let k = 0; k < 26; k++) { const u = -.32 + k * .025, v = bot + bh * (.2 + R() * .3); path(top, line([[u, v + .06], [u + .01, v - .06]]), 'none', { stroke: edge(col, .3), w: Math.max(1.2, w * .008), op: .7 }); }
+    if (A.wool) { const lumps = []; for (let k = 0; k < 18; k++) lumps.push([-.32 + (k % 6) * .12 + (Math.floor(k / 6) % 2) * .06, bot + .04 + Math.floor(k / 6) * bh * .33, .07]); lumps.forEach(([u, v, r]) => path(top, circ(u, v, r), A.wool, { stroke: edge(A.wool, .2) })); lumps.forEach(([u, v, r]) => path(top, circ(u - r * .2, v + r * .25, r * .45), '#ffffff', { op: .45 })); }
+    if (A.spikes) for (let k = 0; k < 60; k++) { const a = Math.PI * (.05 + .9 * (k % 20) / 20), r = bh * (.5 + Math.floor(k / 20) * .12), cu = -.05 + Math.cos(a) * .3, cv = bot + bh * .45 + Math.sin(a) * r * .95; path(top, line([[cu, cv], [cu + Math.cos(a) * .05 - .015, cv + Math.sin(a) * .05]]), 'none', { stroke: A.spikes, w: Math.max(1.2, w * .009) }); }
+    if (A.plates) for (let k = 0; k < 7; k++) { const u = -.24 + k * .07, h = .08 + Math.sin(k / 6 * Math.PI) * .07; path(top, blob([[u - .03, back + .01], [u, back + h + .02], [u + .03, back + .01]]), A.plates, { stroke: edge(A.plates) }); }
+    // where the legs join: the shoulder and the haunch, drawn on the body
+    if (!A.wool) { path(top, curve([[fore + .06, back - bh * .15], [fore - .04, bot + bh * .45], [fore + .01, bot + .02]]), 'none', { stroke: edge(col, .3), w: Math.max(1, w * .006), op: .55 }); if (!A.biped) path(top, curve([[hind - .1, back - bh * .1], [hind + .08, bot + bh * .5], [hind + .02, bot + .02]]), 'none', { stroke: edge(col, .3), w: Math.max(1, w * .006), op: .55 }); }
+    // the head
+    const headG = mover(top, 'ld-a-head', h0[0] - A.hr * .5, h0[1] - A.hr * .2, -R() * 2);
+    const hr = A.hr, sn = A.sn, dr = A.drop || 0;
+    if (A.mane && A.mane.startsWith('#')) { const mp = []; for (let k = 0; k < 14; k++) { const a = k / 14 * Math.PI * 2, r = hr * (1.55 + (k % 2) * .22); mp.push([h0[0] - hr * .35 + Math.cos(a) * r, h0[1] - hr * .1 + Math.sin(a) * r * 1.05]); } path(headG, blob(mp), A.mane, { stroke: edge(A.mane) }); }
+    if (A.ear === 'big') path(headG, blob([[h0[0] - hr * .3, h0[1] + hr * .7], [h0[0] - hr * 1.3, h0[1] + hr * .6], [h0[0] - hr * 1.4, h0[1] - hr * .5], [h0[0] - hr * .9, h0[1] - hr * 1.3], [h0[0] - hr * .4, h0[1] - hr * .4]]), edge(col, .08), { stroke: edge(col) });
+    if (A.frill) path(headG, blob(Array.from({ length: 11 }, (_, k) => { const a = Math.PI * (.35 + k / 10 * 1.1), r = hr * (1.5 + (k % 2) * .12); return [h0[0] - hr * .4 + Math.cos(a) * r, h0[1] + Math.sin(a) * r]; }).concat([[h0[0] - hr * .2, h0[1] - hr * .3]])), A.col2, { stroke: edge(A.col2) });
+    const head = [[h0[0] - hr * .9, h0[1] + hr * .25], [h0[0] - hr * .2, h0[1] + hr * .92], [h0[0] + hr * .5, h0[1] + hr * .6], [h0[0] + hr * .6 + sn, h0[1] + hr * .12 - dr], [h0[0] + hr * .72 + sn, h0[1] - hr * .2 - dr], [h0[0] + hr * .5 + sn * .6, h0[1] - hr * .58 - dr * .7], [h0[0], h0[1] - hr * .72], [h0[0] - hr * .65, h0[1] - hr * .45]];
+    const headD = blob(head);
+    path(headG, headD, col, { stroke: edge(col) });
+    const face = clipTo(headD); headG.appendChild(face);
+    path(face, blob([[h0[0] - hr, h0[1] - hr], [h0[0] + hr + sn, h0[1] - hr], [h0[0] + hr + sn, h0[1] - hr * .3 - dr], [h0[0] - hr, h0[1] - hr * .2]]), A.col2, { op: .7 });
+    if (A.pat && ['stripes', 'spots', 'rosettes'].includes(A.pat)) pattern(face, A, h0[0] - hr, h0[1] - hr, h0[0] + hr * .3, h0[1] + hr);
+    if (A.points || A.mask) path(face, oval(h0[0] + hr * .3 + sn * .5, h0[1] - hr * .05, hr * .55, hr * .5), A.dk, { op: .85 });
+    path(face, blob([[h0[0] - hr, h0[1] + hr * .5], [h0[0] + hr + sn, h0[1] + hr * .3], [h0[0] + hr + sn, h0[1] + hr], [h0[0] - hr, h0[1] + hr]]), lite(col, .5), { op: .3 });
+    if (A.ear === 'pointed' || A.ear === 'round' || A.ear === 'small' || A.ear === 'mouse') { const big = A.ear === 'mouse' ? 1.6 : A.ear === 'small' ? .6 : kind === 'corgi' || kind === 'fox' ? 1.3 : 1; const eb = [h0[0] - hr * .25, h0[1] + hr * .78]; if (A.ear === 'pointed') path(headG, blob([[eb[0] - hr * .3 * big, eb[1] - hr * .05], [eb[0] - hr * .15 * big, eb[1] + hr * .55 * big], [eb[0] + hr * .25 * big, eb[1]]]), col, { stroke: edge(col) }); else { path(headG, circ(eb[0], eb[1] + hr * .1, hr * .28 * big), col, { stroke: edge(col) }); path(headG, circ(eb[0], eb[1] + hr * .1, hr * .15 * big), A.ear === 'mouse' ? '#f2b8b8' : A.panda ? A.dk : edge(col, .2), { op: A.panda ? 1 : .8 }); } if (A.panda) path(headG, circ(eb[0], eb[1] + hr * .1, hr * .28 * big), A.dk, {}); }
+    if (A.ear === 'flop') path(headG, blob([[h0[0] - hr * .3, h0[1] + hr * .6], [h0[0] - hr * .65, h0[1] + hr * .3], [h0[0] - hr * .6, h0[1] - hr * .5], [h0[0] - hr * .35, h0[1] - hr * .3]]), edge(col, .12), { stroke: edge(col) });
+    if (A.ear === 'long') [0, .12].forEach((o, k) => path(headG, blob([[h0[0] - hr * .4 - o * hr, h0[1] + hr * .7], [h0[0] - hr * .75 - o * hr, h0[1] + hr * 2.1], [h0[0] - hr * .45 - o * hr, h0[1] + hr * 2.25], [h0[0] - hr * .1 - o * hr, h0[1] + hr * .8]]), k ? edge(col, .15) : col, { stroke: edge(col) }));
+    if (A.panda) path(face, oval(h0[0] + hr * .25, h0[1] + hr * .22, hr * .26, hr * .19, -25), A.dk, {});
+    eye(headG, h0[0] + hr * .25 + (A.trunk ? 0 : sn * .15), h0[1] + hr * .28, Math.max(.007, hr * .12), A.panda ? '#5a4a3a' : '#1a1412');
+    if (A.tear) path(headG, line([[h0[0] + hr * .3, h0[1] + hr * .2], [h0[0] + hr * .5, h0[1] - hr * .3], [h0[0] + hr * .6 + sn * .5, h0[1] - hr * .45]]), 'none', { stroke: '#2b2219', w: Math.max(1.2, w * .006) });
+    path(headG, circ(h0[0] + hr * .62 + sn, h0[1] - hr * .1 - dr, hr * .08), edge(col, .5), {});
+    path(headG, curve([[h0[0] + hr * .66 + sn, h0[1] - hr * .3 - dr], [h0[0] + hr * .3 + sn * .6, h0[1] - hr * .42 - dr * .7], [h0[0] + hr * .1, h0[1] - hr * .35]]), 'none', { stroke: edge(col, .5), w: Math.max(1, w * .006) });
+    if (A.snout) path(headG, oval(h0[0] + hr * .74 + sn, h0[1] - hr * .2 - dr, hr * .1, hr * .2), lite(col, .2), { stroke: edge(col) });
+    if (A.horn === 'rhino') { path(headG, blob([[h0[0] + hr * .3 + sn, h0[1] + hr * .1 - dr], [h0[0] + hr * .6 + sn, h0[1] + hr * 1.1], [h0[0] + hr * .7 + sn, h0[1] + hr * .05 - dr]]), '#cfc6b4', { stroke: '#8a826e' }); path(headG, blob([[h0[0] + hr * .05 + sn * .6, h0[1] + hr * .45], [h0[0] + hr * .2 + sn * .6, h0[1] + hr * .95], [h0[0] + hr * .32 + sn * .6, h0[1] + hr * .45]]), '#cfc6b4', { stroke: '#8a826e' }); }
+    if (A.horn === 'buffalo') path(headG, `M${P(h0[0] - hr * .1, h0[1] + hr * .8).map(fx)}C${P(h0[0] - hr * 1.2, h0[1] + hr * 1.1).map(fx)} ${P(h0[0] - hr * 1.1, h0[1] - hr * .3).map(fx)} ${P(h0[0] - hr * .4, h0[1] - hr * .1).map(fx)}`, 'none', { stroke: '#2a2826', w: Math.max(2, w * .025) });
+    if (A.horn === 'cow' || A.horn === 'goat') path(headG, curve([[h0[0] - hr * .1, h0[1] + hr * .8], [h0[0] - hr * .45, h0[1] + hr * 1.3], [h0[0] - hr * (A.horn === 'goat' ? 1 : .3), h0[1] + hr * (A.horn === 'goat' ? 1.1 : 1.5)]]), 'none', { stroke: A.horn === 'goat' ? '#8a7a62' : '#e8dcc0', w: Math.max(2, w * .016) });
+    if (A.horn === 'antlers') { const b0 = [h0[0] - hr * .15, h0[1] + hr * .85]; path(headG, curve([b0, [b0[0] - .04, b0[1] + .08], [b0[0] - .08, b0[1] + .16]]), 'none', { stroke: '#7a5a3a', w: Math.max(1.6, w * .012) }); [[.04, .05], [.06, .1], [.01, .14]].forEach(([du, dv]) => path(headG, line([[b0[0] - du * .9, b0[1] + dv * .9], [b0[0] - du * .9 + .035, b0[1] + dv * .9 + .045]]), 'none', { stroke: '#7a5a3a', w: Math.max(1.4, w * .009) })); }
+    if (A.horn === 'tri') { [[-.05, .7, .5], [.2, .85, .5]].forEach(([du, l, a]) => path(headG, blob([[h0[0] + du * hr * 2 - hr * .1, h0[1] + hr * .55], [h0[0] + du * hr * 2 + hr * l, h0[1] + hr * 1.25], [h0[0] + du * hr * 2 + hr * .15, h0[1] + hr * .5]]), '#e8dcc0', { stroke: '#8a7e64' })); path(headG, blob([[h0[0] + hr * .5 + sn, h0[1] + hr * .2 - dr], [h0[0] + hr * .75 + sn, h0[1] + hr * .55], [h0[0] + hr * .72 + sn, h0[1] + hr * .1 - dr]]), '#e8dcc0', { stroke: '#8a7e64' }); }
+    if (A.ossicones) [0, .2].forEach((o) => { path(headG, line([[h0[0] - hr * (.1 + o), h0[1] + hr * .8], [h0[0] - hr * (.2 + o), h0[1] + hr * 1.35]]), 'none', { stroke: col, w: Math.max(1.6, w * .012) }); path(headG, circ(h0[0] - hr * (.2 + o), h0[1] + hr * 1.38, hr * .1), A.dk, {}); });
+    if (A.beard) path(headG, blob([[h0[0] + hr * .1, h0[1] - hr * .6], [h0[0] + hr * .25, h0[1] - hr * 1.2], [h0[0] + hr * .45, h0[1] - hr * .6]]), A.dk, { op: .9 });
+    if (A.sabre) path(headG, blob([[h0[0] + hr * .45 + sn * .5, h0[1] - hr * .45], [h0[0] + hr * .5 + sn * .5, h0[1] - hr * 1.15], [h0[0] + hr * .62 + sn * .5, h0[1] - hr * .5]]), '#f4efe2', { stroke: '#a89e86' });
+    if (A.teeth) for (let k = 0; k < 6; k++) path(headG, blob([[h0[0] + hr * .1 + k * (hr * .5 + sn) / 6, h0[1] - hr * .38 - dr * .5], [h0[0] + hr * .14 + k * (hr * .5 + sn) / 6, h0[1] - hr * .5 - dr * .5], [h0[0] + hr * .18 + k * (hr * .5 + sn) / 6, h0[1] - hr * .38 - dr * .5]]), '#f4efe2', {});
+    if (A.trunk) { const tg = mover(headG, 'ld-a-tail', h0[0] + hr * .6, h0[1] - hr * .2, -R(), 'animation-duration:2.8s'); path(tg, limb([[h0[0] + hr * .55, h0[1] - hr * .1], [h0[0] + hr * 1.05, h0[1] - hr * .9], [h0[0] + hr * 1.0, h0[1] - hr * 1.9], [h0[0] + hr * 1.25, h0[1] - hr * 2.4]], [hr * .6, hr * .45, hr * .3, hr * .22]), col, { stroke: edge(col) }); for (let k = 1; k < 9; k++) { const f = k / 9; path(tg, line([[h0[0] + hr * (.75 + f * .3), h0[1] - hr * (.3 + f * 1.9)], [h0[0] + hr * (.95 + f * .35), h0[1] - hr * (.32 + f * 1.9)]]), 'none', { stroke: edge(col, .3), w: Math.max(.8, w * .004), op: .7 }); } }
+    if (A.tusks === 'straight' || A.tusks === 'curl') path(headG, A.tusks === 'curl' ? `M${P(h0[0] + hr * .5, h0[1] - hr * .5).map(fx)}C${P(h0[0] + hr * 1.6, h0[1] - hr * 1.6).map(fx)} ${P(h0[0] + hr * 2.4, h0[1] - hr * .4).map(fx)} ${P(h0[0] + hr * 1.6, h0[1] + hr * .2).map(fx)}` : curve([[h0[0] + hr * .5, h0[1] - hr * .5], [h0[0] + hr * 1.1, h0[1] - hr * 1.05], [h0[0] + hr * 1.55, h0[1] - hr * .85]]), 'none', { stroke: '#f4efe2', w: Math.max(2.4, w * .022) });
+    if (A.tusks === 'warthog') path(headG, curve([[h0[0] + hr * .5 + sn * .7, h0[1] - hr * .3], [h0[0] + hr * .6 + sn * .8, h0[1] + hr * .2], [h0[0] + hr * .4 + sn * .7, h0[1] + hr * .5]]), 'none', { stroke: '#f4efe2', w: Math.max(1.8, w * .012) });
+    if (A.biped) { const ag = mover(top, 'ld-a-tail', .2, back - bh * .35, -.3); path(ag, limb([[.2, back - bh * .35], [.25, back - bh * .55], [.29, back - bh * .5]], [.03, .02, .012]), col, { stroke: edge(col) }); }
+  } else if (A.b === 'upright') { // standing or sitting up: a meerkat, a monkey, a sloth, a gorilla, a kangaroo
+    const col = A.col, hr = A.hr, sit = !!A.sit, k = A.hop;
+    shadow();
+    const tailG = mover(top, 'ld-a-tail', -.05, .1, -R());
+    if (A.tail === 'thin') path(tailG, curve([[-.08, .1], [-.2, .03], [-.28, .02]]), 'none', { stroke: edge(col, .1), w: Math.max(2, w * .03) });
+    if (A.tail === 'monkey') path(tailG, `M${P(-.1, .12).map(fx)}C${P(-.4, .05).map(fx)} ${P(-.45, .45).map(fx)} ${P(-.3, .45).map(fx)}`, 'none', { stroke: col, w: Math.max(2, w * .03) });
+    if (A.tail === 'kanga') path(tailG, limb([[-.08, .25], [-.25, .08], [-.4, .01]], [.12, .07, .03]), col, { stroke: edge(col) });
+    const body = k ? [[-.12, .3], [-.06, .62], [.06, .7], [.13, .55], [.12, .25], [0, .12]] : sit ? [[-.2, .05], [-.22, .3], [-.12, .52], [.06, .56], [.16, .4], [.18, .12], [0, .02]] : [[-.1, .1], [-.11, .45], [-.05, .64], [.06, .66], [.11, .45], [.1, .1], [0, .05]];
+    const bodyD = blob(body);
+    if (k) { const lg = mover(top, 'ld-a-tail', -.02, .2, 0); path(lg, limb([[-.02, .3], [-.12, .14], [.05, .02], [.22, .01]], [.14, .1, .05, .04]), col, { stroke: edge(col) }); }
+    else { const lg1 = mover(top, 'ld-a-leg', -.04, .2, -.4); path(lg1, limb([[-.04, .22], [sit ? .1 : -.05, sit ? .1 : .1], [sit ? .16 : -.04, .015]], [.09, .07, .06]), edge(col, .15), { stroke: edge(col) }); }
+    path(top, bodyD, col, { stroke: edge(col) });
+    const cg = clipTo(bodyD); top.appendChild(cg); path(cg, oval(.06, (body[3][1] + body[0][1]) / 2, .08, .3), A.col2, { op: .85 }); path(cg, oval(-.08, .5, .1, .25), lite(col, .4), { op: .3 });
+    if (!k) { const lg2 = mover(top, 'ld-a-leg', .02, .2, 0); path(lg2, limb([[.02, .22], [sit ? .14 : .03, sit ? .1 : .1], [sit ? .22 : .05, .015]], [.09, .07, .06]), col, { stroke: edge(col) }); }
+    const ag = mover(top, 'ld-a-head', .05, k ? .55 : .52, -.2);
+    path(ag, limb([[.03, k ? .58 : .55], [.12, k ? .45 : .4], [.15, k ? .4 : sit ? .3 : .35]], [.06, .045, .035]), col, { stroke: edge(col) });
+    const h0 = [k ? .1 : .02, (k ? .7 : sit ? .62 : .72) + hr * .6];
+    const hg = mover(top, 'ld-a-head', h0[0], h0[1] - hr * .5, -R() * 2);
+    const headD = blob([[h0[0] - hr * .8, h0[1]], [h0[0] - hr * .3, h0[1] + hr * .85], [h0[0] + hr * .5, h0[1] + hr * .7], [h0[0] + hr * (k ? 1.4 : .95), h0[1] - hr * .15], [h0[0] + hr * .4, h0[1] - hr * .75], [h0[0] - hr * .5, h0[1] - hr * .6]]);
+    if (k) path(hg, blob([[h0[0] - hr * .4, h0[1] + hr * .6], [h0[0] - hr * .55, h0[1] + hr * 1.7], [h0[0] - hr * .15, h0[1] + hr * .7]]), col, { stroke: edge(col) });
+    path(hg, headD, col, { stroke: edge(col) });
+    const fg = clipTo(headD); hg.appendChild(fg); path(fg, oval(h0[0] + hr * .35, h0[1] - hr * .1, hr * .55, hr * .55), A.col2, { op: .9 }); if (A.mask) path(fg, oval(h0[0] + hr * .35, h0[1] + hr * .15, hr * .3, hr * .18), A.dk, { op: .8 });
+    if (!k && kind !== 'sloth') path(hg, circ(h0[0] - hr * .45, h0[1] + hr * .25, hr * .22), col, { stroke: edge(col) });
+    eye(hg, h0[0] + hr * .4, h0[1] + hr * .15, hr * .1, kind === 'sloth' ? '#2a1a10' : '#1a1412');
+    path(hg, circ(h0[0] + hr * .85, h0[1] - hr * .15, hr * .08), A.dk, {});
+  } else if (A.b === 'bird') { // perched (or standing) on its feet, or flying ("pose":"fly")
+    const fly = s.pose === 'fly' && !A.flightless, up = !!A.upright, fat = A.fat ? 1.25 : 1, legL = fly ? 0 : A.leg;
+    const by = fly ? 0 : legL + (up ? .3 : .18), col = A.col;
+    if (!fly) shadow();
+    const bodyPts = up ? [[-.12, by - .28], [-.15, by + .05], [-.08, by + .28], [.06, by + .3], [.13, by + .05], [.1, by - .28], [0, by - .32]]
+      : [[-.32, by + .03], [-.15, by + .12 * fat], [.12, by + .13 * fat], [.24, by + .06], [.2, by - .08 * fat], [0, by - .13 * fat], [-.2, by - .07]];
+    const head = up ? [.02, by + .36] : A.sneck ? [.18, by + .55] : [.27, by + .13];
+    const hr = up ? (kind === 'owl' ? .13 : .09) : (kind === 'hummingbird' ? .055 : .075) * (A.fat ? 1.3 : 1);
+    // tail
+    const tg = mover(top, 'ld-a-tail', up ? -.05 : -.3, up ? by - .25 : by + .02, -R(), 'animation-duration:2.2s');
+    if (A.tail === 'long') path(tg, blob([[-.28, by + .05], [-.62, by - .14], [-.64, by - .18], [-.26, by - .02]]), A.tc || col, { stroke: edge(A.tc || col) });
+    else if (A.tail === 'fan') path(tg, blob([[-.28, by + .05], [-.5, by - .02], [-.52, by - .1], [-.26, by - .04]]), A.tc || col, { stroke: edge(A.tc || col) });
+    else if (A.tail === 'hen') path(tg, blob([[-.28, by + .02], [-.4, by + .2], [-.46, by + .18], [-.34, by - .02]]), A.tc || col, { stroke: edge(A.tc || col) });
+    else if (!up) path(tg, blob([[-.28, by + .03], [-.42, by - .02], [-.4, by - .06], [-.25, by - .04]]), A.tc || col, { stroke: edge(A.tc || col) });
+    // legs
+    if (!fly) [-.02, .05].forEach((u, k) => { const g = mover(top, A.swim ? 'ld-a-head' : 'ld-a-leg', u, by - .08, -k * .45, 'animation-duration:1.4s'); path(g, line([[u, by - (up ? .28 : .1)], [u + (A.sneck ? .0 : .01), legL * .5], [u, 0]]), 'none', { stroke: A.lc || '#8a7a5a', w: Math.max(1.4, w * (A.sneck ? .012 : .015)) }); path(g, line([[u - .04, 0], [u + .05, 0]]), 'none', { stroke: A.lc || '#8a7a5a', w: Math.max(1.4, w * .012) }); });
+    // far wing (flying)
+    if (fly) { const fw = mover(top, A.fast ? 'ld-a-wingf' : 'ld-a-wing', .02, by + .08, -.1); path(fw, blob([[-.08, by + .08], [-.1, by + .5], [.08, by + .55], [.12, by + .1]]), edge(A.wing, .18), { stroke: edge(A.wing) }); }
+    const bodyD = blob(bodyPts);
+    path(top, bodyD, col, { stroke: edge(col) });
+    const cg = clipTo(bodyD); top.appendChild(cg); path(cg, up ? oval(.02, by - .05, .1, .22) : oval(.05, by - .08, .22, .08), A.belly, { op: .95 });
+    if (A.bars) for (let k = 0; k < 12; k++) path(cg, line([[-.05 + k * .025, by - .1], [-.04 + k * .025, by - .02]]), 'none', { stroke: edge(A.belly, .35), w: Math.max(1, w * .005) });
+    if (A.band) path(cg, oval(.0, by + .08, .1, .04), A.band, {});
+    path(cg, oval(-.04, by + .1, .15, .04), lite(col, .5), { op: .35 });
+    // near wing: folded on the body, or raised and flapping
+    if (fly) { const nw = mover(top, A.fast ? 'ld-a-wingf' : 'ld-a-wing', .02, by + .06, 0); const wp = [[-.06, by + .07], [-.2, by + .42], [-.05, by + .62], [.1, by + .48], [.12, by + .08]]; path(nw, blob(wp), A.wing, { stroke: edge(A.wing) }); for (let k = 0; k < 5; k++) path(nw, line([[-.04 + k * .03, by + .12], [-.15 + k * .055, by + .5 + (k % 2) * .04]]), 'none', { stroke: edge(A.wing, .3), w: Math.max(.9, w * .005), op: .8 }); if (A.band) path(nw, line([[-.1, by + .3], [.08, by + .3]]), 'none', { stroke: A.band, w: Math.max(2, w * .03) }); }
+    else { const wg = mover(top, 'ld-a-head', .1, by + .05, -R(), 'animation-duration:3s'); const wp = up ? [[-.12, by + .2], [-.16, by - .2], [-.08, by - .28], [-.04, by + .15]] : [[.14, by + .07], [-.05, by + .1], [-.3, by - .02], [-.15, by - .06], [.1, by - .03]]; path(wg, blob(wp), A.wing, { stroke: edge(A.wing) }); if (A.band) path(wg, oval(.0, by + .03, .1, .025), A.band, {}); for (let k = 0; k < (up ? 0 : 4); k++) path(wg, line([[-.02 - k * .06, by + .06], [-.08 - k * .06, by - .02]]), 'none', { stroke: edge(A.wing, .3), w: Math.max(.9, w * .005), op: .7 }); }
+    // neck and head
+    const hg = mover(top, 'ld-a-head', head[0] - hr * .5, head[1] - hr * .5, -R() * 2, 'animation-duration:1.8s');
+    if (A.sneck) path(hg, curve([[.18, by + .08], [.08, by + .25], [.22, by + .4], [head[0], head[1] - hr * .4]]), 'none', { stroke: col, w: Math.max(3, w * .04) });
+    if (A.neck) path(hg, oval(head[0] - hr * .1, head[1] - hr * .9, hr * .8, hr * .3), A.neck, { op: .9 });
+    path(hg, circ(head[0], head[1], hr), A.head, { stroke: edge(A.head) });
+    if (A.disc) path(hg, circ(head[0] + hr * .25, head[1], hr * .7), A.disc, { op: .9 });
+    if (A.face) path(hg, oval(head[0] + hr * .35, head[1], hr * .45, hr * .35), A.face, {});
+    if (A.throat) path(hg, oval(head[0] + hr * .1, head[1] - hr * .55, hr * .6, hr * .4), A.throat, {});
+    if (A.ring) path(hg, oval(head[0] - hr * .1, head[1] - hr * .95, hr * .7, hr * .12), '#ffffff', {});
+    if (A.tufts) [-.3, .2].forEach((o) => path(hg, blob([[head[0] + hr * o - hr * .15, head[1] + hr * .8], [head[0] + hr * o - hr * .1, head[1] + hr * 1.35], [head[0] + hr * o + hr * .12, head[1] + hr * .85]]), col, { stroke: edge(col) }));
+    if (A.comb) { path(hg, blob([[head[0] - hr * .4, head[1] + hr * .85], [head[0] - hr * .2, head[1] + hr * 1.4], [head[0], head[1] + hr * 1.15], [head[0] + hr * .2, head[1] + hr * 1.4], [head[0] + hr * .45, head[1] + hr * .85]]), '#d8262b', { stroke: '#8f1416' }); path(hg, oval(head[0] + hr * .6, head[1] - hr * .7, hr * .15, hr * .3), '#d8262b', {}); }
+    const bx = head[0] + hr * .85, bv = head[1] - hr * .05, bc = A.bc;
+    const beak = { hook: [[bx - .01, bv + hr * .35], [bx + hr * .9, bv + hr * .1], [bx + hr * .85, bv - hr * .45], [bx + hr * .55, bv - hr * .15], [bx - .01, bv - hr * .25]], parrot: [[bx - .01, bv + hr * .4], [bx + hr * .7, bv + hr * .1], [bx + hr * .55, bv - hr * .7], [bx + hr * .2, bv - hr * .35], [bx - .01, bv - hr * .35]], cone: [[bx - .01, bv + hr * .25], [bx + hr * .7, bv - hr * .05], [bx - .01, bv - hr * .3]], needle: [[bx - .01, bv + hr * .12], [bx + hr * 3.2, bv - hr * .2], [bx - .01, bv - hr * .12]], owl: [[bx - hr * .25, bv + hr * .1], [bx + hr * .1, bv - hr * .3], [bx - hr * .3, bv - hr * .35]], duck: [[bx - .01, bv + hr * .2], [bx + hr * 1.1, bv - hr * .05], [bx + hr * 1.15, bv - hr * .25], [bx - .01, bv - hr * .3]], flamingo: [[bx - .01, bv + hr * .25], [bx + hr * 1.0, bv + hr * .05], [bx + hr * 1.1, bv - hr * .7], [bx + hr * .6, bv - hr * .3], [bx - .01, bv - hr * .25]], toucan: [[bx - .01, bv + hr * .55], [bx + hr * 2.6, bv + hr * .1], [bx + hr * 2.8, bv - hr * .3], [bx + hr * 1.2, bv - hr * .4], [bx - .01, bv - hr * .4]], dodo: [[bx - .01, bv + hr * .45], [bx + hr * 1.3, bv + hr * .2], [bx + hr * 1.35, bv - hr * .5], [bx + hr * .9, bv - hr * .25], [bx - .01, bv - hr * .4]] }[A.beak] || [[bx - .01, bv + hr * .25], [bx + hr * .7, bv], [bx - .01, bv - hr * .3]];
+    path(hg, blob(beak), bc, { stroke: edge(bc, .35) });
+    if (A.beak === 'toucan') path(hg, oval(bx + hr * 2.3, bv - hr * .05, hr * .35, hr * .25), '#1d1b1b', {});
+    if (A.beak === 'flamingo') path(hg, oval(bx + hr * .95, bv - hr * .35, hr * .2, hr * .3), '#1e1e1e', {});
+    eye(hg, head[0] + hr * (kind === 'owl' ? .45 : .35), head[1] + hr * .2, hr * (kind === 'owl' ? .28 : .18), kind === 'owl' ? '#f2b21c' : '#1a1412');
+    if (kind === 'owl') path(hg, circ(head[0] + hr * .45, head[1] + hr * .2, hr * .14), '#1a1412', {});
+  } else if (A.b === 'bat') {
+    const col = A.col, by = 0;
+    const wing = (side) => { const g = mover(top, 'ld-a-wing', 0, by + .04, side > 0 ? 0 : -.1); const pts = [[0, by + .06], [.12 * side, by + .3], [.3 * side, by + .32], [.48 * side, by + .2], [.38 * side, by + .1], [.3 * side, by + .14], [.22 * side, by + .02], [.12 * side, by + .06], [.06 * side, by - .04]]; path(g, blob(pts), side > 0 ? A.wing : edge(A.wing, .15), { stroke: edge(A.wing) }); [[.3, .32], [.48, .2], [.38, .1]].forEach(([u, v]) => path(g, line([[.02 * side, by + .05], [u * side, by + v]]), 'none', { stroke: edge(A.wing, .35), w: Math.max(1, w * .006) })); };
+    wing(-1); path(top, oval(0, by, .07, .1), col, { stroke: edge(col) }); wing(1);
+    const hg = mover(top, 'ld-a-head', 0, by + .08, 0);
+    path(hg, circ(.02, by + .12, .05), col, { stroke: edge(col) });
+    if (A.crest) { path(hg, blob([[0, by + .14], [-.2, by + .2], [.02, by + .17]]), col, { stroke: edge(col) }); path(hg, blob([[.05, by + .14], [.25, by + .08], [.05, by + .1]]), '#d8a83a', { stroke: '#8a6a2a' }); }
+    else [-.03, .05].forEach((o) => path(hg, blob([[o - .02, by + .15], [o - .03, by + .22], [o + .02, by + .16]]), col, { stroke: edge(col) }));
+    eye(hg, .04, by + .13, .008);
+  } else if (A.b === 'fish') { // swimming, its middle at x, y
+    const col = A.col, L = A.whale ? 1 : 1, h = A.whale ? .22 : A.shark ? .17 : A.dolphin ? .16 : A.fancy ? .26 : .22;
+    const tg = mover(top, 'ld-a-fin', -.34, 0, -R());
+    const tail = A.whale || A.dolphin ? [[-.34, 0], [-.48, .08], [-.52, .07], [-.45, 0], [-.52, -.07], [-.48, -.08]] : A.shark ? [[-.32, 0], [-.46, .2], [-.5, .19], [-.42, 0], [-.46, -.1], [-.42, -.11]] : [[-.32, 0], [-.48, h * .85], [-.5, h * .7], [-.43, 0], [-.5, -h * .7], [-.48, -h * .85]];
+    path(tg, blob(tail), A.fin, { stroke: edge(A.fin) });
+    if (A.fancy) path(tg, blob([[-.33, 0], [-.6, .2], [-.66, 0], [-.6, -.2]]), A.fin, { op: .6 });
+    const bodyPts = A.whale ? [[-.36, 0], [-.2, .08], [.15, h * .55], [.42, h * .4], [.5, 0], [.42, -h * .5], [.1, -h * .6], [-.25, -.05]]
+      : A.dolphin ? [[-.36, 0], [-.15, h * .45], [.2, h * .55], [.36, h * .3], [.52, .0], [.38, -h * .2], [.1, -h * .45], [-.2, -h * .3]]
+      : A.shark ? [[-.34, 0], [-.1, h * .5], [.2, h * .5], [.46, h * .12], [.48, -h * .05], [.3, -h * .32], [-.05, -h * .45], [-.25, -h * .15]]
+      : [[-.32, 0], [-.15, h * .6], [.12, h * .75], [.36, h * .35], [.42, 0], [.34, -h * .35], [.1, -h * .7], [-.16, -h * .5]];
+    const bodyD = blob(bodyPts);
+    // fins
+    const dors = A.shark ? [[-.02, h * .45], [.06, h * 1.35], [.16, h * .5]] : A.dolphin ? [[0, h * .5], [-.02, h * 1.1], [.1, h * .55]] : A.whale ? [[-.2, .07], [-.18, .12], [-.12, .08]] : [[-.15, h * .55], [0, h * 1.05], [.15, h * .7]];
+    path(top, blob(dors), A.fin, { stroke: edge(A.fin) });
+    const bg = mover(top, 'ld-a-body', 0, 0, -R());
+    path(bg, bodyD, col, { stroke: edge(col) });
+    const cg = clipTo(bodyD); bg.appendChild(cg);
+    path(cg, oval(.05, -h * .55, .45, h * .45), A.col2, { op: .9 });
+    if (A.bands) [.25, .02, -.22].forEach((u) => { path(cg, blob([[u - .03, h], [u + .03, h], [u + .045, -h], [u - .015, -h]]), '#f8f6f2', { stroke: '#1e1e1e' }); });
+    if (A.armor) path(cg, blob([[.12, h * .9], [.5, h * .2], [.5, -h * .7], [.1, -h * .8], [.05, 0]]), kitDark(col, .15), { stroke: kitDark(col, .4) });
+    if (!A.whale && !A.dolphin && !A.shark && !A.armor) for (let k = 0; k < 24; k++) { const u = -.2 + (k % 8) * .055, v = -h * .3 + Math.floor(k / 8) * h * .3; path(cg, `M${P(u, v + .015).map(fx)}q${w * .012},${w * .012} 0,${w * .03}`, 'none', { stroke: edge(col, .25), w: Math.max(.8, w * .004), op: .6 }); }
+    if (A.whale) for (let k = 0; k < 7; k++) path(cg, line([[.0 + k * .05, -h * .3], [.08 + k * .05, -h * .58]]), 'none', { stroke: edge(A.col2, .25), w: Math.max(1, w * .006) });
+    path(cg, oval(-.02, h * .45, .3, h * .18), lite(col, .5), { op: .35 });
+    const pec = A.whale ? [[.2, -h * .4], [.05, -h * 1.1], [.12, -h * .45]] : [[.18, -h * .1], [.05, -h * .6], [.1, -h * .1]];
+    path(bg, blob(pec), A.fin, { stroke: edge(A.fin) });
+    if (A.shark) for (let k = 0; k < 4; k++) path(bg, line([[.26 + k * .025, h * .2], [.24 + k * .025, -h * .15]]), 'none', { stroke: edge(col, .35), w: Math.max(1, w * .006) });
+    else if (!A.whale && !A.dolphin) path(bg, curve([[.26, h * .5], [.22, 0], [.26, -h * .5]]), 'none', { stroke: edge(col, .35), w: Math.max(1, w * .007) });
+    eye(bg, A.whale ? .36 : A.dolphin ? .38 : A.shark ? .36 : .32, A.whale ? -h * .1 : h * .15, A.whale ? .01 : .02);
+    if (A.whale) path(bg, curve([[.5, -h * .05], [.3, -h * .25], [.1, -h * .2]]), 'none', { stroke: edge(col, .45), w: Math.max(1, w * .007) });
+    if (A.armor) for (let k = 0; k < 4; k++) path(bg, blob([[.36 + k * .03, -h * .2], [.38 + k * .03, -h * .38], [.4 + k * .03, -h * .2]]), '#f4efe2', {});
+  } else if (A.b === 'octopus') {
+    const col = A.col;
+    for (let k = 0; k < 8; k++) { const a = -Math.PI * (.08 + k / 7 * .84), g = mover(top, 'ld-a-arm', Math.cos(a) * .08, .3 + Math.sin(a) * .05, -k * .3); const s1 = [Math.cos(a) * .08, .3], e = [Math.cos(a) * .38, .03 + (k % 2) * .05]; path(g, limb([s1, [(s1[0] + e[0]) / 2 + Math.sin(k) * .05, .16], e, [e[0] + (k < 4 ? -.05 : .05), e[1] + .06]], [.07, .05, .025, .01]), k % 2 ? edge(col, .12) : col, { stroke: edge(col) }); for (let j = 1; j < 5; j++) path(g, circ(s1[0] + (e[0] - s1[0]) * j / 5, .3 + (e[1] - .3) * j / 5 - .015, .008), A.col2, {}); }
+    const mg = mover(top, 'ld-a-pulse', 0, .32, 0); const mant = blob([[-.13, .32], [-.15, .52], [-.05, .7], [.08, .7], [.17, .52], [.14, .32], [0, .27]]); path(mg, mant, col, { stroke: edge(col) }); path(mg, oval(-.04, .56, .05, .09), lite(col, .5), { op: .4 }); eye(mg, .06, .38, .02);
+  } else if (A.b === 'jelly') {
+    const col = A.col, g = mover(top, 'ld-a-pulse', 0, .55, 0);
+    for (let k = 0; k < 7; k++) { const u = -.13 + k * .045, tg = mover(g, 'ld-a-arm', u, .5, -k * .25); path(tg, curve([[u, .5], [u + .04, .35], [u - .03, .2], [u + .02, .02]]), 'none', { stroke: k % 2 ? A.col2 : col, w: Math.max(1.4, w * .012), op: .85 }); }
+    path(g, blob([[-.2, .5], [-.17, .66], [-.06, .74], [.06, .74], [.17, .66], [.2, .5], [.1, .47], [0, .5], [-.1, .47]]), col, { stroke: edge(col, .25), op: .85 });
+    path(g, oval(-.05, .64, .08, .04, -15), '#ffffff', { op: .5 });
+  } else if (A.b === 'turtle') {
+    const col = A.col, sea = !!A.sea; if (!sea) shadow();
+    const by = sea ? .14 : .02;
+    [[.18, .42], [-.18, -.42]].forEach(([u, d], k) => { const g = mover(top, sea ? 'ld-a-wing' : 'ld-a-leg', u, by + .08, -k * .4); path(g, sea ? blob([[u, by + .08], [u + .12 * (u > 0 ? 1 : -.5), by - .06], [u + .03, by + .02]]) : limb([[u, by + .08], [u + .01, by]], [.07, .065]), col, { stroke: edge(col) }); });
+    const shell = blob([[-.3, by + .06], [-.25, by + .2], [-.05, by + .29], [.15, by + .26], [.28, by + .12], [.3, by + .06]]);
+    path(top, shell, A.shell, { stroke: edge(A.shell) });
+    const sg = clipTo(shell); top.appendChild(sg);
+    for (let k = 0; k < 5; k++) path(sg, blob([[-.24 + k * .11, by + .07], [-.22 + k * .11, by + .17], [-.17 + k * .11, by + .21], [-.12 + k * .11, by + .17], [-.13 + k * .11, by + .07]]), kitDark(A.shell, .12), { stroke: kitDark(A.shell, .4) });
+    path(sg, oval(-.05, by + .24, .2, .04), lite(A.shell, .5), { op: .35 });
+    path(top, oval(0, by + .055, .3, .02), lite(col, .2), { stroke: edge(col) });
+    const hg = mover(top, 'ld-a-head', .28, by + .1, 0); path(hg, limb([[.26, by + .1], [.36, by + .13], [.42, by + .13]], [.07, .065, .07]), col, { stroke: edge(col) }); eye(hg, .42, by + .15, .01);
+  } else if (A.b === 'crab') {
+    const col = A.col; shadow();
+    for (let k = 0; k < 4; k++) [-1, 1].forEach((sd) => { const g = mover(top, 'ld-a-leg', sd * .12, .12, -k * .2); path(g, line([[sd * .12, .12], [sd * (.24 + k * .04), .16], [sd * (.3 + k * .04), 0]]), 'none', { stroke: edge(col, .1), w: Math.max(1.6, w * .016) }); });
+    path(top, oval(0, .15, .2, .1), col, { stroke: edge(col) }); path(top, oval(-.04, .2, .1, .03), lite(col, .5), { op: .4 });
+    [-1, 1].forEach((sd) => { const g = mover(top, 'ld-a-arm', sd * .15, .2, sd * .2); path(g, line([[sd * .15, .2], [sd * .26, .3]]), 'none', { stroke: col, w: Math.max(2, w * .025) }); path(g, blob([[sd * .24, .3], [sd * .3, .38], [sd * .36, .33], [sd * .3, .28]]), col, { stroke: edge(col) }); });
+    [-.05, .05].forEach((u) => { path(top, line([[u, .24], [u, .3]]), 'none', { stroke: col, w: Math.max(1.4, w * .01) }); eye(top, u, .31, .012); });
+  } else if (A.b === 'croc') { // a crocodile or a lizard, low on its legs
+    const col = A.col; shadow(); const lg = A.leg, sm = !!A.small, h = sm ? .07 : .08;
+    const tg = mover(top, 'ld-a-tail', -.18, lg + h * .5, -R());
+    path(tg, limb([[-.15, lg + h * .5], [-.35, lg + h * .2], [-.5, lg + .01], [-.6, .03]], [h * 1.6, h, h * .4, .01]), col, { stroke: edge(col) });
+    [[.14, true], [-.12, true]].forEach(([u], k) => { const g = mover(top, 'ld-a-leg', u + .02, lg + h * .4, -k * .45 - .2); path(g, limb([[u + .02, lg + h * .4], [u + .07, lg * .5], [u + .05, .01]], [h * .7, h * .5, h * .45]), edge(col, .15), { stroke: edge(col) }); });
+    const body = blob([[-.18, lg + h * .2], [-.1, lg + h * 1.2], [.15, lg + h * 1.2], [.26, lg + h * .9], [.3 + A.sn, lg + h * .55], [.3 + A.sn, lg + h * .3], [.2, lg], [-.1, lg - .005]]);
+    path(top, body, col, { stroke: edge(col) });
+    const cg = clipTo(body); top.appendChild(cg); path(cg, oval(.05, lg, .3, h * .5), A.col2, { op: .85 });
+    if (!sm) for (let k = 0; k < 10; k++) path(cg, blob([[-.16 + k * .04, lg + h * 1.15], [-.145 + k * .04, lg + h * 1.4], [-.13 + k * .04, lg + h * 1.15]]), edge(col, .2), {});
+    if (A.dots) for (let k = 0; k < 20; k++) path(cg, circ(-.15 + R() * .4, lg + h * (.5 + R() * .6), .008), lite(col, .5), {});
+    [[.14], [-.12]].forEach(([u], k) => { const g = mover(top, 'ld-a-leg', u, lg + h * .4, -k * .45); path(g, limb([[u, lg + h * .4], [u + .05, lg * .5], [u + .04, .01]], [h * .7, h * .5, h * .45]), col, { stroke: edge(col) }); });
+    eye(top, .2, lg + h * 1.05, .013);
+    if (!sm) for (let k = 0; k < 7; k++) path(top, blob([[.22 + k * A.sn / 7, lg + h * .42], [.23 + k * A.sn / 7, lg + h * .3], [.24 + k * A.sn / 7, lg + h * .42]]), '#f4efe2', {});
+  } else if (A.b === 'snake') {
+    const col = A.col; shadow();
+    const pts = [], wd = []; for (let k = 0; k <= 20; k++) { const f = k / 20; pts.push([-.48 + f * .86, .05 + Math.sin(f * Math.PI * 2.2) * .07]); wd.push(.02 + Math.sin(Math.min(1, f * 1.4) * Math.PI / 2) * .055 - (f > .93 ? .02 : 0)); }
+    const g = mover(top, 'ld-a-snake', -.05, .05, 0);
+    const bodyD = limb(pts, wd);
+    path(g, bodyD, col, { stroke: edge(col) });
+    const cg = clipTo(bodyD); g.appendChild(cg); for (let k = 0; k < 14; k++) { const p = pts[1 + k], q = [p[0], p[1] + .02]; path(cg, circ(q[0], q[1], .022), A.dk, { op: .85 }); }
+    path(cg, limb(pts.map(([u, v]) => [u, v - .025]), wd.map((d) => d * .4)), A.col2, { op: .7 });
+    const h = pts[20]; path(g, oval(h[0] + .03, h[1] + .005, .05, .032), col, { stroke: edge(col) }); eye(g, h[0] + .045, h[1] + .02, .009);
+    path(g, line([[h[0] + .08, h[1]], [h[0] + .12, h[1] - .005], [h[0] + .13, h[1] + .01]]), 'none', { stroke: '#d8262b', w: Math.max(1, w * .006) });
+  } else if (A.b === 'frog') {
+    const col = A.col; shadow();
+    const lg = mover(top, 'ld-a-pulse', -.1, .12, -.3, 'animation-duration:2.4s');
+    path(lg, blob([[-.2, .12], [-.3, .02], [-.05, .0], [.02, .06], [-.08, .2]]), edge(col, .12), { stroke: edge(col) });
+    const body = blob([[-.25, .14], [-.15, .38], [.08, .45], [.25, .35], [.3, .2], [.2, .1], [-.05, .08]]);
+    path(top, body, col, { stroke: edge(col) });
+    const cg = clipTo(body); top.appendChild(cg); path(cg, oval(.1, .12, .22, .08), A.col2, { op: .8 }); if (A.spots) for (let k = 0; k < 14; k++) path(cg, circ(-.18 + R() * .42, .15 + R() * .28, .02 + R() * .02), A.dk, {}); path(cg, oval(-.02, .38, .15, .04), '#ffffff', { op: .3 });
+    path(top, limb([[.14, .18], [.18, .06], [.24, .01]], [.07, .05, .04]), col, { stroke: edge(col) });
+    path(top, blob([[-.18, .15], [-.12, .03], [.05, .0], [-.02, .1]]), col, { stroke: edge(col) });
+    [.16, .25].forEach((u, k) => { path(top, circ(u, .42 - k * .02, .045), col, { stroke: edge(col) }); eye(top, u + .01, .425 - k * .02, .025); });
+    const th = mover(top, 'ld-a-pulse', .2, .22, 0, 'animation-duration:1.1s'); path(th, oval(.24, .21, .06, .045), A.col2, { op: .9 });
+  } else if (A.b === 'butterfly') { // seen from above, wings spread, flapping
+    const col = A.col;
+    [-1, 1].forEach((sd) => { const g = mover(top, 'ld-a-flap', 0, .4, 0); const fw = blob([[0, .44], [.12 * sd, .7], [.38 * sd, .78], [.42 * sd, .6], [.2 * sd, .42]]), hw = blob([[0, .38], [.18 * sd, .38], [.32 * sd, .25], [.2 * sd, .12], [.06 * sd, .18]]);
+      [fw, hw].forEach((d) => { path(g, d, col, { stroke: A.dk, w: Math.max(1.6, w * .016) }); const c = clipTo(d); g.appendChild(c); for (let k = 0; k < 6; k++) path(c, line([[0, .4], [(.1 + k * .07) * sd, k < 3 ? .8 : .1 + k * .02]]), 'none', { stroke: A.dk, w: Math.max(1, w * .007) }); for (let k = 0; k < 10; k++) path(c, circ((.2 + R() * .22) * sd, .14 + R() * .64, .012), '#f6f2ea', { op: (k % 3) ? 0 : .9 }); path(c, d, 'none', { stroke: A.dk, w: Math.max(3, w * .05) }); });
+      for (let k = 0; k < 8; k++) path(g, circ((.36 - k * .02) * sd, .72 - k * .03, .008), '#f6f2ea', {}); });
+    path(top, oval(0, .42, .025, .2), A.dk, {});
+    [-1, 1].forEach((sd) => path(top, curve([[0, .62], [.04 * sd, .74], [.07 * sd, .8]]), 'none', { stroke: A.dk, w: Math.max(1, w * .007) }));
+  } else if (A.b === 'bee') {
+    const col = A.col;
+    [-1, 1].forEach((sd) => { const g = mover(top, 'ld-a-wingf', 0, .3, 0); path(g, oval(-.02 + sd * .02, .42, .12, .07, -30 + sd * 25), '#dceffa', { stroke: '#9ab8c8', op: .7 }); });
+    const body = blob([[-.25, .22], [-.15, .33], [.08, .32], [.15, .25], [.08, .16], [-.15, .15]]); path(top, body, col, { stroke: edge(col) });
+    const cg = clipTo(body); top.appendChild(cg); [-.18, -.08, .02].forEach((u) => path(cg, blob([[u, .1], [u + .04, .1], [u + .04, .4], [u, .4]]), A.dk, {})); path(cg, oval(-.05, .3, .12, .02), '#ffffff', { op: .4 });
+    path(top, circ(.2, .26, .07), A.dk, {}); eye(top, .23, .28, .015, '#2a2a2a');
+    path(top, line([[-.28, .24], [-.32, .23]]), 'none', { stroke: A.dk, w: Math.max(1.4, w * .01) });
+    [-.08, 0, .08].forEach((u, k) => { const g = mover(top, 'ld-a-leg', u, .16, -k * .3); path(g, line([[u, .16], [u - .02, .06], [u + .02, 0]]), 'none', { stroke: A.dk, w: Math.max(1, w * .008) }); });
+    path(top, curve([[.24, .32], [.28, .42], [.33, .46]]), 'none', { stroke: A.dk, w: Math.max(1, w * .007) });
+  } else if (A.b === 'beetle' || A.b === 'ant' || A.b === 'spider') {
+    const col = A.col; shadow();
+    const legs = A.b === 'spider' ? 4 : 3;
+    for (let k = 0; k < legs; k++) [0, 1].forEach((far) => { const u = -.08 + k * (A.b === 'spider' ? .06 : .1), g = mover(top, 'ld-a-leg', u, .14, -(k + far) * .3); path(g, line([[u, .14], [u + (k - 1) * .08 + (far ? .02 : 0), A.b === 'spider' ? .3 : .2], [u + (k - 1) * .14 + (far ? .03 : 0), 0]]), 'none', { stroke: A.b === 'beetle' ? (far ? edge(A.dk, .1) : A.dk) : far ? edge(col, .2) : col, w: Math.max(1.4, w * .012) }); });
+    if (A.b === 'ant') { [[-.2, .15, .1, .08], [0, .16, .06, .045], [.14, .18, .06, .055]].forEach(([u, v, rx, ry]) => path(top, oval(u, v, rx, ry), col, { stroke: edge(col) })); eye(top, .17, .2, .012); path(top, curve([[.17, .22], [.24, .3], [.3, .28]]), 'none', { stroke: col, w: Math.max(1.2, w * .008) }); }
+    else if (A.b === 'spider') { path(top, oval(-.12, .2, .16, .12), col, { stroke: edge(col) }); path(top, oval(.08, .17, .09, .07), col, { stroke: edge(col) }); path(top, oval(-.15, .26, .07, .03), lite(col, .5), { op: .3 }); [.12, .15].forEach((u) => eye(top, u, .2, .01)); }
+    else { const sh = blob([[-.25, .1], [-.22, .28], [-.02, .32], [.12, .26], [.14, .12], [0, .08]]); path(top, sh, col, { stroke: edge(col) }); const cg = clipTo(sh); top.appendChild(cg); if (A.spots) for (let k = 0; k < 6; k++) path(cg, circ(-.18 + k * .055, .17 + (k % 2) * .07, .028), A.dk, {}); path(cg, line([[-.24, .2], [.12, .2]]), 'none', { stroke: A.dk, w: Math.max(1, w * .008) }); path(cg, oval(-.08, .28, .12, .025), '#ffffff', { op: .4 }); path(top, oval(.19, .15, .07, .06), A.dk, { stroke: edge(A.dk) }); eye(top, .22, .17, .01, '#f6f2ea'); if (A.horn) { path(top, limb([[.22, .17], [.36, .2], [.46, .27]], [.04, .025, .01]), A.dk, {}); path(top, limb([[.1, .3], [.28, .36], [.44, .31]], [.05, .03, .012]), A.dk, {}); } else [-1, 1].forEach((k) => path(top, line([[.22, .19], [.27, .25 + k * .01], [.3, .26 + k * .02]]), 'none', { stroke: A.dk, w: Math.max(1, w * .007) })); }
+  }
+  return root;
+}
+
 function shape2d(s, p) {
   const t = String(s.t || s.type || '').toLowerCase();
   const n = (k, d = 0) => num(s[k], -50, 450, d);
@@ -1565,6 +2120,7 @@ function shape2d(s, p) {
   if (t === 'ellipse') return paint(mk('ellipse', { cx: n('cx', 200), cy: n('cy', 130), rx: num(s.rx, 1, 200, 30), ry: num(s.ry, 1, 200, 20) }));
   if (t === 'poly' && Array.isArray(s.pts)) { const pts = s.pts.slice(0, 60).map((q) => `${num(q && q[0], -50, 450)},${num(q && q[1], -50, 450)}`).join(' '); return paint(mk('polyline', { points: pts })); }
   if (t === 'text') { const e = mk('text', { x: n('x'), y: n('y'), class: 'ld-word', 'font-size': num(s.size, 8, 22, 12) }); e.textContent = words(s.text ?? s.s, 60); return e; }
+  if (t === 'animal') return animalShape(s, mk); // (v327) an animal, whole and moving
   if (KIT.includes(t)) return kitShape(s, mk); // (v324) a tree, a flower, a cloud...: drawn whole, in the guide's style
   return null;
 }
@@ -1811,11 +2367,13 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
     if (g) pick(g); else if (picked) pick(picked);
   });
   const tmp = new T.Vector3();
+  let animators = []; // (v327: filled once the model is built)
   const tick = (now) => {
     raf = requestAnimationFrame(tick);
     if (!visible) return;
     const dt = Math.min(.05, (now - last) / 1000); last = now;
     if ((!still() && !paused3) || moving3) groups.forEach((g) => { if (g.visible && g.userData.spinners) g.userData.spinners.forEach((sp) => { sp.rotation[sp.userData.axle] += dt * 3; }); });
+    if ((!still() && !paused3) || moving3) animators.forEach((o) => o.userData.animate(now / 1000));
     if (moving3) { // (v314) a beating part, and the dots on their way
       const beat = (now % 860) / 860, sq = beat < 0.18 ? Math.sin((beat / 0.18) * Math.PI) : 0, br = (Math.sin((now / 1700) * Math.PI) + 1) / 2;
       groups.forEach((g) => { const b = g.userData.beat; if (b) b.piv.scale.setScalar(b.kind === 'breathe' ? 1 + br * 0.04 : 1 - sq * 0.05); });
@@ -1897,7 +2455,8 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
   gone.observe(document.body, { childList: true, subtree: true });
   const byPart = (i) => groups.find((g) => g.userData.i === i) || null;
   const SIDES = { front: [0, .14, 1], back: [0, .14, -1], left: [-1, .14, .001], right: [1, .14, .001], side: [1, .14, .001], top: [.001, 1, .04] };
-  const motion3 = flow3.length > 0 || groups.some((g) => g.userData.beat || g.userData.spinners);
+  animators = []; groups.forEach((g) => g.traverse((o) => { if (typeof o.userData.animate === 'function') animators.push(o); })); // (v327: animals that walk, fly and swim)
+  const motion3 = flow3.length > 0 || groups.some((g) => g.userData.beat || g.userData.spinners) || animators.length > 0;
   const view = {
     hintText,
     // (v314) moving parts: move() once it is built (move(true) even with Reduce Motion); pause() stops them
@@ -1986,18 +2545,23 @@ function finishMat(T, colour, finish, { real, matte, glow }) {
 // tree, a flower or a rock stands at y 0; clouds, the sun and the moon float high above; roots grow below it). Surfaces
 // are bent by noise so nothing is a perfect ball: lumpy leafy crowns, rough bark, jagged pine tiers, faceted rocks;
 // every clump a slightly different green, and matte natural materials that catch the light like the real thing.
-const KIT3 = ['tree', 'flower', 'leaf', 'cloud', 'sun', 'moon', 'rainbow', 'rock', 'grass', 'log', 'mushroom', 'ground', 'drops', 'snowflake', 'bolt', 'vehicle']; // (v326: and vehicles)
+const KIT3 = ['tree', 'flower', 'leaf', 'cloud', 'sun', 'moon', 'rainbow', 'rock', 'grass', 'log', 'mushroom', 'ground', 'drops', 'snowflake', 'bolt', 'vehicle', 'animal']; // (v326: and vehicles; v327: animals)
 const KIT3_KINDS = {
   tree: ['round', 'oak', 'pine', 'bush', 'palm', 'blossom', 'fruit', 'autumn', 'bare'],
   flower: ['sunflower', 'daisy', 'tulip', 'rose', 'lily', 'lavender', 'blossom', 'hydrangea'],
   leaf: ['oval', 'maple', 'heart'], cloud: ['white', 'grey', 'rain', 'storm', 'snow'],
   rock: ['stone', 'mossy'], log: ['log', 'stump'], grass: ['grass', 'flowers'], ground: ['grass', 'soil', 'sand', 'snow'],
   get vehicle() { return VEH_KINDS; },
+  get animal() { return ANIMAL_KINDS; },
 };
 // the box a kit model fills, from where it stands (for the model's checks and the camera)
 function kit3Box(s, pos) {
   const t = String(s.t || '').toLowerCase(), h = Math.abs(n3(s.h ?? s.size, t === 'tree' ? 3 : 1)), w = Math.abs(n3(s.w ?? s.r ?? s.size, 1)), r = Math.abs(n3(s.r ?? s.size, 0.6));
   const [x, y, z] = pos, sq = (a, lo, hi) => [x - a, y + lo, z - a, x + a, y + hi, z + a];
+  if (t === 'animal') { // (v327) from where it stands (a flying bird, a fish or a jellyfish: its middle)
+    const L = Math.abs(n3(s.w ?? s.size ?? s.len, 3)), A = ANIMALS[String(s.kind)] || ANIMALS.lion, tall = animalTall(A) * L, mid = A.b === 'fish' || A.b === 'bat' || (A.b === 'bird' && s.pose === 'fly');
+    return mid ? [x - L / 2, y - tall / 2, z - L * .3, x + L / 2, y + tall / 2, z + L * .3] : [x - L / 2, y, z - L * .25, x + L / 2, y + tall, z + L * .25];
+  }
   if (t === 'vehicle') { // (v326) its length along x (along z when it faces z), its height from its shape
     const L = Math.abs(n3(s.w ?? s.size ?? s.len, 4)), k = String(s.kind || 'sedan'), P = VEH_SHAPES[VEH_OF[k] || k], along = s.facing === 'z' || s.facing === '-z';
     const tall = P ? Math.max(...P.top.map((q) => q[1])) + 0.05 : ({ rocket: 1, balloon: 1.4, sailboat: 0.95, excavator: 0.75, tractor: 0.65, helicopter: 0.42, airplane: 0.42, bicycle: 0.65, motorcycle: 0.6, scooter: 0.65 })[k] || 0.45;
@@ -2326,6 +2890,236 @@ function kit3d(T, s, mat) {
     }
     // facing: its front toward +x, or the way asked
     G.rotation.y = ({ '-x': Math.PI, z: -Math.PI / 2, '-z': Math.PI / 2 })[s.facing] || 0;
+  } else if (t === 'animal') { // (v327) an animal in 3D, its front toward +x, standing on the ground (y 0), w its length; it moves
+    const A = ANIMALS[kind] || ANIMALS.lion, L = Math.min(14, Math.max(.1, Math.abs(n3(s.w ?? s.size ?? s.len, 3))));
+    const C = (h) => new T.Color(h), col = C(A.col), col2 = C(A.col2 || A.col), dk = C(A.dk || kitDark3(A.col));
+    const hash = (a, b, c) => { const v = Math.sin(a * 127.1 + b * 311.7 + c * 74.7) * 43758.5453; return v - Math.floor(v); };
+    // its coat at a point (in parts of its length): the base colour, a lighter belly, and its real pattern
+    const coat = (x, y, z, belly) => {
+      const c = col.clone(); if (belly != null && y < belly) c.lerp(col2, Math.min(1, (belly - y) * 18));
+      const cell = (sz, f) => { const ix = Math.floor(x / sz), iy = Math.floor(y / sz), iz = Math.floor(z / sz); let d1 = 9, d2 = 9; for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (let e = -1; e <= 1; e++) { const cx = (ix + a + hash(ix + a, iy + b, iz + e)) * sz, cy = (iy + b + hash(iy + b, iz + e, ix + a)) * sz, cz = (iz + e + hash(iz + e, ix + a, iy + b)) * sz, d = Math.hypot(x - cx, y - cy, z - cz); if (d < d1) { d2 = d1; d1 = d; } else if (d < d2) d2 = d; } return f(d1, d2); };
+      if (A.pat === 'stripes') { const v = Math.sin(x * 48 + Math.sin(y * 14) * 1.1 + y * 6 + Math.sin(x * 9) * .9); if (v > .35) c.copy(dk); }
+      if (A.pat === 'spots' && cell(.032, (d1) => d1 < .011)) c.copy(dk);
+      if (A.pat === 'rosettes') cell(.045, (d1) => { if (d1 < .017 && d1 > .009) c.copy(dk); else if (d1 <= .009) c.lerp(dk, .25); return 0; });
+      if (A.pat === 'patches') cell(.06, (d1, d2) => { if (d2 - d1 > .01) c.copy(dk); return 0; });
+      if (A.pat === 'cow' && cell(.16, (d1) => d1 < .06)) c.copy(dk);
+      if (A.pat === 'saddle' && x > -.12 && x < .05) c.copy(col2);
+      return c;
+    };
+    const VM = (rough = .7) => { const m = M('#ffffff', rough); const v = m.clone(); v.vertexColors = true; return v; };
+    const skinMat = VM(A.b === 'fish' || A.b === 'frog' ? .35 : .72), smooth = (A.b === 'fish' || A.b === 'frog' || A.b === 'jelly');
+    const paint = (g, ox, oy, oz, belly, plain) => { const p = g.attributes.position, cs = new Float32Array(p.count * 3); for (let i = 0; i < p.count; i++) { const c = plain ? C(plain) : coat((p.getX(i) + ox) / L, (p.getY(i) + oy) / L, (p.getZ(i) + oz) / L, belly); if (!plain && !smooth) c.multiplyScalar(.94 + hash(p.getX(i), p.getY(i), p.getZ(i)) * .1); cs[i * 3] = c.r; cs[i * 3 + 1] = c.g; cs[i * 3 + 2] = c.b; } g.setAttribute('color', new T.BufferAttribute(cs, 3)); return g; };
+    const ell = (rx, ry, rz, seg = 32, amp = .03) => { const g = new T.SphereGeometry(1, seg, Math.round(seg * .7)), p = g.attributes.position, v = new T.Vector3(), o = R() * 9; for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i); const d = 1 + amp * noise(v.x * 2 + o, v.y * 2, v.z * 2 + o); p.setXYZ(i, v.x * rx * d, v.y * ry * d, v.z * rz * d); } g.computeVertexNormals(); return g; };
+    const part = (geo, x, y, z, belly, plain, parent = G, mat = skinMat) => { paint(geo, x, y, z, belly, plain); const e = new T.Mesh(geo, mat); e.position.set(x, y, z); parent.add(e); return e; };
+    const plainM = (h, r = .6, ex) => M(h, r, ex);
+    const pivot = (x, y, z, parent = G) => { const g = new T.Group(); g.position.set(x, y, z); parent.add(g); return g; };
+    // a limb in a pivot: a tapered tube through points (relative to the pivot), painted with the coat
+    const limb3 = (pv, pts, r0, r1, belly, plain) => { const segs = A.pat && !plain ? 64 : 16, rad = A.pat && !plain ? 21 : 11, curve = new T.CatmullRomCurve3(pts.map((q) => new T.Vector3(...q))), g = new T.TubeGeometry(curve, segs, r0, rad - 1, false), p = g.attributes.position, c = new T.Vector3(), v = new T.Vector3();
+      for (let i = 0; i <= segs; i++) { const u = i / segs, k = (r0 + (r1 - r0) * u) / r0; curve.getPointAt(u, c); for (let j = 0; j < rad; j++) { const idx = i * rad + j; v.fromBufferAttribute(p, idx).sub(c).multiplyScalar(k).add(c); p.setXYZ(idx, v.x, v.y, v.z); } } g.computeVertexNormals();
+      paint(g, pv.position.x, pv.position.y, pv.position.z, belly, plain); const e = new T.Mesh(g, skinMat); pv.add(e);
+      [pts[0], pts[pts.length - 1]].forEach((q, k) => { const cap = new T.Mesh(paint(new T.SphereGeometry(k ? r1 : r0, 12, 8), pv.position.x + q[0], pv.position.y + q[1], pv.position.z + q[2], belly, plain), skinMat); cap.position.set(...q); pv.add(cap); });
+      return e; };
+    const eyes = (x, y, z, r, parent = G) => [-1, 1].forEach((sd) => { const e = new T.Mesh(new T.SphereGeometry(r, 12, 10), M('#14100e', .15, { clear: true })); e.position.set(x, y, sd * z); parent.add(e); const hl = new T.Mesh(new T.SphereGeometry(r * .3, 8, 6), M('#ffffff', .2)); hl.position.set(x + r * .5, y + r * .4, sd * (z + r * .6)); parent.add(hl); });
+    const legs = [], wings = [], tails = [], heads = [], fins = [], arms = []; let bob = null, pulse = null, speed = 1;
+    if (A.b === 'quad') {
+      const leg = A.leg * L, bh = A.bh * L, t = (A.tilt || 0) * L, rz = bh * (A.trunk ? .42 : .38), back = leg + bh, cy = leg + bh / 2, belly = (cy - bh * .25) / L;
+      const fine = A.pat ? 96 : 40, body = part(ell(.34 * L, bh / 2, rz, fine, .025), 0, cy + t * .3, 0, belly); body.rotation.z = Math.atan2(t, .3 * L);
+      const na = A.neck[1] * Math.PI / 180, nl = A.neck[0] * L, hr = A.hr * L, nb = A.biped ? [.2 * L, back + t - bh * .15, 0] : [.25 * L, back + t - bh * .28, 0];
+      const h0 = [nb[0] + Math.cos(na) * nl + hr * .5, nb[1] + Math.sin(na) * nl + (A.trunk ? bh * .05 : 0), 0];
+      if (A.hump) part(ell(.12 * L, A.hump * L * 1.2, rz * .8), A.trunk ? .18 * L : 0, back + A.hump * L * .2, 0, null);
+      if (nl > .01 * L) { const nk = pivot(0, 0, 0); limb3(nk, [[nb[0] - .03 * L, nb[1] - bh * .1, 0], [nb[0] + Math.cos(na) * nl * .5, nb[1] + Math.sin(na) * nl * .5, 0], [h0[0] - hr * .4, h0[1] - hr * .1, 0]], Math.max(bh * .3, hr * .7), hr * .62, belly); }
+      // the head (in a pivot that nods), with its face and features
+      const hp = pivot(h0[0] - hr * .6, h0[1] - hr * .3, 0); heads.push(hp); const hx = hr * .6, hy = hr * .3;
+      part(ell(hr * .95, hr * .78, hr * .72, A.pat ? 64 : 28), hx, hy, 0, null, null, hp);
+      const sn = A.sn * L, dr = (A.drop || 0) * L;
+      part(ell(hr * .3 + sn * .55, hr * .42, hr * .45, 24), hx + hr * .55 + sn * .45, hy - hr * .22 - dr, 0, null, null, hp);
+      eyes(hx + hr * .45, hy + hr * .25, hr * .55, hr * .11, hp);
+      const nose = new T.Mesh(new T.SphereGeometry(hr * .1, 10, 8), M('#2a201c', .3)); nose.position.set(hx + hr * .62 + sn, hy - hr * .12 - dr, 0); if (!A.trunk) hp.add(nose);
+      const earC = A.ear === 'mouse' ? '#f2b8b8' : null;
+      if (['pointed', 'round', 'small', 'mouse', 'flop', 'long'].includes(A.ear)) [-1, 1].forEach((sd) => { const big = A.ear === 'mouse' ? 1.6 : A.ear === 'small' ? .6 : A.ear === 'long' ? 1 : 1; let g;
+        if (A.ear === 'pointed') { g = new T.ConeGeometry(hr * .26 * big, hr * .6 * big, 10); }
+        else if (A.ear === 'long') { g = ell(hr * .15, hr * 1.1, hr * .06, 14); }
+        else if (A.ear === 'flop') { g = ell(hr * .3, hr * .45, hr * .08, 14); }
+        else g = ell(hr * .26 * big, hr * .26 * big, hr * .08, 14);
+        const e = part(g, hx - hr * .25, hy + hr * (A.ear === 'flop' ? .2 : A.ear === 'long' ? 1.6 : .8), sd * hr * .45, null, earC || (A.panda ? A.dk : null), hp); e.rotation.x = sd * (A.ear === 'flop' ? .9 : .35); if (A.ear === 'flop') e.position.y = hy + hr * .1; });
+      if (A.ear === 'big') [-1, 1].forEach((sd) => { const e = part(ell(hr * .7, hr * .95, hr * .06, 20), hx - hr * .4, hy + hr * .1, sd * hr * .75, null, kitDark3b(A.col, .92), hp); e.rotation.y = sd * .5; });
+      if (A.mane && String(A.mane).startsWith('#')) part(ell(hr * 1.45, hr * 1.55, hr * 1.25, 24, .12), hx - hr * .55, hy - hr * .1, 0, null, A.mane, hp);
+      if (A.mane === 'stiff' || A.mane === 'flow' || A.mane === 'short') { const mp = pivot(0, 0, 0); limb3(mp, [[nb[0] - .02 * L, nb[1] + bh * .25, 0], [h0[0] - hr * .5, h0[1] + hr * .6, 0]], .02 * L, .015 * L, null, A.mane === 'short' ? A.dk : kitDark3b(A.col, .45)); }
+      if (A.horn === 'rhino') { [[hx + hr * .6 + sn, hy + hr * .25 - dr, hr * .22, hr * .9], [hx + hr * .35 + sn * .5, hy + hr * .6, hr * .14, hr * .45]].forEach(([x, y, r, h]) => { const c = new T.Mesh(new T.ConeGeometry(r, h, 14), M('#cfc6b4', .5)); c.position.set(x, y + h * .4, 0); c.rotation.z = -.25; hp.add(c); }); }
+      if (A.horn === 'buffalo' || A.horn === 'cow' || A.horn === 'goat') [-1, 1].forEach((sd) => { const hc = A.horn === 'buffalo' ? '#2a2826' : A.horn === 'goat' ? '#8a7a62' : '#e8dcc0'; const pts = A.horn === 'buffalo' ? [[hx - hr * .1, hy + hr * .6, sd * hr * .3], [hx - hr * .2, hy + hr * .55, sd * hr * 1.1], [hx - hr * .5, hy - hr * .1, sd * hr * 1.2], [hx - hr * .1, hy - hr * .05, sd * hr * 1.05]] : A.horn === 'goat' ? [[hx - hr * .1, hy + hr * .7, sd * hr * .25], [hx - hr * .5, hy + hr * 1.3, sd * hr * .35], [hx - hr * 1, hy + hr * 1.1, sd * hr * .4]] : [[hx - hr * .1, hy + hr * .6, sd * hr * .4], [hx - hr * .1, hy + hr * .9, sd * hr * .8], [hx + hr * .1, hy + hr * 1.2, sd * hr * .85]]; const c = new T.CatmullRomCurve3(pts.map((q) => new T.Vector3(...q))); hp.add(new T.Mesh(new T.TubeGeometry(c, 16, hr * (A.horn === 'buffalo' ? .13 : .07), 8), M(hc, .5))); });
+      if (A.horn === 'antlers') [-1, 1].forEach((sd) => { const b0 = new T.Vector3(hx - hr * .2, hy + hr * .75, sd * hr * .3), m = M('#7a5a3a', .7); hp.add(new T.Mesh(new T.TubeGeometry(new T.CatmullRomCurve3([b0, b0.clone().add(new T.Vector3(-hr * .4, hr * .8, sd * hr * .5)), b0.clone().add(new T.Vector3(-hr * .9, hr * 1.7, sd * hr * .7))]), 12, hr * .06, 6), m)); [[-.5, 1, .55], [-.75, 1.4, .65]].forEach(([dx, dy, dz]) => { const p0 = b0.clone().add(new T.Vector3(dx * hr, dy * hr, sd * dz * hr)); hp.add(new T.Mesh(new T.TubeGeometry(new T.LineCurve3(p0, p0.clone().add(new T.Vector3(hr * .45, hr * .5, 0))), 4, hr * .045, 6), m)); }); });
+      if (A.horn === 'tri') [[hx + hr * .1, hy + hr * .75, hr * .35, hr * .1, 1.2], [hx + hr * .6 + sn, hy + hr * .1 - dr, 0, hr * .1, .6]].forEach(([x, y, z, r, hh]) => [-1, 1].forEach((sd) => { if (!z && sd < 0) return; const c = new T.Mesh(new T.ConeGeometry(r, hr * hh, 12), M('#e8dcc0', .5)); c.position.set(x + hr * .2, y + hr * hh * .4, sd * z); c.rotation.z = -.6; hp.add(c); }));
+      if (A.frill) { const f = part(new T.CircleGeometry(hr * 1.5, 24), hx - hr * .6, hy + hr * .5, 0, null, A.col2, hp); f.rotation.y = Math.PI / 2; f.rotation.x = .3; f.material = f.material.clone(); f.material.side = T.DoubleSide; }
+      if (A.ossicones) [-1, 1].forEach((sd) => { const o = new T.Mesh(new T.CylinderGeometry(hr * .06, hr * .07, hr * .55, 8), plainM(A.col, .6)); o.position.set(hx - hr * .2, hy + hr * 1.05, sd * hr * .2); hp.add(o); const k = new T.Mesh(new T.SphereGeometry(hr * .1, 8, 6), plainM(A.dk, .6)); k.position.set(hx - hr * .2, hy + hr * 1.35, sd * hr * .2); hp.add(k); });
+      if (A.trunk) { const tp = pivot(hx + hr * .7, hy - hr * .1, 0, hp); tails.push(tp); limb3(tp, [[0, 0, 0], [hr * .45, -hr * .8, 0], [hr * .4, -hr * 1.8, 0], [hr * .65, -hr * 2.4, 0]], hr * .3, hr * .12, null); }
+      if (A.tusks === 'straight' || A.tusks === 'curl') [-1, 1].forEach((sd) => { const pts = A.tusks === 'curl' ? [[hx + hr * .5, hy - hr * .45, sd * hr * .35], [hx + hr * 1.4, hy - hr * 1.3, sd * hr * .7], [hx + hr * 2.1, hy - hr * .5, sd * hr * .5], [hx + hr * 1.5, hy + hr * .2, sd * hr * .2]] : [[hx + hr * .5, hy - hr * .45, sd * hr * .32], [hx + hr * 1.1, hy - hr * 1, sd * hr * .38], [hx + hr * 1.55, hy - hr * .8, sd * hr * .3]]; hp.add(new T.Mesh(new T.TubeGeometry(new T.CatmullRomCurve3(pts.map((q) => new T.Vector3(...q))), 16, hr * .09, 8), M('#f4efe2', .35))); });
+      if (A.sabre) [-1, 1].forEach((sd) => { const c = new T.Mesh(new T.ConeGeometry(hr * .07, hr * .8, 8), M('#f4efe2', .4)); c.position.set(hx + hr * .5 + sn * .5, hy - hr * .75, sd * hr * .2); c.rotation.z = Math.PI; hp.add(c); });
+      if (A.teeth) for (let k = 0; k < 6; k++) [-1, 1].forEach((sd) => { const c = new T.Mesh(new T.ConeGeometry(hr * .04, hr * .14, 6), M('#f4efe2', .4)); c.position.set(hx + hr * .2 + k * (hr * .5 + sn) / 6, hy - hr * .5 - dr * .5, sd * hr * .36); c.rotation.z = Math.PI; hp.add(c); });
+      if (A.panda) [-1, 1].forEach((sd) => { const e = part(ell(hr * .2, hr * .16, hr * .05, 12), hx + hr * .35, hy + hr * .22, sd * hr * .58, null, A.dk, hp); e.rotation.x = sd * .3; });
+      if (A.wool) for (let k = 0; k < 40; k++) { const a = R() * Math.PI * 2, b = (R() - .3) * Math.PI * .8; part(new T.SphereGeometry(bh * .18, 10, 8), Math.cos(b) * Math.cos(a) * .3 * L, cy + Math.sin(b) * bh * .45, Math.cos(b) * Math.sin(a) * rz * .95, null, A.wool); }
+      if (A.spikes) for (let k = 0; k < 70; k++) { const a = R() * Math.PI, b = R() * Math.PI, dir = new T.Vector3(Math.cos(a) * .9, Math.sin(a) * Math.sin(b) + .1, Math.sin(a) * Math.cos(b)).normalize(); if (dir.x > .6) continue; const c = new T.Mesh(new T.ConeGeometry(bh * .04, bh * .3, 5), plainM(A.spikes, .7)); c.position.set(dir.x * .3 * L, cy + dir.y * bh * .5, dir.z * rz); c.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), dir); G.add(c); }
+      if (A.plates) for (let k = 0; k < 7; k++) { const u = (-.24 + k * .07) * L, h = (.08 + Math.sin(k / 6 * Math.PI) * .08) * L, sh = new T.Shape(); sh.moveTo(-.035 * L, 0); sh.lineTo(0, h); sh.lineTo(.035 * L, 0); const e = new T.Mesh(new T.ExtrudeGeometry(sh, { depth: .012 * L, bevelEnabled: false }), plainM(A.plates, .6)); e.position.set(u, back - .01 * L + Math.sin(k / 6 * Math.PI) * .02 * L, (k % 2 ? .015 : -.015) * L - .006 * L); G.add(e); }
+      if (A.udder) part(new T.SphereGeometry(.035 * L, 12, 10), -.1 * L, leg + .01 * L, 0, null, '#f2b8b0');
+      // the tail
+      const tp = pivot(-.33 * L, back - bh * .2 - t * .5, 0); tails.push(tp);
+      if (A.tail === 'dino') limb3(tp, [[.06 * L, 0, 0], [-.18 * L, -.06 * L, 0], [-.38 * L, -.15 * L, 0], [-.55 * L, -.2 * L, 0]], bh * .38, .01 * L, null);
+      else if (A.tail === 'bushy' || A.tail === 'feather') { limb3(tp, [[0, 0, 0], [-.12 * L, -.05 * L, 0], [-.25 * L, -.1 * L, 0]], .03 * L, .04 * L, null); if (A.tip) part(new T.SphereGeometry(.035 * L, 10, 8), -.26 * L, -.1 * L, 0, null, A.tip, tp); }
+      else if (A.tail === 'horse') limb3(tp, [[0, 0, 0], [-.08 * L, -.12 * L, 0], [-.1 * L, -.3 * L, 0]], .03 * L, .02 * L, null, kitDark3b(A.col, .4));
+      else if (A.tail === 'puff') part(new T.SphereGeometry(.05 * L, 12, 10), -.02 * L, -.02 * L, 0, null, A.col2, tp);
+      else if (A.tail === 'stub' || A.tail === 'curl') part(new T.SphereGeometry(.03 * L, 10, 8), -.02 * L, -.01 * L, 0, null, null, tp);
+      else if (A.tail !== 'none') { const len = A.tail === 'long' ? .38 : A.tail === 'rat' ? .45 : .26, droop = A.tail === 'long' ? .05 : .22; limb3(tp, [[0, 0, 0], [-len * .4 * L, -droop * .6 * L, 0], [-len * L, -droop * L * (A.tail === 'long' ? -.5 : 1.1), 0]], (A.tail === 'long' ? .02 : .012) * L, .008 * L, null, A.tail === 'rat' ? '#e8b8b8' : null); if (A.tail === 'tuft') part(new T.SphereGeometry(.03 * L, 10, 8), -len * L, -droop * 1.15 * L, 0, null, A.dk, tp); }
+      // the legs, in diagonal pairs (as animals walk)
+      const legAt = (u, z, hind, phase) => { const top = leg + bh * .45, pv = pivot(u * L, top, z); legs.push([pv, phase]); const lt = A.legT * L;
+        if (A.biped && !hind) { limb3(pv, [[0, 0, 0], [.04 * L, -.08 * L, 0], [.07 * L, -.09 * L, 0]], lt * .25, lt * .12, null); return; }
+        const pts = hind ? [[0, 0, 0], [.035 * L, -top * .5, 0], [-.02 * L, -top * .76, 0], [.005 * L, -top + lt * .3, 0]] : [[0, 0, 0], [-.005 * L, -top * .45, 0], [.005 * L, -top * .78, 0], [.01 * L, -top + lt * .3, 0]];
+        limb3(pv, pts, lt * (hind ? .8 : .65), lt * .32, null, A.panda ? A.dk : null);
+        const foot = A.foot === 'hoof' ? new T.Mesh(new T.CylinderGeometry(lt * .3, lt * .36, lt * .35, 12), M('#2a2422', .5)) : new T.Mesh(paint(ell(lt * .45, lt * .25, lt * .38, 12, 0), pv.position.x, 0, z, null, A.panda ? A.dk : A.foot === 'pad' ? kitDark3b(A.col, .85) : null), skinMat);
+        foot.position.set(pts[3][0] + lt * .1, -top + lt * .18, 0); pv.add(foot); };
+      const fz = rz * .55, fu = A.biped ? .16 : .2, hu = A.biped ? -.08 : -.22;
+      legAt(fu, -fz, false, 0); legAt(fu, fz, false, Math.PI); legAt(hu, fz, true, 0); legAt(hu, -fz, true, Math.PI);
+      speed = 4.2 * Math.min(1.6, Math.max(.6, .35 / Math.max(.1, A.leg + .1)));
+    } else if (A.b === 'upright') {
+      const sit = !!A.sit, hr = A.hr * L, cyb = (sit ? .3 : .38) * L;
+      part(ell(.15 * L, (sit ? .27 : .3) * L, .13 * L, 30), 0, cyb, 0, null);
+      const hp = pivot(0, cyb + (sit ? .3 : .34) * L, 0); heads.push(hp);
+      part(ell(hr * .95, hr * .9, hr * .85, 24), 0, hr * .5, 0, null, null, hp); part(ell(hr * .5, hr * .45, hr * .55, 16), hr * .55, hr * .35, 0, null, A.col2, hp); eyes(hr * .6, hr * .65, hr * .4, hr * .11, hp);
+      if (A.mask) [-1, 1].forEach((sd) => part(ell(hr * .25, hr * .18, hr * .05, 10), hr * .55, hr * .65, sd * hr * .5, null, A.dk, hp));
+      if (kind !== 'sloth') [-1, 1].forEach((sd) => part(ell(hr * .25, hr * .25, hr * .07, 10), -hr * .1, hr * .9, sd * hr * .7, null, null, hp));
+      [-1, 1].forEach((sd, k) => { const ap = pivot(.02 * L, cyb + .2 * L, sd * .13 * L); arms.push([ap, k * Math.PI]); limb3(ap, [[0, 0, 0], [.08 * L, -.12 * L, 0], [.12 * L, -.2 * L, 0]], .045 * L, .03 * L, null); });
+      [-1, 1].forEach((sd, k) => { const lp = pivot(0, cyb - .15 * L, sd * .08 * L); legs.push([lp, k * Math.PI]); limb3(lp, sit ? [[0, 0, 0], [.14 * L, -.08 * L, 0], [.2 * L, -.12 * L, 0]] : [[0, 0, 0], [.02 * L, -.12 * L, 0], [.04 * L, -(cyb - .17 * L), 0]], .055 * L, .04 * L, null); });
+      if (A.tail === 'monkey' || A.tail === 'thin' || A.tail === 'kanga') { const tp = pivot(-.12 * L, cyb - .15 * L, 0); tails.push(tp); limb3(tp, A.tail === 'monkey' ? [[0, 0, 0], [-.25 * L, -.1 * L, 0], [-.35 * L, .2 * L, 0], [-.25 * L, .3 * L, 0]] : [[0, 0, 0], [-.15 * L, -.12 * L, 0], [-.3 * L, -.15 * L, 0]], (A.tail === 'kanga' ? .06 : .02) * L, .012 * L, null); }
+      speed = A.hop ? 5 : 1.5;
+    } else if (A.b === 'bird') {
+      const fly = s.pose === 'fly' && !A.flightless, up = !!A.upright, legL = (fly ? 0 : A.leg) * L, by = fly ? 0 : legL + (up ? .3 : .18) * L, fat = A.fat ? 1.25 : 1;
+      const body = part(ell((up ? .14 : .26) * L * fat, (up ? .3 : .12) * L * fat, (up ? .13 : .11) * L * fat, 32), 0, by, 0, (by - (up ? .1 : .05) * L) / L);
+      paint(body.geometry, 0, by, 0, null); const bc = body.geometry.attributes.color, bp = body.geometry.attributes.position; const bel = C(A.belly), ccol = C(A.col); for (let i = 0; i < bp.count; i++) { const yy = bp.getY(i), xx = bp.getX(i), f = up ? (xx > 0 ? 1 : 0) : (yy < -.02 * L ? 1 : 0); const c = f ? bel : ccol; bc.setXYZ(i, c.r, c.g, c.b); } bc.needsUpdate = true;
+      if (!up) body.rotation.z = .25;
+      const head = up ? [.02 * L, by + .36 * L, 0] : A.sneck ? [.18 * L, by + .55 * L, 0] : [.27 * L, by + .13 * L, 0], hr = (up ? (kind === 'owl' ? .13 : .09) : kind === 'hummingbird' ? .055 : .075) * L * (A.fat ? 1.3 : 1);
+      if (A.sneck) { const nk = pivot(0, 0, 0); limb3(nk, [[.18 * L, by + .08 * L, 0], [.06 * L, by + .25 * L, 0], [.22 * L, by + .4 * L, 0], [head[0], head[1] - hr * .4, 0]], .035 * L, .03 * L, null, A.col); }
+      const hp = pivot(head[0], head[1], 0); heads.push(hp);
+      part(ell(hr, hr * .95, hr * .9, 20), 0, 0, 0, null, A.head, hp);
+      if (A.face) [-1, 1].forEach((sd) => part(ell(hr * .45, hr * .35, hr * .05, 10), hr * .35, 0, sd * hr * .75, null, A.face, hp));
+      if (A.disc) part(ell(hr * .3, hr * .85, hr * .9, 16), hr * .55, 0, 0, null, A.disc, hp);
+      if (A.throat) part(ell(hr * .6, hr * .45, hr * .7, 14), hr * .2, -hr * .55, 0, null, A.throat, hp);
+      if (A.neck) part(ell(hr * .5, hr * .3, hr * .95, 12), -hr * .1, -hr * .9, 0, null, A.neck, hp);
+      if (A.tufts) [-1, 1].forEach((sd) => { const c = new T.Mesh(new T.ConeGeometry(hr * .18, hr * .55, 8), plainM(A.col, .7)); c.position.set(0, hr * 1.05, sd * hr * .5); hp.add(c); });
+      if (A.comb) { const c = part(ell(hr * .5, hr * .35, hr * .1, 12), 0, hr * .95, 0, null, '#d8262b', hp); part(ell(hr * .15, hr * .3, hr * .1, 8), hr * .55, -hr * .7, 0, null, '#d8262b', hp); }
+      const bl = { needle: 3.2, toucan: 2.7, duck: 1.15, flamingo: 1.1, dodo: 1.35, hook: .9, parrot: .7, cone: .7, owl: .35 }[A.beak] || .7, bw = { toucan: .55, dodo: .5, parrot: .45, hook: .38, duck: .35, flamingo: .3 }[A.beak] || .25;
+      const beak = new T.Mesh(new T.ConeGeometry(hr * bw, hr * bl, 14), M(A.bc, .4, { clear: true })); beak.rotation.z = -Math.PI / 2 - (A.beak === 'hook' || A.beak === 'parrot' || A.beak === 'flamingo' ? .35 : 0); beak.position.set(hr * .8 + hr * bl * .45, -hr * .1, 0); beak.scale.set(1, 1, A.beak === 'duck' ? .6 : 1); hp.add(beak);
+      eyes(hr * .45, hr * .25, hr * .62, hr * (kind === 'owl' ? .2 : .13), hp);
+      // tail and legs
+      const tp = pivot(up ? -.04 * L : -.24 * L, up ? by - .25 * L : by + .02 * L, 0); tails.push(tp);
+      const tl = A.tail === 'long' ? .4 : A.tail === 'fan' ? .24 : A.tail === 'hen' ? .2 : .14;
+      const tf = part(ell(tl * .5 * L, .02 * L, (A.tail === 'fan' ? .08 : .05) * L, 16, 0), -tl * .45 * L, A.tail === 'hen' ? .08 * L : -.04 * L, 0, null, A.tc || A.col, tp); tf.rotation.z = A.tail === 'hen' ? -.9 : up ? .9 : .35;
+      if (!fly) [-1, 1].forEach((sd, k) => { const lp = pivot(.02 * L, by - (up ? .26 : .08) * L, sd * .04 * L); legs.push([lp, k * Math.PI]); limb3(lp, [[0, 0, 0], [0, -(by - (up ? .26 : .08) * L) * .5, 0], [0, -(by - (up ? .26 : .08) * L) + .01 * L, 0]], .012 * L, .01 * L, null, A.lc); const ft = new T.Mesh(new T.BoxGeometry(.08 * L, .008 * L, .05 * L), M(A.lc, .6)); ft.position.set(.02 * L, -(by - (up ? .26 : .08) * L) + .005 * L, 0); lp.add(ft); });
+      // wings: folded on the body, or spread and flapping
+      [-1, 1].forEach((sd) => { const wp = pivot(.04 * L, by + (fly ? .04 : .03) * L, sd * (up ? .12 : .1) * L); wings.push([wp, sd]);
+        const sh = new T.Shape(); if (fly) { sh.moveTo(0, 0); sh.quadraticCurveTo(.16 * L, .06 * L, .12 * L, .5 * L); sh.quadraticCurveTo(-.02 * L, .58 * L, -.16 * L, .45 * L); sh.quadraticCurveTo(-.14 * L, .2 * L, -.1 * L, 0); }
+        else if (up) { sh.moveTo(0, .15 * L); sh.quadraticCurveTo(-.08 * L, 0, -.02 * L, -.28 * L); sh.quadraticCurveTo(.04 * L, -.05 * L, 0, .15 * L); }
+        else { sh.moveTo(.12 * L, .05 * L); sh.quadraticCurveTo(-.05 * L, .1 * L, -.3 * L, -.02 * L); sh.quadraticCurveTo(-.05 * L, -.08 * L, .12 * L, .05 * L); }
+        const g = new T.ExtrudeGeometry(sh, { depth: .012 * L, bevelEnabled: true, bevelSize: .006 * L, bevelThickness: .006 * L, bevelSegments: 2 });
+        if (fly) g.rotateX(sd * Math.PI / 2); else g.translate(0, 0, sd > 0 ? 0 : -.012 * L);
+        const wm = M(A.wing, .65); const e = new T.Mesh(g, wm); wp.add(e);
+        if (A.band && fly) { const b = new T.Mesh(new T.BoxGeometry(.2 * L, .015 * L, .03 * L), M(A.band, .6)); b.position.set(-.02 * L, .01 * L, sd * .25 * L); b.rotation.x = Math.PI / 2; wp.add(b); }
+      });
+      speed = A.fast ? 40 : fly ? 7 : 2;
+    } else if (A.b === 'bat') {
+      const m = M(A.wing, .7, {}); part(ell(.07 * L, .1 * L, .06 * L, 16), 0, 0, 0, null, A.col);
+      const hp = pivot(0, .12 * L, 0); heads.push(hp); part(new T.SphereGeometry(.05 * L, 14, 10), 0, 0, 0, null, A.col, hp); eyes(.035 * L, .01 * L, .03 * L, .008 * L, hp);
+      if (A.crest) { const c = new T.Mesh(new T.ConeGeometry(.02 * L, .22 * L, 8), plainM(A.col, .6)); c.rotation.z = Math.PI / 2 - .3; c.position.set(-.1 * L, .03 * L, 0); hp.add(c); const bk = new T.Mesh(new T.ConeGeometry(.02 * L, .2 * L, 8), M('#d8a83a', .5)); bk.rotation.z = -Math.PI / 2; bk.position.set(.13 * L, -.01 * L, 0); hp.add(bk); }
+      else [-1, 1].forEach((sd) => { const c = new T.Mesh(new T.ConeGeometry(.018 * L, .05 * L, 6), plainM(A.col, .6)); c.position.set(0, .05 * L, sd * .025 * L); hp.add(c); });
+      [-1, 1].forEach((sd) => { const wp = pivot(0, .04 * L, sd * .04 * L); wings.push([wp, sd]); const sh = new T.Shape(); [[0, .02], [.1, .28], [.3, .3], [.48, .18], [.38, .1], [.3, .13], [.22, .02], [.12, .06], [.05, -.04]].forEach(([a, b], k) => (k ? sh.lineTo(a * L, b * L) : sh.moveTo(a * L, b * L))); const g = new T.ShapeGeometry(sh); g.rotateX(-Math.PI / 2); g.rotateY(sd > 0 ? -Math.PI / 2 : Math.PI / 2); const e = new T.Mesh(g, m); e.material = m.clone(); e.material.side = T.DoubleSide; wp.add(e); });
+      speed = 9;
+    } else if (A.b === 'fish') {
+      const h = (A.whale ? .22 : A.shark ? .17 : A.dolphin ? .16 : A.fancy ? .26 : .22) * L, flat = A.whale || A.dolphin || A.shark ? .75 : .45;
+      const bodyG = ell(.42 * L, h * .7, h * .7 * flat, 40, .01), bp = bodyG.attributes.position; for (let i = 0; i < bp.count; i++) { const x = bp.getX(i), f = Math.max(0, -x / (.42 * L)); bp.setY(i, bp.getY(i) * (1 - f * .55)); bp.setZ(i, bp.getZ(i) * (1 - f * .5)); } bodyG.computeVertexNormals();
+      const body = part(bodyG, .04 * L, 0, 0, -h * .15 / L); bob = body;
+      if (A.bands) { const cc = body.geometry.attributes.color; for (let i = 0; i < bp.count; i++) { const x = bp.getX(i) / L + .04; if ([.25, .02, -.22].some((u) => Math.abs(x - u) < .03)) cc.setXYZ(i, .97, .96, .94); } cc.needsUpdate = true; }
+      const finM = M(A.fin, .5, {}); finM.side = T.DoubleSide;
+      const tp = pivot(-.36 * L, 0, 0); tails.push(tp); const ts = new T.Shape();
+      if (A.whale || A.dolphin) { ts.moveTo(0, 0); ts.lineTo(-.14 * L, .12 * L); ts.lineTo(-.1 * L, 0); ts.lineTo(-.14 * L, -.12 * L); ts.lineTo(0, 0); const g = new T.ShapeGeometry(ts); g.rotateX(Math.PI / 2); tp.add(new T.Mesh(g, finM)); }
+      else { ts.moveTo(.02 * L, 0); ts.lineTo(-.14 * L, h * (A.shark ? 1.1 : .85)); ts.lineTo(-.1 * L, 0); ts.lineTo(-.14 * L, -h * (A.shark ? .5 : .85)); ts.lineTo(.02 * L, 0); tp.add(new T.Mesh(new T.ShapeGeometry(ts), finM)); }
+      const ds = new T.Shape(); if (A.shark || A.dolphin) { ds.moveTo(-.04 * L, 0); ds.lineTo(.02 * L, h * .9); ds.lineTo(.08 * L, 0); } else { ds.moveTo(-.16 * L, 0); ds.quadraticCurveTo(0, h * .7, .12 * L, 0); } const df = new T.Mesh(new T.ShapeGeometry(ds), finM); df.position.set(A.whale ? -.15 * L : 0, h * .6, 0); G.add(df);
+      [-1, 1].forEach((sd) => { const pf = new T.Mesh(new T.ShapeGeometry((() => { const s2 = new T.Shape(); s2.moveTo(0, 0); s2.lineTo(-.1 * L, -.12 * L * (A.whale ? 1.8 : 1)); s2.lineTo(-.03 * L, -.02 * L); return s2; })()), finM); pf.position.set(.16 * L, -h * .25, sd * h * .5 * flat); pf.rotation.x = sd * .6; G.add(pf); fins.push([pf, sd]); });
+      eyes(.33 * L, h * .12, h * .55 * flat, h * .09);
+      speed = A.whale ? 1.6 : 4;
+    } else if (A.b === 'octopus') {
+      const mant = part(ell(.15 * L, .22 * L, .15 * L, 30, .04), 0, .5 * L, 0, null); pulse = mant; eyes(.12 * L, .38 * L, .09 * L, .025 * L);
+      for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2, ap = pivot(Math.cos(a) * .07 * L, .32 * L, Math.sin(a) * .07 * L); arms.push([ap, k * .8]); limb3(ap, [[0, 0, 0], [Math.cos(a) * .15 * L, -.18 * L, Math.sin(a) * .15 * L], [Math.cos(a) * .32 * L, -.28 * L, Math.sin(a) * .32 * L], [Math.cos(a + .6) * .4 * L, -.22 * L, Math.sin(a + .6) * .4 * L]], .04 * L, .006 * L, null); }
+      speed = 1.6;
+    } else if (A.b === 'jelly') {
+      const jm = M(A.col, .2, { glow: A.col, gi: .3 }); jm.transparent = true; jm.opacity = .7; jm.side = T.DoubleSide;
+      const bell = new T.Mesh(new T.SphereGeometry(.2 * L, 32, 20, 0, Math.PI * 2, 0, Math.PI / 2), jm); bell.position.y = .5 * L; bell.scale.y = .8; bell.userData.keepOpacity = .7; G.add(bell); pulse = bell;
+      for (let k = 0; k < 10; k++) { const a = k / 10 * Math.PI * 2, ap = pivot(Math.cos(a) * .14 * L, .5 * L, Math.sin(a) * .14 * L); arms.push([ap, k * .5]); const c = new T.CatmullRomCurve3([[0, 0, 0], [.03, -.15, 0], [-.02, -.3, .02], [.02, -.46, 0]].map(([x, y, z]) => new T.Vector3(x * L, y * L, z * L))); const tm = new T.Mesh(new T.TubeGeometry(c, 20, .006 * L, 5), jm); tm.userData.keepOpacity = .7; ap.add(tm); }
+      speed = 1.5;
+    } else if (A.b === 'turtle') {
+      const by = (A.sea ? .12 : .04) * L, shell = new T.Mesh(paint(ell(.3 * L, .2 * L, .24 * L, 32, .03), 0, by, 0, null, A.shell), skinMat); shell.position.y = by; shell.scale.y = .8; G.add(shell);
+      const plates = shell.geometry.attributes.color, sp = shell.geometry.attributes.position; for (let i = 0; i < sp.count; i++) { const x = sp.getX(i), z = sp.getZ(i), d = Math.abs(Math.sin(x / L * 16) * Math.sin(z / L * 14)); if (d < .12 && sp.getY(i) > 0) plates.setXYZ(i, plates.getX(i) * .7, plates.getY(i) * .7, plates.getZ(i) * .7); } plates.needsUpdate = true;
+      const cut = new T.Mesh(new T.CylinderGeometry(.31 * L, .31 * L, .02 * L, 32), plainM(kitLight3(A.col), .7)); cut.position.y = by; cut.scale.z = .8; G.add(cut);
+      const hp = pivot(.28 * L, by + .02 * L, 0); heads.push(hp); limb3(hp, [[0, 0, 0], [.08 * L, .03 * L, 0], [.13 * L, .03 * L, 0]], .05 * L, .045 * L, null, A.col); eyes(.14 * L, .05 * L, .035 * L, .01 * L, hp);
+      [[.15, 1], [.15, -1], [-.17, 1], [-.17, -1]].forEach(([u, sd], k) => { const lp = pivot(u * L, by, sd * .18 * L); legs.push([lp, k % 2 ? Math.PI : 0]); if (A.sea) { const f = part(ell(.13 * L, .015 * L, .05 * L, 14), u * .4 * L, -.02 * L, sd * .08 * L, null, A.col, lp); f.rotation.y = -sd * .5; } else limb3(lp, [[0, 0, 0], [0, -by + .02 * L, sd * .02 * L]], .05 * L, .045 * L, null, A.col); });
+      speed = A.sea ? 2.5 : 2;
+    } else if (A.b === 'crab') {
+      part(ell(.2 * L, .08 * L, .14 * L, 24), 0, .14 * L, 0, null, A.col);
+      for (let k = 0; k < 4; k++) [-1, 1].forEach((sd) => { const lp = pivot((-.1 + k * .06) * L, .12 * L, sd * .12 * L); legs.push([lp, (k + (sd > 0 ? 1 : 0)) * 1.3]); limb3(lp, [[0, 0, 0], [-.02 * L, .04 * L, sd * .12 * L], [-.03 * L, -.12 * L, sd * .2 * L]], .018 * L, .008 * L, null, A.col); });
+      [-1, 1].forEach((sd) => { const ap = pivot(.15 * L, .17 * L, sd * .1 * L); arms.push([ap, sd]); limb3(ap, [[0, 0, 0], [.1 * L, .06 * L, sd * .05 * L]], .025 * L, .025 * L, null, A.col); part(ell(.07 * L, .05 * L, .04 * L, 14), .14 * L, .08 * L, sd * .05 * L, null, A.col, ap); });
+      [-1, 1].forEach((sd) => { const st = new T.Mesh(new T.CylinderGeometry(.006 * L, .006 * L, .06 * L, 6), plainM(A.col)); st.position.set(.16 * L, .25 * L, sd * .04 * L); G.add(st); }); eyes(.16 * L, .28 * L, .04 * L, .012 * L);
+      speed = 4;
+    } else if (A.b === 'croc') {
+      const lg = A.leg * L, h = (A.small ? .07 : .08) * L;
+      part(ell(.2 * L, h * .7, h * 1.1, 30), 0, lg + h * .6, 0, (lg + h * .4) / L);
+      const hp = pivot(.18 * L, lg + h * .6, 0); heads.push(hp); part(ell(.08 * L + A.sn * L * .5, h * .4, h * .7, 22), .06 * L + A.sn * L * .45, 0, 0, null, null, hp); eyes(.08 * L, h * .4, h * .45, h * .1, hp);
+      const tp = pivot(-.18 * L, lg + h * .55, 0); tails.push(tp); limb3(tp, [[0, 0, 0], [-.18 * L, -h * .2, 0], [-.35 * L, -h * .45, 0], [-.45 * L, -h * .5, 0]], h * .65, .008 * L, null);
+      [[.12, 1], [.12, -1], [-.12, 1], [-.12, -1]].forEach(([u, sd], k) => { const lp = pivot(u * L, lg + h * .3, sd * h * .7); legs.push([lp, (k === 0 || k === 3) ? 0 : Math.PI]); limb3(lp, [[0, 0, 0], [.02 * L, -lg * .5, sd * h * .5], [.04 * L, -lg - h * .25, sd * h * .6]], h * .3, h * .22, null); });
+      speed = 3;
+    } else if (A.b === 'snake') {
+      const pts = []; for (let k = 0; k <= 30; k++) { const f = k / 30; pts.push(new T.Vector3((-.48 + f * .9) * L, .05 * L, Math.sin(f * Math.PI * 2.3) * .09 * L)); }
+      const curve = new T.CatmullRomCurve3(pts), g = new T.TubeGeometry(curve, 120, .05 * L, 12, false), p = g.attributes.position, c = new T.Vector3(), v = new T.Vector3();
+      for (let i = 0; i <= 120; i++) { const u = i / 120, k = Math.min(1, u * 4) * (u > .93 ? 1.1 : 1) * (1 - Math.max(0, (.08 - u)) * 6); curve.getPointAt(u, c); for (let j = 0; j < 13; j++) { const idx = i * 13 + j; v.fromBufferAttribute(p, idx).sub(c).multiplyScalar(Math.max(.15, k)).add(c); v.y = Math.max(0, v.y); p.setXYZ(idx, v.x, v.y, v.z); } }
+      g.computeVertexNormals(); const cs = new Float32Array(p.count * 3); for (let i = 0; i <= 120; i++) for (let j = 0; j < 13; j++) { const idx = i * 13 + j, blot = Math.sin(i * .55) > .6 && p.getY(idx) > .05 * L, bel = p.getY(idx) < .025 * L, cc = bel ? col2 : blot ? dk : col; cs[idx * 3] = cc.r; cs[idx * 3 + 1] = cc.g; cs[idx * 3 + 2] = cc.b; }
+      g.setAttribute('color', new T.BufferAttribute(cs, 3)); const sk = new T.Mesh(g, skinMat); const sw = pivot(0, 0, 0); sw.add(sk); arms.push([sw, 0]);
+      const end = pts[pts.length - 1]; const hd = part(ell(.07 * L, .035 * L, .05 * L, 18), end.x + .03 * L, .045 * L, end.z, null, A.col, sw); eyes(end.x + .06 * L, .065 * L, .035 * L, .008 * L, sw);
+      speed = 1.4;
+    } else if (A.b === 'frog') {
+      const body = part(ell(.22 * L, .16 * L, .17 * L, 30, .02), 0, .2 * L, 0, .14); body.rotation.z = .35; pulse = body;
+      if (A.spots) { const cc = body.geometry.attributes.color, bp = body.geometry.attributes.position; for (let i = 0; i < bp.count; i++) if (hash(Math.floor(bp.getX(i) / (.05 * L)), Math.floor(bp.getY(i) / (.05 * L)), Math.floor(bp.getZ(i) / (.05 * L))) > .7) cc.setXYZ(i, .07, .07, .07); cc.needsUpdate = true; }
+      [-1, 1].forEach((sd) => { part(new T.SphereGeometry(.05 * L, 14, 10), .15 * L, .36 * L, sd * .08 * L, null, A.col); eyes(.18 * L, .37 * L, .08 * L, .03 * L); const bl = pivot(-.12 * L, .14 * L, sd * .14 * L); legs.push([bl, 0]); limb3(bl, [[0, 0, 0], [.08 * L, -.06 * L, sd * .05 * L], [-.06 * L, -.12 * L, sd * .06 * L], [.06 * L, -.13 * L, sd * .07 * L]], .05 * L, .03 * L, null, kitDark3b(A.col, .9)); const fl = pivot(.14 * L, .14 * L, sd * .1 * L); limb3(fl, [[0, 0, 0], [.03 * L, -.08 * L, sd * .03 * L], [.06 * L, -.13 * L, sd * .04 * L]], .03 * L, .022 * L, null, A.col); });
+      speed = 1.2;
+    } else if (A.b === 'butterfly' || A.b === 'bee') {
+      const bee = A.b === 'bee';
+      const body = part(ell((bee ? .2 : .03) * L, (bee ? .09 : .03) * L, (bee ? .09 : .03) * L, 20, 0), 0, .4 * L, 0, null, bee ? null : A.dk);
+      if (bee) { const cc = body.geometry.attributes.color, bp = body.geometry.attributes.position; for (let i = 0; i < bp.count; i++) if (Math.sin(bp.getX(i) / L * 50) > .3) cc.setXYZ(i, .1, .09, .08); cc.needsUpdate = true; const hd = part(new T.SphereGeometry(.07 * L, 14, 10), .22 * L, .42 * L, 0, null, A.dk); eyes(.26 * L, .44 * L, .04 * L, .015 * L); }
+      else { const b2 = part(ell(.2 * L, .03 * L, .03 * L, 16, 0), 0, .4 * L, 0, null, A.dk); b2.rotation.y = Math.PI / 2; }
+      [-1, 1].forEach((sd) => { const wp = pivot(0, .42 * L, 0); wings.push([wp, sd]);
+        const mk2 = (pts, c, d) => { const sh = new T.Shape(); pts.forEach(([a, b], k) => (k ? sh.lineTo(a * L, b * L) : sh.moveTo(a * L, b * L))); const g = new T.ShapeGeometry(sh); g.rotateX(-Math.PI / 2); if (sd < 0) g.scale(1, 1, -1); const m = M(c, bee ? .1 : .55, bee ? {} : {}); m.side = T.DoubleSide; if (bee) { m.transparent = true; m.opacity = .45; } const e = new T.Mesh(g, m); e.position.y = d; if (bee) e.userData.keepOpacity = .45; wp.add(e); };
+        if (bee) mk2([[0, 0], [-.05, .05], [-.2, .22], [-.08, .26], [.03, .1]], '#dceffa', 0);
+        else { const fw = [[.02, 0], [.14, .06], [.3, .3], [.27, .42], [.08, .4], [-.02, .14]], hw = [[0, 0], [-.04, .06], [-.2, .2], [-.24, .3], [-.12, .33], [-.02, .18]]; [[fw, A.dk, -.002 * L], [hw, A.dk, -.002 * L]].forEach(([p0, c, d]) => mk2(p0.map(([a, b]) => [a * 1.06, b * 1.06]), c, d)); mk2(fw.map(([a, b]) => [a * .9, b * .9]), A.col, 0); mk2(hw.map(([a, b]) => [a * .88, b * .88]), A.col, 0); }
+      });
+      speed = bee ? 40 : 6;
+    } else if (A.b === 'beetle' || A.b === 'ant' || A.b === 'spider') {
+      const sp = A.b === 'spider', ant = A.b === 'ant';
+      if (ant) [[-.2, .1, .08], [0, .06, .045], [.14, .07, .055]].forEach(([u, r, h]) => part(ell(r * L, h * L, h * L * .9, 16), u * L, .16 * L, 0, null, A.col));
+      else { part(ell((sp ? .15 : .18) * L, (sp ? .12 : .1) * L, (sp ? .13 : .14) * L, 24, 0), -.06 * L, .18 * L, 0, null, A.col); part(ell(.08 * L, .07 * L, .08 * L, 16), .14 * L, .15 * L, 0, null, sp ? A.col : A.dk); }
+      if (A.spots) for (let k = 0; k < 6; k++) part(new T.SphereGeometry(.025 * L, 10, 8), (-.14 + (k % 3) * .07) * L, .27 * L, (k < 3 ? -1 : 1) * .05 * L, null, A.dk);
+      if (A.horn) [[.2, .2, .45, .3], [.1, .27, .42, .36]].forEach(([x0, y0, x1, y1]) => G.add(new T.Mesh(new T.TubeGeometry(new T.CatmullRomCurve3([new T.Vector3(x0 * L, y0 * L, 0), new T.Vector3((x0 + x1) / 2 * L, (y0 + y1) / 2 * L + .03 * L, 0), new T.Vector3(x1 * L, y1 * L, 0)]), 12, .015 * L, 6), plainM(A.dk, .3))));
+      const n = sp ? 4 : 3; for (let k = 0; k < n; k++) [-1, 1].forEach((sd) => { const lp = pivot((-.08 + k * (sp ? .06 : .09)) * L, .15 * L, sd * .08 * L); legs.push([lp, (k + (sd > 0 ? 1 : 0)) % 2 ? Math.PI : 0]); limb3(lp, [[0, 0, 0], [(k - 1) * .06 * L, (sp ? .14 : .06) * L, sd * .14 * L], [(k - 1) * .12 * L, -.15 * L, sd * .24 * L]], .012 * L, .006 * L, null, A.b === 'beetle' ? A.dk : A.col); });
+      speed = 6;
+    }
+    // it moves: legs walk in diagonal pairs, wings flap, tails and trunks sway, heads look about, fins and arms swim
+    const swing = A.b === 'quad' ? .35 : A.b === 'croc' ? .5 : .3;
+    G.userData.animate = (time) => {
+      const w = time * speed;
+      legs.forEach(([p, ph]) => { p.rotation.z = Math.sin(w + ph) * swing; });
+      wings.forEach(([p, sd]) => { const f = Math.sin(w); if (A.b === 'butterfly' || A.b === 'bee') p.rotation.x = sd * (.35 + f * .6); else if (A.b === 'bat' || s.pose === 'fly') p.rotation.x = sd * f * .7; else p.rotation.x = sd * Math.max(0, Math.sin(time * .7)) * .08; });
+      tails.forEach((p) => { p.rotation.y = Math.sin(time * (A.b === 'fish' ? speed : 2.2)) * (A.b === 'fish' ? .45 : .25); p.rotation.z = Math.sin(time * 1.3) * .08; });
+      heads.forEach((p) => { p.rotation.y = Math.sin(time * .6) * .18; p.rotation.z = Math.sin(time * .9) * .06; });
+      fins.forEach(([p, sd]) => { p.rotation.x = sd * (.6 + Math.sin(w) * .3); });
+      arms.forEach(([p, ph]) => { p.rotation.z = Math.sin(time * speed + ph) * (A.b === 'snake' ? .03 : .25); p.rotation.y = A.b === 'snake' ? Math.sin(time * speed) * .12 : 0; });
+      if (bob) bob.rotation.y = Math.sin(w) * .05;
+      if (pulse) { const k = 1 + Math.max(0, Math.sin(time * speed * 2)) * .06; pulse.scale.set(k, A.b === 'jelly' ? .8 / k : k, k); }
+    };
+    if (s.still) delete G.userData.animate;
+    G.rotation.y = ({ '-x': Math.PI, z: -Math.PI / 2, '-z': Math.PI / 2, left: Math.PI })[s.facing] || 0;
   }
   return G;
 }

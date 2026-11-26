@@ -4578,3 +4578,30 @@ label.notif-top { cursor: pointer; min-height: 44px; }
 .ld-mv { margin: 4px 0 8px; }
 .ld-mv-acts { display: flex; gap: 8px; flex-wrap: wrap; padding: 4px 4px 8px; }
 .ld-mv-acts .ld-btn { min-height: 44px; color: var(--anatomy-strong); border-color: var(--anatomy-lo); }
+
+/* (v327) Cassie's animals move once a drawing is drawn: legs walk, wings flap, tails sway, fins swim (Pause, Reduce
+   Motion and Lite mode keep them still; Play moves them even with Reduce Motion) */
+.ld-anim { transform-box: view-box; animation-play-state: paused; }
+.ld-svg.ld-go .ld-anim { animation-play-state: running; }
+.ld-a-leg { animation: ldLeg .9s ease-in-out infinite alternate; }
+.ld-a-tail { animation: ldTail 1.7s ease-in-out infinite alternate; }
+.ld-a-head { animation: ldHead 2.6s ease-in-out infinite alternate; }
+.ld-a-wing { animation: ldWing .6s ease-in-out infinite alternate; }
+.ld-a-wingf { animation: ldWing .09s linear infinite alternate; }
+.ld-a-flap { animation: ldFlap .5s ease-in-out infinite alternate; }
+.ld-a-fin { animation: ldFin .8s ease-in-out infinite alternate; }
+.ld-a-body { animation: ldBody 1.6s ease-in-out infinite alternate; }
+.ld-a-pulse { animation: ldPulse 1.4s ease-in-out infinite alternate; }
+.ld-a-arm { animation: ldTail 2.2s ease-in-out infinite alternate; }
+.ld-a-snake { animation: ldSnake 1.8s ease-in-out infinite alternate; }
+@keyframes ldLeg { from { transform: rotate(-14deg); } to { transform: rotate(14deg); } }
+@keyframes ldTail { from { transform: rotate(-9deg); } to { transform: rotate(9deg); } }
+@keyframes ldHead { from { transform: rotate(-3deg); } to { transform: rotate(4deg); } }
+@keyframes ldWing { from { transform: rotate(-32deg); } to { transform: rotate(22deg); } }
+@keyframes ldFlap { from { transform: scaleX(1); } to { transform: scaleX(.3); } }
+@keyframes ldFin { from { transform: rotate(-16deg); } to { transform: rotate(16deg); } }
+@keyframes ldBody { from { transform: rotate(-2deg) translateY(0); } to { transform: rotate(2deg) translateY(-2px); } }
+@keyframes ldPulse { from { transform: scale(1); } to { transform: scale(1.06); } }
+@keyframes ldSnake { from { transform: skewX(-6deg); } to { transform: skewX(6deg); } }
+html.lite .ld-anim { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { .ld-svg:not(.ld-force) .ld-anim { animation: none !important; } }
