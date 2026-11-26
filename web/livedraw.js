@@ -26,7 +26,7 @@ const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ---------- the spec: what the AI wrote, made safe ----------
-const KINDS2 = ['line', 'arrow', 'rect', 'circle', 'ellipse', 'poly', 'path', 'text'];
+const KINDS2 = ['line', 'arrow', 'rect', 'circle', 'ellipse', 'poly', 'path', 'text', 'tree', 'flower', 'leaf', 'cloud', 'sun', 'moon', 'rainbow', 'snowflake', 'bolt', 'drops', 'grass', 'rock', 'log', 'mushroom']; // (v324: and the nature kit)
 const KINDS3 = ['cylinder', 'tube', 'disc', 'cone', 'torus', 'ring', 'blades', 'sphere', 'box', 'capsule', 'pipe', 'arrow', 'lathe', 'plate'];
 const has = (x, k) => x[k] != null && x[k] !== '';
 // (v320) what a 3D part is really made of, with photographically grounded values from the Blender skills pack
@@ -171,6 +171,7 @@ function shapePoints(sh) {
   if (t === 'ellipse') return [[n('cx') - n('rx'), n('cy') - n('ry')], [n('cx') + n('rx'), n('cy') + n('ry')]];
   if (t === 'poly' && Array.isArray(sh.pts)) return sh.pts.map((q) => [+(q && q[0]), +(q && q[1])]);
   if (t === 'text') return [[n('x'), n('y')]];
+  if (KIT.includes(t)) return kitBox(sh); // (v324)
   return [];
 }
 // (v305) living things and creatures: one body whose parts touch; what is not part of the body is left out of that check
@@ -216,6 +217,7 @@ const MUST = [
   { is: /\bplant cells?\b/i, what: 'a plant cell', need: [['cell wall'], ['membrane'], ['nucleus'], ['cytoplasm'], ['chloroplast'], ['vacuole'], ['mitochondri']] },
   { is: /\banimal cells?\b|\bhuman cells?\b/i, what: 'an animal cell', need: [['membrane'], ['nucleus'], ['cytoplasm'], ['mitochondri'], ['ribosome'], ['golgi'], ['endoplasmic', 'er\\b']] },
   { is: /\bvolcano(es)?\b|\bbulkan\b/i, what: 'a volcano', need: [['magma chamber', 'magma'], ['vent', 'conduit'], ['crater'], ['lava'], ['ash', 'gas'], ['layer', 'crust', 'rock']] },
+  { is: /\b(parts of a tree|trees?|puno ng kahoy)\b/i, not: /\b(family|decision|binary|phylogenetic|christmas|syntax|search|tree (diagram|map|chart))\s*trees?\b|\btree (diagram|map|chart)s?\b/i, what: 'a tree', need: [['leaves', 'leaf', 'crown'], ['branch'], ['trunk'], ['root']] }, // (v324)
   { is: /\bflowers?\b|\bbulaklak\b/i, not: /\bflower ?pot\b/i, what: 'a flower', need: [['petal'], ['sepal'], ['stamen', 'anther', 'filament'], ['pistil', 'carpel', 'stigma'], ['ovary'], ['stem', 'receptacle']] },
   { is: /\b(lungs?|respiratory system|breathing)\b|\bbaga\b/i, what: 'the lungs', need: [['trachea', 'windpipe'], ['bronch'], ['lung'], ['alveol', 'air sac'], ['diaphragm']] },
   { is: /\b(human )?eyes?\b(?! ?(drop|glass|liner|shadow))|\bmata\b/i, not: /\b(eye of the storm|hurricane|needle)\b/i, what: 'the eye', need: [['cornea'], ['iris'], ['pupil'], ['lens'], ['retina'], ['optic nerve']] },
@@ -279,9 +281,9 @@ export function check(spec, asked = '') {
     const strokes = p.shapes.filter((x) => String(x.t || x.type).toLowerCase() !== 'text').length;
     if (!pts.length) { out.push(`"${p.label || p.id}" has no shape the picture can show, so its label points at nothing`); continue; }
     if (pts.some(([x, y]) => x < -6 || x > 406 || y < -6 || y > 266)) out.push(`"${p.label || p.id}" goes outside the 400 by 260 picture`);
-    if (strokes < 2) out.push(`"${p.label || p.id}" is a single line or shape; draw its real outline and inner lines`);
-    const kinds = p.shapes.map((x) => String(x.t || x.type).toLowerCase());
-    if (strokes >= 2 && !kinds.some((k) => k === 'path' || k === 'poly' || k === 'line' || k === 'arrow') && !ROUND_THINGS.test(p.label || p.id)) out.push(`"${p.label || p.id}" is only plain circles or boxes; draw its real outline with a path (for a leaf: a pointed tip, a midrib and side veins)`);
+    const kinds = p.shapes.map((x) => String(x.t || x.type).toLowerCase()), kitted = kinds.some((k) => KIT.includes(k)); // (v324: a kit tree or flower is a whole drawing)
+    if (strokes < 2 && !kitted) out.push(`"${p.label || p.id}" is a single line or shape; draw its real outline and inner lines`);
+    if (strokes >= 2 && !kitted && !kinds.some((k) => k === 'path' || k === 'poly' || k === 'line' || k === 'arrow') && !ROUND_THINGS.test(p.label || p.id)) out.push(`"${p.label || p.id}" is only plain circles or boxes; draw its real outline with a path (for a leaf: a pointed tip, a midrib and side veins)`);
     if (/\b(heart|hearts|puso)\b/i.test(`${spec.title} ${p.label || p.id}`) && !/\b(valentine|symbol|emoji|love|card)\b/i.test(spec.title) && p.shapes.some(valentine)) out.push(`"${p.label || p.id}" is drawn as a valentine heart symbol, not a real heart. Draw the real organ: a rounded cone shape with its point (the apex) down and to the left, wider at the top; the aorta arching over the top, the pulmonary trunk in front of it, the vena cava coming in on the right; inside, the two small atria at the top and the two larger ventricles below, the left ventricle with the thickest wall`);
     if (p.anchor) { const sh = shapeOf(p); if (sh) { const [x0, y0, x1, y1] = sh; if (p.anchor[0] < x0 - 6 || p.anchor[0] > x1 + 6 || p.anchor[1] < y0 - 6 || p.anchor[1] > y1 + 6) out.push(`the anchor of "${p.label || p.id}" is not on its own main shape`); } }
     const xs = pts.map((q) => q[0]), ys = pts.map((q) => q[1]);
@@ -586,7 +588,7 @@ export async function render(host, rawSpec, opts = {}) {
   let mv = null; const mvHost = spec.mode === '3d' ? el('div', 'ld-mv') : null;
   const machineOn = async () => {
     if (mv) return mv;
-    let m = null; try { m = await import('./isoview.js?v=323'); } catch (e) { return null; }
+    let m = null; try { m = await import('./isoview.js?v=324'); } catch (e) { return null; }
     mv = m.machine(mvHost, spec, { dark: !lightPage() });
     if (mv) {
       const row = el('div', 'ld-mv-acts');
@@ -869,6 +871,7 @@ function draw2d(stage, spec, { animate, setSay, hint }) {
         if (my !== turns[i]) return;
         n.style.visibility = '';
         if (n.tagName === 'text') { const full = n.dataset.full != null ? n.dataset.full : (n.dataset.full = n.textContent); n.textContent = ''; for (let k = 1; k <= full.length; k++) { if (my !== turns[i]) { n.textContent = full; return; } n.textContent = full.slice(0, k); await sleep(18); } continue; }
+        if (n.tagName === 'g') { n.style.opacity = '0'; void n.getBoundingClientRect(); n.style.transition = `opacity ${each}ms ease`; n.style.opacity = ''; await sleep(each); n.style.transition = ''; continue; } // (v324: a kit shape comes in whole)
         let L = 200; try { L = Math.max(8, Math.ceil(n.getTotalLength())); } catch (e) { /* */ }
         const dashed = n.getAttribute('stroke-dasharray');
         if (!dashed) { n.style.strokeDasharray = L; n.style.strokeDashoffset = L; } else n.style.opacity = '0';
@@ -905,6 +908,16 @@ function draw2d(stage, spec, { animate, setSay, hint }) {
         for (const n of groups[i].children) {
           n.style.visibility = '';
           if (n.tagName === 'text') { const full = n.textContent; n.textContent = ''; for (let k = 1; k <= full.length; k++) { n.textContent = full.slice(0, k); await sleep(22); } continue; }
+          if (n.tagName === 'g') { // (v324) a kit shape: all its outlines drawn at once, then its colours fill in
+            const kids = [...n.children], dur = 700;
+            kids.forEach((c) => { let L = 120; try { L = Math.max(8, Math.ceil(c.getTotalLength())); } catch (e) { /* */ } c.style.strokeDasharray = L; c.style.strokeDashoffset = L; c.style.fillOpacity = '0'; });
+            void n.getBoundingClientRect();
+            kids.forEach((c, k) => { const late = Math.round(k / kids.length * 260); c.style.transition = `stroke-dashoffset ${dur}ms ease-in-out ${late}ms, fill-opacity .45s ease ${Math.round(dur * 0.55) + late}ms`; c.style.strokeDashoffset = '0'; c.style.fillOpacity = ''; });
+            n.dataset.drawing = '1'; await sleep(dur + 420);
+            kids.forEach((c) => { c.style.strokeDasharray = ''; c.style.strokeDashoffset = ''; c.style.transition = ''; });
+            delete n.dataset.drawing; n.dataset.drawn = '1';
+            continue;
+          }
           let L = 200; try { L = Math.max(8, Math.ceil(n.getTotalLength())); } catch (e) { /* */ }
           const dur = Math.round(Math.min(600, Math.max(300, L * 1.4)));
           n.style.strokeDasharray = L; n.style.strokeDashoffset = L; n.style.fillOpacity = '0'; n.dataset.drawing = '1';
@@ -924,6 +937,297 @@ function draw2d(stage, spec, { animate, setSay, hint }) {
   };
   return view;
 }
+// ---------- (v324) the nature kit: trees, flowers, leaves, weather and the ground, drawn finished and alive ----------
+// One shape each ({"t":"tree","kind":"oak","x":200,"y":230,"h":160}), drawn the way the owner's guide pictures are: soft,
+// rounded, glossy like clay, every form outlined a shade darker, shaded underneath and lit from the top left. x and y are
+// where it stands on the ground (a cloud, the sun, the moon, a snowflake: its middle); h (or w, r) its size.
+const KIT = ['tree', 'flower', 'leaf', 'cloud', 'sun', 'moon', 'rainbow', 'snowflake', 'bolt', 'drops', 'grass', 'rock', 'log', 'mushroom'];
+const KIT_KINDS = {
+  tree: ['round', 'oak', 'pine', 'bush', 'palm', 'blossom', 'fruit', 'autumn'],
+  flower: ['sunflower', 'daisy', 'tulip', 'rose', 'lily', 'lavender', 'blossom', 'hydrangea'],
+  leaf: ['oval', 'maple', 'oak', 'ginkgo', 'fern', 'heart'],
+  cloud: ['white', 'rain', 'storm', 'snow', 'grey'],
+  rock: ['stone', 'mossy'], log: ['log', 'stump'], grass: ['grass', 'flowers'],
+};
+// the box a kit shape fills (for the checks and the labels): [[x0, y0], [x1, y1]]
+function kitBox(sh) {
+  const t = String(sh.t || '').toLowerCase(), x = +sh.x, y = +sh.y, h = +sh.h || +sh.w || +sh.r * 2 || 60, w = +sh.w || h, r = +sh.r || h / 2;
+  const rot = +sh.rot || 0;
+  if (rot) { // (turned about where it stands: the four corners of its box, turned)
+    const b = kitBox({ ...sh, rot: 0 }), a = rot * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
+    const mx = (b[0][0] + b[1][0]) / 2, my = (b[0][1] + b[1][1]) / 2, pts = [[mx, b[0][1]], [b[1][0], my], [mx, b[1][1]], [b[0][0], my]].map(([px, py]) => [x + (px - x) * c - (py - y) * s, y + (px - x) * s + (py - y) * c]);
+    return [[Math.min(...pts.map((q) => q[0])), Math.min(...pts.map((q) => q[1]))], [Math.max(...pts.map((q) => q[0])), Math.max(...pts.map((q) => q[1]))]];
+  }
+  if (t === 'tree') return [[x - h * (sh.kind === 'pine' ? 0.32 : 0.46), y - h], [x + h * (sh.kind === 'pine' ? 0.32 : 0.46), y]];
+  if (t === 'flower' || t === 'mushroom') return [[x - h * 0.36, y - h], [x + h * 0.36, y]];
+  if (t === 'leaf') return [[x - h * 0.42, y - h], [x + h * 0.42, y]];
+  if (t === 'cloud') return [[x - w / 2, y - w * 0.3], [x + w / 2, y + (/rain|snow|storm/.test(sh.kind) ? w * 0.55 : w * 0.16)]];
+  if (t === 'sun' || t === 'snowflake' || t === 'moon') return [[x - r * 1.4, y - r * 1.4], [x + r * 1.4, y + r * 1.4]];
+  if (t === 'rainbow') return [[x - r, y - r], [x + r, y + r * 0.12]];
+  if (t === 'bolt') return [[x - h * 0.3, y - h / 2], [x + h * 0.3, y + h / 2]];
+  if (t === 'drops') return [[x - w / 2, y - w * 0.15], [x + w / 2, y + w * 0.45]];
+  if (t === 'grass' || t === 'log') return [[x - w / 2, y - w * (t === 'log' ? 0.42 : 0.36)], [x + w / 2, y]];
+  if (t === 'rock') return [[x - w / 2, y - w * 0.62], [x + w / 2, y]];
+  return [[x, y]];
+}
+function kitMix(hex, to, k) { // a colour moved toward another (to darken or lighten it)
+  const p = (h) => { h = h.replace('#', ''); if (h.length === 3) h = h.split('').map((c) => c + c).join(''); return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)); };
+  const a = p(hex), b = p(to);
+  return '#' + a.map((v, i) => Math.round(v + (b[i] - v) * k).toString(16).padStart(2, '0')).join('');
+}
+const kitDark = (c, k = 0.34) => kitMix(c, '#1b1410', k), kitLight = (c, k = 0.45) => kitMix(c, '#ffffff', k);
+const kc = (x, y, r) => `M${(x - r).toFixed(1)},${y.toFixed(1)}a${r.toFixed(1)},${r.toFixed(1)} 0 1,0 ${(2 * r).toFixed(1)},0a${r.toFixed(1)},${r.toFixed(1)} 0 1,0 ${(-2 * r).toFixed(1)},0Z`;
+const ke = (x, y, rx, ry, rot = 0) => { // an ellipse as a path, turned by rot degrees
+  const a = rot * Math.PI / 180, c = Math.cos(a), s = Math.sin(a), P = (u, v) => `${(x + u * c - v * s).toFixed(1)},${(y + u * s + v * c).toFixed(1)}`;
+  return `M${P(-rx, 0)}A${rx.toFixed(1)},${ry.toFixed(1)} ${rot} 1,0 ${P(rx, 0)}A${rx.toFixed(1)},${ry.toFixed(1)} ${rot} 1,0 ${P(-rx, 0)}Z`;
+};
+const kpts = (pts) => 'M' + pts.map((q) => q[0].toFixed(1) + ',' + q[1].toFixed(1)).join('L') + 'Z';
+// a smooth closed curve through points (Catmull-Rom as cubic Béziers): leaves, petals, rocks
+function ksmooth(pts) {
+  const n = pts.length, P = (i) => pts[(i + n) % n];
+  let d = `M${P(0)[0].toFixed(1)},${P(0)[1].toFixed(1)}`;
+  for (let i = 0; i < n; i++) {
+    const p0 = P(i - 1), p1 = P(i), p2 = P(i + 1), p3 = P(i + 2);
+    d += `C${(p1[0] + (p2[0] - p0[0]) / 6).toFixed(1)},${(p1[1] + (p2[1] - p0[1]) / 6).toFixed(1)} ${(p2[0] - (p3[0] - p1[0]) / 6).toFixed(1)},${(p2[1] - (p3[1] - p1[1]) / 6).toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
+  }
+  return d + 'Z';
+}
+// a seeded random, so a shape is drawn the same way every time
+function krand(seed) { let s = Math.abs(Math.floor(seed)) % 2147483647 || 7; return () => (s = (s * 48271) % 2147483647) / 2147483647; }
+
+// a list of layers: [d, fill, {stroke, w, op, line}]; built by the makers below
+function kitLayers(t, kind, x, y, S, base) {
+  const L = [], R = krand(x * 7 + y * 13 + S * 3);
+  const put = (d, fill, o = {}) => L.push([d, fill, o]);
+  // puffs: round lumps merged into one soft shape (a tree's crown, a bush, a cloud, a hydrangea): the outline under
+  // them all, the fill over it, then each lump shaded below and lit above
+  const puffs = (list, col, { shade = 0.28, lite = 0.5, line = null } = {}) => {
+    const edge = line || kitDark(col, 0.42);
+    list.forEach(([cx, cy, r]) => put(kc(cx, cy, r), col, { stroke: edge, w: Math.max(1.4, S * 0.012) }));
+    list.forEach(([cx, cy, r]) => put(kc(cx, cy, r - 0.2), col, { stroke: 'none' }));
+    const ys = list.map((q) => q[1]), mid = (Math.min(...ys) + Math.max(...ys)) / 2;
+    list.forEach(([cx, cy, r]) => { if (cy >= mid - r * 0.4) put(kc(cx + r * 0.14, cy + r * 0.24, r * 0.7), kitDark(col, shade), { stroke: 'none', op: 0.38 }); });
+    list.forEach(([cx, cy, r]) => { if (cy >= mid - r * 0.4) put(kc(cx - r * 0.12, cy - r * 0.12, r * 0.64), col, { stroke: 'none', op: 0.92 }); });
+    list.forEach(([cx, cy, r]) => { if (cy <= mid) put(ke(cx - r * 0.3, cy - r * 0.4, r * 0.26, r * 0.15, -30), kitLight(col, lite), { stroke: 'none', op: 0.7 }); });
+  };
+  const trunk = (bx, by, h, wd, col) => { // a tapered trunk, its roots flaring into the ground
+    const top = by - h, w0 = wd, w1 = wd * 0.55;
+    put(`M${bx - w0 * 1.25},${by}C${bx - w0 * 0.6},${by - 3} ${bx - w0 * 0.5},${by - h * 0.18} ${bx - w1 / 2},${top}L${bx + w1 / 2},${top}C${bx + w0 * 0.5},${by - h * 0.18} ${bx + w0 * 0.6},${by - 3} ${bx + w0 * 1.25},${by}Z`, col, { stroke: kitDark(col, 0.4) });
+    put(`M${bx + w1 * 0.05},${top + 2}C${bx + w0 * 0.3},${by - h * 0.3} ${bx + w0 * 0.35},${by - h * 0.1} ${bx + w0 * 0.9},${by - 1}`, 'none', { stroke: kitDark(col, 0.5), w: 1.2, line: true });
+    put(`M${bx - w1 * 0.25},${top + h * 0.2}C${bx - w1 * 0.3},${by - h * 0.4} ${bx - w0 * 0.2},${by - h * 0.15} ${bx - w0 * 0.3},${by - 2}`, 'none', { stroke: kitLight(col, 0.35), w: 1.3, line: true, op: 0.7 });
+  };
+  const branch = (x0, y0, x1, y1, wd, col) => put(`M${x0 - wd / 2},${y0}Q${(x0 + x1) / 2},${(y0 + y1) / 2 + wd} ${x1},${y1}Q${(x0 + x1) / 2 + wd * 0.6},${(y0 + y1) / 2} ${x0 + wd / 2},${y0}Z`, col, { stroke: kitDark(col, 0.4), w: 1.1 });
+  const leafShape = (cx, cy, len, ang, col, wide = 0.42) => { // one simple leaf with its midrib, from its stalk end
+    const a = ang * Math.PI / 180, c = Math.cos(a), s = Math.sin(a), P = (u, v) => [cx + u * c - v * s, cy + u * s + v * c];
+    const pts = [P(0, 0), P(len * 0.3, -len * wide * 0.5), P(len * 0.7, -len * wide * 0.42), P(len, 0), P(len * 0.7, len * wide * 0.42), P(len * 0.3, len * wide * 0.5)];
+    put(ksmooth(pts), col, { stroke: kitDark(col, 0.42) });
+    put(ksmooth([P(len * 0.12, -len * wide * 0.12), P(len * 0.45, -len * wide * 0.36), P(len * 0.75, -len * wide * 0.2), P(len * 0.5, -len * wide * 0.06)]), kitLight(col, 0.4), { stroke: 'none', op: 0.6 });
+    const m0 = P(len * 0.05, 0), m1 = P(len * 0.92, 0);
+    put(`M${m0[0].toFixed(1)},${m0[1].toFixed(1)}L${m1[0].toFixed(1)},${m1[1].toFixed(1)}`, 'none', { stroke: kitDark(col, 0.3), w: 1, line: true, op: 0.8 });
+  };
+  const stem = (bx, by, top, col = '#6b9a48') => { // a flower's curving stem with a leaf each side
+    put(`M${bx - 1.8},${by}C${bx - 3},${by - S * 0.3} ${bx + 3},${top + S * 0.25} ${bx - 1.2},${top}L${bx + 1.6},${top}C${bx + 5},${top + S * 0.25} ${bx - 0.4},${by - S * 0.3} ${bx + 1.8},${by}Z`, col, { stroke: kitDark(col, 0.4), w: 1.1 });
+    leafShape(bx, by - S * 0.22, S * 0.3, 200, '#7fae58', 0.5); leafShape(bx, by - S * 0.3, S * 0.3, -20, '#7fae58', 0.5);
+  };
+  const ring = (cx, cy, n, dist, mk) => { for (let k = 0; k < n; k++) mk(cx + dist * Math.cos(k * 2 * Math.PI / n - Math.PI / 2), cy + dist * Math.sin(k * 2 * Math.PI / n - Math.PI / 2), k * 360 / n - 90); };
+  const ground = (bx, by, w) => { put(ke(bx, by, w / 2, w * 0.09), '#86c25a', { stroke: kitDark('#86c25a', 0.35) }); put(ke(bx - w * 0.08, by - w * 0.02, w * 0.3, w * 0.04), kitLight('#86c25a', 0.35), { stroke: 'none', op: 0.7 }); };
+
+  if (t === 'tree') {
+    const h = S, crownCol = base || { blossom: '#f3a3c2', autumn: '#e8963a', pine: '#2f7d4a' }[kind] || '#4f9e3c';
+    if (kind === 'pine') {
+      ground(x, y, h * 0.62); trunk(x, y, h * 0.3, h * 0.07, '#8a5a34');
+      const tiers = 5;
+      for (let k = 0; k < tiers; k++) { // stacked tiers, widest at the bottom, a soft wavy hem
+        const ty = y - h * 0.22 - k * h * 0.15, tw = h * (0.32 - k * 0.05), th = h * 0.26, tip = ty - th;
+        const hem = []; for (let j = 0; j <= 6; j++) hem.push([x + tw - j * tw / 3, ty + (j % 2 ? -3 : 2)]);
+        put(`M${x},${tip}Q${x + tw * 0.35},${tip + th * 0.45} ${x + tw},${ty}` + hem.map((q) => `L${q[0].toFixed(1)},${q[1].toFixed(1)}`).join('') + `Q${x - tw * 0.35},${tip + th * 0.45} ${x},${tip}Z`, crownCol, { stroke: kitDark(crownCol, 0.45) });
+        put(`M${x - 1},${tip + 3}Q${x - tw * 0.3},${tip + th * 0.5} ${x - tw * 0.8},${ty - 2}L${x - tw * 0.3},${ty - th * 0.2}Z`, kitLight(crownCol, 0.3), { stroke: 'none', op: 0.65 });
+      }
+    } else if (kind === 'palm') {
+      ground(x, y, h * 0.5);
+      const top = [x + h * 0.12, y - h * 0.8];
+      put(`M${x - h * 0.05},${y}Q${x + h * 0.02},${y - h * 0.45} ${top[0] - h * 0.02},${top[1]}L${top[0] + h * 0.03},${top[1]}Q${x + h * 0.08},${y - h * 0.45} ${x + h * 0.05},${y}Z`, '#a7744a', { stroke: kitDark('#a7744a', 0.4) });
+      for (let k = 1; k < 7; k++) { const yy = y - k * h * 0.11, xx = x + (k * h * 0.11 / (h * 0.8)) * h * 0.12; put(`M${xx - h * 0.035},${yy}Q${xx},${yy + 3} ${xx + h * 0.035},${yy}`, 'none', { stroke: '#7a5232', w: 1.2, line: true }); }
+      [-160, -130, -95, -60, -25, 5].forEach((ang) => leafShape(top[0], top[1], h * 0.42, ang, '#3f9a4a', 0.32));
+      [[top[0] - 4, top[1] + 6], [top[0] + 5, top[1] + 7], [top[0], top[1] + 11]].forEach(([cx, cy]) => put(kc(cx, cy, h * 0.035), '#8a5a2e', { stroke: '#5c3a1c' }));
+    } else if (kind === 'bush') {
+      ground(x, y, h * 1.1);
+      const list = [];
+      for (let k = 0; k < 5; k++) list.push([x + (k - 2) * h * 0.2, y - h * (0.2 + R() * 0.03), h * (0.17 + R() * 0.03)]);
+      for (let k = 0; k < 3; k++) list.push([x + (k - 1) * h * 0.22, y - h * (0.42 + R() * 0.04), h * (0.18 + R() * 0.03)]);
+      list.push([x, y - h * 0.58, h * 0.17]);
+      puffs(list, crownCol);
+    } else { // round, oak, blossom, fruit, autumn: a trunk that branches into a crown of soft lumps
+      ground(x, y, h * 0.7);
+      trunk(x, y, h * 0.55, h * 0.075, '#8a5a34');
+      branch(x, y - h * 0.42, x - h * 0.2, y - h * 0.66, h * 0.035, '#8a5a34'); branch(x, y - h * 0.46, x + h * 0.2, y - h * 0.7, h * 0.035, '#8a5a34');
+      const cy = y - h * 0.68, W = h * (kind === 'oak' ? 0.44 : 0.38), H = h * 0.3, list = [];
+      const n = kind === 'oak' ? 13 : 11;
+      for (let k = 0; k < n; k++) { const a = (k / n) * Math.PI * 2, rr = h * (0.13 + R() * 0.05); list.push([x + Math.cos(a) * W * 0.72, cy + Math.sin(a) * H * 0.72 - (Math.sin(a) < 0 ? h * 0.02 : 0), rr]); }
+      list.push([x, cy - H * 0.2, h * 0.2], [x - W * 0.3, cy + H * 0.1, h * 0.16], [x + W * 0.3, cy + H * 0.05, h * 0.16]);
+      puffs(list, crownCol);
+      if (kind === 'fruit') for (let k = 0; k < 7; k++) { const fx = x + (R() - 0.5) * W * 1.4, fy = cy + (R() - 0.4) * H * 1.2; put(kc(fx, fy, h * 0.03), '#e8553c', { stroke: kitDark('#e8553c', 0.4) }); put(kc(fx - h * 0.009, fy - h * 0.01, h * 0.01), '#ffd9cf', { stroke: 'none', op: 0.8 }); }
+      if (kind === 'blossom') for (let k = 0; k < 14; k++) put(kc(x + (R() - 0.5) * W * 1.6, cy + (R() - 0.5) * H * 1.5, h * 0.014), '#fff4f8', { stroke: 'none', op: 0.9 });
+    }
+  } else if (t === 'flower') {
+    const h = S, top = y - h * 0.72, hr = h * 0.2;
+    if (kind === 'lavender') {
+      [[-0.12, 0.95], [0, 1.05], [0.12, 0.9]].forEach(([dx, k]) => {
+        const sx = x + dx * h, st = y - h * k;
+        put(`M${x + dx * h * 0.3},${y}Q${sx},${y - h * 0.3} ${sx},${st + h * 0.4}`, 'none', { stroke: '#6b9a48', w: 2.2, line: true });
+        for (let j = 0; j < 7; j++) { const by = st + h * 0.4 - j * h * 0.075; put(ke(sx - h * 0.028, by, h * 0.032, h * 0.042, -20), '#9b7fd6', { stroke: '#6f56ae' }); put(ke(sx + h * 0.028, by - h * 0.03, h * 0.032, h * 0.042, 20), '#a98ee0', { stroke: '#6f56ae' }); }
+      });
+      leafShape(x, y - h * 0.08, h * 0.32, 205, '#7fae58', 0.32); leafShape(x, y - h * 0.08, h * 0.32, -25, '#7fae58', 0.32);
+    } else if (kind === 'blossom') {
+      stem(x, y, top);
+      [[0, 0, 1], [-0.17, 0.12, 0.8], [0.15, -0.1, 0.75]].forEach(([dx, dy, k]) => {
+        const cx = x + dx * h, cy = top + dy * h, rr = hr * 0.62 * k;
+        ring(cx, cy, 5, rr * 0.75, (px, py, ang) => put(ke(px, py, rr * 0.62, rr * 0.55, ang), '#f7a6c3', { stroke: '#d9739a' }));
+        put(kc(cx, cy, rr * 0.3), '#ffe39a', { stroke: '#e0b14a' });
+      });
+    } else if (kind === 'hydrangea') {
+      stem(x, y, top + hr * 0.6);
+      const list = []; for (let k = 0; k < 14; k++) { const a = k * 2.4, d = hr * Math.sqrt(k / 14) * 1.05; list.push([x + Math.cos(a) * d, top + Math.sin(a) * d * 0.85, hr * 0.32]); }
+      puffs(list, base || '#b8a2ea', { shade: 0.25, lite: 0.6 });
+      for (let k = 0; k < 8; k++) put(kc(x + (R() - 0.5) * hr * 1.6, top + (R() - 0.5) * hr * 1.3, h * 0.01), '#f6e9b8', { stroke: 'none' });
+    } else {
+      stem(x, y, top + hr * 0.4);
+      if (kind === 'tulip') {
+        const c = base || '#f08bb0', w = hr * 0.95, tp = top - hr * 0.95;
+        put(ksmooth([[x - w, top - hr * 0.1], [x - w * 0.92, top + hr * 0.55], [x, top + hr * 0.82], [x + w * 0.92, top + hr * 0.55], [x + w, top - hr * 0.1], [x + w * 0.62, tp + hr * 0.25], [x + w * 0.3, top - hr * 0.25], [x, tp + hr * 0.05], [x - w * 0.3, top - hr * 0.25], [x - w * 0.62, tp + hr * 0.25]]), c, { stroke: kitDark(c, 0.38) });
+        put(ksmooth([[x - w * 0.5, top + hr * 0.62], [x - w * 0.42, top - hr * 0.2], [x, tp], [x + w * 0.42, top - hr * 0.2], [x + w * 0.5, top + hr * 0.62], [x, top + hr * 0.8]]), kitDark(c, 0.06), { stroke: kitDark(c, 0.38) });
+        put(ke(x - w * 0.55, top, hr * 0.14, hr * 0.38, 10), kitLight(c, 0.55), { stroke: 'none', op: 0.7 });
+      } else if (kind === 'rose') {
+        const c = base || '#ee7d9f';
+        ring(x, top, 6, hr * 0.62, (px, py, ang) => put(ke(px, py, hr * 0.52, hr * 0.42, ang), kitDark(c, 0.06), { stroke: kitDark(c, 0.38) }));
+        put(kc(x, top, hr * 0.62), c, { stroke: kitDark(c, 0.38) });
+        put(`M${x},${top}m-${hr * 0.08},0a${hr * 0.1},${hr * 0.1} 0 1,1 ${hr * 0.18},0a${hr * 0.22},${hr * 0.22} 0 1,1 -${hr * 0.4},0a${hr * 0.34},${hr * 0.34} 0 1,1 ${hr * 0.66},0`, 'none', { stroke: kitDark(c, 0.36), w: 1.4, line: true });
+        put(ke(x - hr * 0.3, top - hr * 0.3, hr * 0.16, hr * 0.09, -30), kitLight(c, 0.6), { stroke: 'none', op: 0.8 });
+      } else if (kind === 'lily') {
+        const c = base || '#fbe3ea';
+        ring(x, top, 6, hr * 0.55, (px, py, ang) => { const a = ang * Math.PI / 180, tx = x + Math.cos(a) * hr * 1.25, ty = top + Math.sin(a) * hr * 1.25; put(ksmooth([[x, top], [px + Math.cos(a + 1.3) * hr * 0.3, py + Math.sin(a + 1.3) * hr * 0.3], [tx, ty], [px + Math.cos(a - 1.3) * hr * 0.3, py + Math.sin(a - 1.3) * hr * 0.3]]), c, { stroke: '#d98aa6' }); put(`M${x},${top}L${((x + tx) / 2).toFixed(1)},${((top + ty) / 2).toFixed(1)}`, 'none', { stroke: '#e79ab5', w: 2.2, line: true, op: 0.7 }); });
+        for (let k = 0; k < 5; k++) { const a = -Math.PI / 2 + (k - 2) * 0.35; put(`M${x},${top}L${(x + Math.cos(a) * hr * 0.75).toFixed(1)},${(top + Math.sin(a) * hr * 0.75).toFixed(1)}`, 'none', { stroke: '#cfa74a', w: 1.2, line: true }); put(kc(x + Math.cos(a) * hr * 0.78, top + Math.sin(a) * hr * 0.78, h * 0.012), '#e0a63c', { stroke: 'none' }); }
+      } else { // sunflower, daisy
+        const sun = kind === 'sunflower', c = base || (sun ? '#f6c945' : '#fbf1de'), n = sun ? 12 : 14;
+        ring(x, top, n, hr * 0.72, (px, py, ang) => { put(ke(px, py, hr * 0.42, hr * 0.2, ang), c, { stroke: kitDark(c, sun ? 0.32 : 0.22) }); put(ke(px - Math.cos(ang * Math.PI / 180) * hr * 0.06, py - hr * 0.04, hr * 0.2, hr * 0.07, ang), kitLight(c, 0.6), { stroke: 'none', op: 0.6 }); });
+        const mid = sun ? '#6b4226' : '#f3c33e';
+        put(kc(x, top, hr * (sun ? 0.46 : 0.34)), mid, { stroke: kitDark(mid, 0.4) });
+        if (sun) for (let k = -2; k <= 2; k++) { put(`M${x + k * hr * 0.17},${top - hr * 0.42}L${x + k * hr * 0.17},${top + hr * 0.42}`, 'none', { stroke: kitDark(mid, 0.35), w: 0.9, line: true, op: 0.7 }); put(`M${x - hr * 0.42},${top + k * hr * 0.17}L${x + hr * 0.42},${top + k * hr * 0.17}`, 'none', { stroke: kitDark(mid, 0.35), w: 0.9, line: true, op: 0.7 }); }
+        put(ke(x - hr * 0.14, top - hr * 0.16, hr * 0.14, hr * 0.08, -30), kitLight(mid, 0.55), { stroke: 'none', op: 0.75 });
+      }
+    }
+  } else if (t === 'leaf') {
+    const h = S, c = base || { maple: '#e8622f', ginkgo: '#e9b53a', oak: '#b9873a' }[kind] || '#4f9e46', tip = [x, y - h];
+    put(`M${x},${y}L${x},${y - h * 0.18}`, 'none', { stroke: kitDark(c, 0.35), w: 2.4, line: true });
+    if (kind === 'maple') {
+      const pts = []; const lobes = [[-90, 1], [-40, 0.82], [-150, 0.82], [5, 0.6], [-185, 0.6]];
+      for (let k = 0; k <= 20; k++) { const a = (-200 + k * 11) * Math.PI / 180, lobe = lobes.reduce((m, [la, lr]) => Math.max(m, lr * Math.exp(-((a * 180 / Math.PI - la) ** 2) / 220)), 0.3); pts.push([x + Math.cos(a) * h * 0.5 * (0.45 + lobe * 0.6), y - h * 0.42 + Math.sin(a) * h * 0.5 * (0.45 + lobe * 0.6)]); }
+      put(kpts([[x, y - h * 0.18], ...pts]), c, { stroke: kitDark(c, 0.4) });
+      [[-90, 1], [-40, 0.8], [-140, 0.8]].forEach(([a, k]) => { const r = a * Math.PI / 180; put(`M${x},${y - h * 0.2}L${(x + Math.cos(r) * h * 0.5 * k).toFixed(1)},${(y - h * 0.42 + Math.sin(r) * h * 0.5 * k).toFixed(1)}`, 'none', { stroke: kitDark(c, 0.3), w: 1, line: true }); });
+    } else if (kind === 'ginkgo') {
+      put(`M${x},${y - h * 0.18}C${x - h * 0.15},${y - h * 0.4} ${x - h * 0.52},${y - h * 0.62} ${x - h * 0.45},${y - h * 0.9}Q${x - h * 0.1},${y - h * 1.02} ${x},${y - h * 0.88}Q${x + h * 0.1},${y - h * 1.02} ${x + h * 0.45},${y - h * 0.9}C${x + h * 0.52},${y - h * 0.62} ${x + h * 0.15},${y - h * 0.4} ${x},${y - h * 0.18}Z`, c, { stroke: kitDark(c, 0.38) });
+      for (let k = -3; k <= 3; k++) put(`M${x},${y - h * 0.2}L${(x + k * h * 0.12).toFixed(1)},${(y - h * 0.88).toFixed(1)}`, 'none', { stroke: kitDark(c, 0.22), w: 0.8, line: true, op: 0.7 });
+    } else if (kind === 'fern') {
+      put(`M${x},${y - h * 0.1}Q${x + h * 0.06},${y - h * 0.6} ${tip[0]},${tip[1]}`, 'none', { stroke: kitDark(c, 0.3), w: 1.6, line: true });
+      for (let k = 1; k < 9; k++) { const yy = y - h * 0.1 - k * h * 0.1, len = h * 0.32 * (1 - k / 11); leafShape(x + 1, yy, len, -160 - k * 2, c, 0.35); leafShape(x + 1, yy, len, -20 + k * 2, c, 0.35); }
+    } else if (kind === 'oak') {
+      const pts = []; for (let k = 0; k <= 24; k++) { const v = k / 24, side = k <= 12 ? -1 : 1, t2 = k <= 12 ? v * 2 : (1 - v) * 2, w = Math.sin(t2 * Math.PI) * h * 0.26 * (0.75 + 0.25 * Math.cos(t2 * Math.PI * 8)); pts.push([x + side * w, y - h * 0.18 - t2 * h * 0.82 * (k <= 12 ? 1 : 1)]); }
+      put(ksmooth(pts), c, { stroke: kitDark(c, 0.4) });
+      put(`M${x},${y - h * 0.18}L${x},${y - h * 0.95}`, 'none', { stroke: kitDark(c, 0.3), w: 1, line: true });
+    } else { // oval, heart: a broad leaf with a midrib and veins
+      const wd = kind === 'heart' ? 0.5 : 0.3;
+      const pts = [[x, y - h * 0.18], [x - h * wd, y - h * 0.4], [x - h * wd * 0.8, y - h * 0.72], [tip[0], tip[1]], [x + h * wd * 0.8, y - h * 0.72], [x + h * wd, y - h * 0.4]];
+      put(ksmooth(pts), c, { stroke: kitDark(c, 0.4) });
+      put(ksmooth([[x - h * 0.05, y - h * 0.3], [x - h * wd * 0.7, y - h * 0.48], [x - h * wd * 0.45, y - h * 0.75], [x - h * 0.04, y - h * 0.85]]), kitLight(c, 0.35), { stroke: 'none', op: 0.5 });
+      put(`M${x},${y - h * 0.18}L${x},${y - h * 0.94}`, 'none', { stroke: kitDark(c, 0.3), w: 1.2, line: true });
+      for (let k = 1; k <= 4; k++) { const yy = y - h * (0.2 + k * 0.15), sp = h * wd * (0.75 - Math.abs(k - 2) * 0.12); put(`M${x},${yy + h * 0.05}Q${x - sp * 0.5},${yy} ${x - sp},${yy - h * 0.06}M${x},${yy + h * 0.05}Q${x + sp * 0.5},${yy} ${x + sp},${yy - h * 0.06}`, 'none', { stroke: kitDark(c, 0.22), w: 0.9, line: true, op: 0.8 }); }
+    }
+  } else if (t === 'cloud') {
+    const w = S, col = base || { storm: '#8b97b3', grey: '#c3ccd9' }[kind] || '#f3f6fb';
+    if (kind === 'rain' || kind === 'snow' || kind === 'storm') {
+      if (kind === 'snow') [-0.28, 0, 0.28, -0.14, 0.14].forEach((dx, k) => L.push(...kitLayers('snowflake', '', x + dx * w, y + w * (k < 3 ? 0.3 : 0.45), w * 0.07, '#9cc7f0')));
+      else for (let k = 0; k < 5; k++) { const dx = (k - 2) * w * 0.15, dy = w * (k % 2 ? 0.42 : 0.3); put(`M${x + dx},${y + dy - w * 0.08}Q${x + dx + w * 0.045},${y + dy} ${x + dx},${y + dy + w * 0.03}Q${x + dx - w * 0.045},${y + dy} ${x + dx},${y + dy - w * 0.08}Z`, '#4aa3e8', { stroke: '#2b78bd' }); put(ke(x + dx - w * 0.012, y + dy - w * 0.005, w * 0.008, w * 0.014), '#d9efff', { stroke: 'none', op: 0.9 }); }
+      if (kind === 'storm') L.push(...kitLayers('bolt', '', x + w * 0.05, y + w * 0.32, w * 0.45, ''));
+    }
+    const list = [[x - w * 0.3, y + w * 0.02, w * 0.17], [x - w * 0.1, y - w * 0.1, w * 0.23], [x + w * 0.14, y - w * 0.06, w * 0.21], [x + w * 0.33, y + w * 0.04, w * 0.14], [x, y + w * 0.06, w * 0.2]];
+    puffs(list, col, { shade: kind === 'storm' ? 0.3 : 0.16, lite: 0.8, line: kitDark(col, 0.22) });
+  } else if (t === 'sun') {
+    const r = S, c = base || '#ffc93a';
+    for (let k = 0; k < 12; k++) { const a = k * Math.PI / 6, a1 = a - 0.13, a2 = a + 0.13; put(kpts([[x + Math.cos(a1) * r * 1.12, y + Math.sin(a1) * r * 1.12], [x + Math.cos(a) * r * 1.55, y + Math.sin(a) * r * 1.55], [x + Math.cos(a2) * r * 1.12, y + Math.sin(a2) * r * 1.12]]), '#ffb21f', { stroke: '#e08a12' }); }
+    put(kc(x, y, r), c, { stroke: kitDark(c, 0.3) });
+    put(kc(x + r * 0.12, y + r * 0.16, r * 0.8), kitDark(c, 0.12), { stroke: 'none', op: 0.5 });
+    put(ke(x - r * 0.35, y - r * 0.4, r * 0.32, r * 0.18, -35), kitLight(c, 0.7), { stroke: 'none', op: 0.85 });
+  } else if (t === 'moon') {
+    const r = S, c = base || '#ffd45c';
+    put(`M${x + r * 0.25},${y - r}A${r},${r} 0 0,0 ${x + r * 0.25},${y + r}A${r * 1.3},${r * 1.3} 0 0,1 ${x + r * 0.25},${y - r}Z`, c, { stroke: kitDark(c, 0.3) });
+    put(ke(x - r * 0.55, y - r * 0.25, r * 0.12, r * 0.3, 15), kitLight(c, 0.6), { stroke: 'none', op: 0.75 });
+  } else if (t === 'rainbow') {
+    const r = S, cols = ['#ef4b4b', '#f5933a', '#f7d046', '#5cc36a', '#4a9de0', '#8a6ad8'], band = r * 0.09;
+    cols.forEach((c, k) => { const rr = r - k * band - band / 2; put(`M${x - rr},${y}A${rr},${rr} 0 0,1 ${x + rr},${y}`, 'none', { stroke: c, w: band * 0.98, line: true }); });
+    [[x - r + band * 3, y + 2], [x + r - band * 3, y + 2]].forEach(([cx, cy]) => L.push(...kitLayers('cloud', 'white', cx, cy, r * 0.55, '')));
+  } else if (t === 'snowflake') {
+    const r = S, c = base || '#8ec3f2';
+    for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3, ex = x + Math.cos(a) * r, ey = y + Math.sin(a) * r; put(`M${x},${y}L${ex.toFixed(1)},${ey.toFixed(1)}`, 'none', { stroke: c, w: Math.max(1.6, r * 0.16), line: true }); [0.55, 0.8].forEach((f) => { const bx = x + Math.cos(a) * r * f, by = y + Math.sin(a) * r * f; [0.7, -0.7].forEach((d) => put(`M${bx.toFixed(1)},${by.toFixed(1)}L${(bx + Math.cos(a + d) * r * 0.28).toFixed(1)},${(by + Math.sin(a + d) * r * 0.28).toFixed(1)}`, 'none', { stroke: c, w: Math.max(1.2, r * 0.11), line: true })); }); }
+    put(kc(x, y, r * 0.16), kitLight(c, 0.3), { stroke: kitDark(c, 0.2) });
+  } else if (t === 'bolt') {
+    const h = S, c = base || '#ffcc33';
+    put(kpts([[x + h * 0.1, y - h / 2], [x - h * 0.22, y + h * 0.06], [x - h * 0.02, y + h * 0.06], [x - h * 0.12, y + h / 2], [x + h * 0.24, y - h * 0.08], [x + h * 0.03, y - h * 0.08], [x + h * 0.16, y - h / 2]]), c, { stroke: kitDark(c, 0.35) });
+  } else if (t === 'drops') {
+    const w = S;
+    for (let k = 0; k < 5; k++) { const dx = (k - 2) * w * 0.2, dy = w * (k % 2 ? 0.25 : 0.05); put(`M${x + dx},${y + dy - w * 0.1}Q${x + dx + w * 0.06},${y + dy} ${x + dx},${y + dy + w * 0.04}Q${x + dx - w * 0.06},${y + dy} ${x + dx},${y + dy - w * 0.1}Z`, '#4aa3e8', { stroke: '#2b78bd' }); }
+  } else if (t === 'grass') {
+    const w = S;
+    for (let k = 0; k < 13; k++) { const bx = x + (k / 12 - 0.5) * w * 0.8, hh = w * (0.22 + R() * 0.14), lean = (R() - 0.5) * w * 0.12, col = k % 3 ? '#5aa83e' : '#7fc24f'; put(`M${bx - w * 0.025},${y}Q${bx + lean * 0.3},${y - hh * 0.6} ${bx + lean},${y - hh}Q${bx + lean * 0.3 + w * 0.02},${y - hh * 0.55} ${bx + w * 0.025},${y}Z`, col, { stroke: kitDark(col, 0.35), w: 1 }); }
+    if (kind === 'flowers') [[-0.25, 0.3, '#f26b8a'], [0.05, 0.36, '#ffd45c'], [0.28, 0.28, '#fbf1de']].forEach(([dx, dy, c]) => { ring(x + dx * w, y - dy * w, 5, w * 0.03, (px, py, ang) => put(ke(px, py, w * 0.03, w * 0.022, ang), c, { stroke: kitDark(c, 0.3), w: 0.8 })); put(kc(x + dx * w, y - dy * w, w * 0.016), '#f3b23e', { stroke: 'none' }); });
+  } else if (t === 'rock') {
+    const w = S, c = base || '#9c9a8c', pts = [];
+    for (let k = 0; k < 8; k++) { const a = Math.PI + k * Math.PI / 7, rr = 0.85 + R() * 0.2; pts.push([x + Math.cos(a) * w * 0.5 * rr, y + Math.min(0, Math.sin(a)) * w * 0.6 * rr]); }
+    put(ksmooth(pts), c, { stroke: kitDark(c, 0.45) });
+    put(ksmooth([[x - w * 0.05, y - w * 0.55], [x + w * 0.3, y - w * 0.4], [x + w * 0.42, y - w * 0.05], [x + w * 0.1, y - w * 0.15]]), kitDark(c, 0.18), { stroke: 'none', op: 0.6 });
+    put(ksmooth([[x - w * 0.35, y - w * 0.3], [x - w * 0.15, y - w * 0.5], [x + w * 0.02, y - w * 0.45], [x - w * 0.2, y - w * 0.3]]), kitLight(c, 0.4), { stroke: 'none', op: 0.65 });
+    put(`M${x - w * 0.05},${y - w * 0.55}L${x + w * 0.05},${y - w * 0.3}L${x - w * 0.02},${y - w * 0.12}`, 'none', { stroke: kitDark(c, 0.4), w: 1, line: true, op: 0.7 });
+    if (kind === 'mossy') { put(`M${x - w * 0.42},${y - w * 0.3}Q${x - w * 0.2},${y - w * 0.7} ${x + w * 0.15},${y - w * 0.58}Q${x + w * 0.4},${y - w * 0.5} ${x + w * 0.42},${y - w * 0.3}Q${x + w * 0.2},${y - w * 0.38} ${x},${y - w * 0.34}Q${x - w * 0.22},${y - w * 0.24} ${x - w * 0.42},${y - w * 0.3}Z`, '#8cc04a', { stroke: kitDark('#8cc04a', 0.35) }); put(ke(x - w * 0.1, y - w * 0.52, w * 0.12, w * 0.04, -10), kitLight('#8cc04a', 0.5), { stroke: 'none', op: 0.7 }); }
+  } else if (t === 'log') {
+    const w = S, bark = '#8a5a34', wood = '#e2b77a';
+    if (kind === 'stump') {
+      const h = w * 0.42, top = y - h, rx = w * 0.32, ry = w * 0.1;
+      put(`M${x - rx},${top}L${x - rx * 1.05},${y - h * 0.25}Q${x - rx * 1.5},${y} ${x - rx * 1.6},${y}L${x + rx * 1.6},${y}Q${x + rx * 1.5},${y} ${x + rx * 1.05},${y - h * 0.25}L${x + rx},${top}Z`, bark, { stroke: kitDark(bark, 0.4) });
+      [-0.5, 0, 0.5].forEach((f) => put(`M${x + f * rx},${top + ry}L${x + f * rx * 1.1},${y - 2}`, 'none', { stroke: kitDark(bark, 0.35), w: 1, line: true }));
+      put(ke(x, top, rx, ry), wood, { stroke: kitDark(wood, 0.4) });
+      [0.7, 0.45, 0.2].forEach((k) => put(ke(x, top, rx * k, ry * k), 'none', { stroke: kitDark(wood, 0.25), w: 0.9, line: true }));
+    } else {
+      const h = w * 0.34, ry = h / 2, rx = ry * 0.45, x0 = x - w / 2 + rx, x1 = x + w / 2 - rx, cy = y - ry;
+      put(`M${x0},${cy - ry}L${x1},${cy - ry}A${rx},${ry} 0 0,1 ${x1},${cy + ry}L${x0},${cy + ry}Z`, bark, { stroke: kitDark(bark, 0.4) });
+      put(`M${x0 + w * 0.12},${cy - ry * 0.4}L${x1 - w * 0.2},${cy - ry * 0.4}M${x0 + w * 0.25},${cy + ry * 0.3}L${x1 - w * 0.05},${cy + ry * 0.3}`, 'none', { stroke: kitDark(bark, 0.35), w: 1, line: true });
+      put(ke(x0, cy, rx, ry), wood, { stroke: kitDark(wood, 0.4) });
+      [0.65, 0.35].forEach((k) => put(ke(x0, cy, rx * k, ry * k), 'none', { stroke: kitDark(wood, 0.25), w: 0.9, line: true }));
+    }
+  } else if (t === 'mushroom') {
+    const h = S, cap = base || '#e0714f';
+    put(`M${x - h * 0.1},${y}Q${x - h * 0.13},${y - h * 0.3} ${x - h * 0.08},${y - h * 0.55}L${x + h * 0.08},${y - h * 0.55}Q${x + h * 0.13},${y - h * 0.3} ${x + h * 0.1},${y}Z`, '#f4e9d6', { stroke: '#c9b79a' });
+    put(`M${x - h * 0.42},${y - h * 0.52}Q${x - h * 0.4},${y - h} ${x},${y - h}Q${x + h * 0.4},${y - h} ${x + h * 0.42},${y - h * 0.52}Q${x},${y - h * 0.44} ${x - h * 0.42},${y - h * 0.52}Z`, cap, { stroke: kitDark(cap, 0.38) });
+    [[-0.2, 0.75, 0.06], [0.08, 0.86, 0.05], [0.22, 0.66, 0.045], [-0.02, 0.62, 0.035]].forEach(([dx, dy, r]) => put(kc(x + dx * h, y - dy * h, r * h), '#fff6ec', { stroke: 'none', op: 0.95 }));
+  }
+  return L;
+}
+function kitShape(s, mk) {
+  const t = String(s.t || '').toLowerCase(), list = KIT_KINDS[t], kind = list ? (list.includes(String(s.kind || '').toLowerCase()) ? String(s.kind).toLowerCase() : list[0]) : '';
+  const N = (v, lo, hi, d) => { v = +v; return Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d; };
+  const x = N(s.x ?? s.cx, -40, 440, 200), y = N(s.y ?? s.cy, -40, 300, 200);
+  const S = ['cloud', 'grass', 'rock', 'log', 'drops'].includes(t) ? N(s.w ?? s.size ?? s.h, 10, 400, 90)
+    : ['sun', 'moon', 'snowflake', 'rainbow'].includes(t) ? N(s.r ?? (s.size ? s.size / 2 : null), 4, 160, t === 'rainbow' ? 80 : 24) : N(s.h ?? s.size, 10, 260, 100);
+  const base = typeof s.fill === 'string' && /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(s.fill) ? s.fill : null; // (its own colour, if one is given)
+  const g = mk('g', { class: 'ld-kit' });
+  const rot = N(s.rot, -180, 180, 0); if (rot) g.setAttribute('transform', `rotate(${rot} ${x} ${y})`); // (a leaf turned to lie the way it grows)
+  for (const [d, fill, o] of kitLayers(t, kind, x, y, S, base)) {
+    const e = mk('path', { d, fill: fill || 'none', stroke: o.stroke || 'none', 'stroke-width': o.w || 1.6, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' });
+    if (fill && fill !== 'none') e.setAttribute('fill-opacity', o.op != null ? o.op : 1);
+    if (o.line && o.op != null) e.setAttribute('stroke-opacity', o.op);
+    g.appendChild(e);
+  }
+  return g;
+}
+
 function shape2d(s, p) {
   const t = String(s.t || s.type || '').toLowerCase();
   const n = (k, d = 0) => num(s[k], -50, 450, d);
@@ -944,6 +1248,7 @@ function shape2d(s, p) {
   if (t === 'ellipse') return paint(mk('ellipse', { cx: n('cx', 200), cy: n('cy', 130), rx: num(s.rx, 1, 200, 30), ry: num(s.ry, 1, 200, 20) }));
   if (t === 'poly' && Array.isArray(s.pts)) { const pts = s.pts.slice(0, 60).map((q) => `${num(q && q[0], -50, 450)},${num(q && q[1], -50, 450)}`).join(' '); return paint(mk('polyline', { points: pts })); }
   if (t === 'text') { const e = mk('text', { x: n('x'), y: n('y'), class: 'ld-word', 'font-size': num(s.size, 8, 22, 12) }); e.textContent = words(s.text ?? s.s, 60); return e; }
+  if (KIT.includes(t)) return kitShape(s, mk); // (v324) a tree, a flower, a cloud...: drawn whole, in the guide's style
   return null;
 }
 
