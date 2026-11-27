@@ -743,7 +743,7 @@ export function fromBook(question, want3d = false, loose = false) { // (loose, v
       if (mo.flows && !out.flows) out.flows = JSON.parse(JSON.stringify(mo.flows));
       out.parts.forEach((p) => { if (mo.spin && mo.spin.includes(p.id)) p.spin = true; if (mo.beat && mo.beat.includes(p.id)) p.beat = true; if (mo.breathe && mo.breathe.includes(p.id)) p.beat = 'breathe'; });
     }
-    if (/\b(only|just)\b/i.test(q)) delete out.flows; // (v335) "only show me the heart": the heart alone, not the blood running round it
+    if (/\b(only|just)\b/i.test(q)) { delete out.flows; out.parts = out.parts.filter((p) => !/\b(flows?|blood ?flow|air ?flow|arrows?|path)\b/i.test(`${p.id} ${p.label}`)); } // (v335) "only show me the heart": the heart alone, not the blood running round it (v336: nor a part that is only the flow)
     return out;
   }
   return null;
@@ -753,13 +753,20 @@ export function fromBook(question, want3d = false, loose = false) { // (loose, v
 export function fromKit(question, want3d, m, loose = false) {
   if (!m || !m.kitFind || String(question || '').length > 160) return null;
   if (m.kitNames && !KIT_WORDS.length) knowWords(m.kitNames());
-  const q = fixTypos(question);
+  const q = fixTypos(question), only = /\b(only|just)\b/i.test(q); // (v336: "only the refrigerator": the thing itself, whole and closed)
   for (const h of m.kitFind(q)) {
     if (!loose && words(q.replace(new RegExp(h.re.source, 'gi'), ' ')).filter((w) => w.length > 2).length) continue; // (asks for more: the AI's)
-    const spec = m.kitSpec(h, want3d);
+    const spec = m.kitSpec(h, want3d, { only });
     if (spec) return { ...spec, book: 'kit:' + h.kind };
   }
   return null;
+}
+// (v336) "only ..." / "just ...": the object itself, complete: the kit's whole object first (a closed refrigerator, a whole
+// apple), else the book's drawing without anything running through it; otherwise the book first, then the kits
+export const isOnly = (q) => /\b(only|just)\b/i.test(String(q || ''));
+export function fromBookOrKit(question, want3d, m, loose = false) {
+  const kit = () => (m ? fromKit(question, want3d, m, loose) : null), book = () => fromBook(question, want3d, loose);
+  return isOnly(question) ? kit() || book() : book() || kit();
 }
 export const bookKeys = () => BOOK.map((e) => e.key);
 // (v316) the subject's own words, the way the book matches them: "how does a blender work?" is "blender",

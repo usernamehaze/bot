@@ -1602,7 +1602,7 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
     // (v310) her drawing book: a checked drawing of a common subject shows at once, with no AI (follow-ups still ask it)
     if (draw) {
       const bk = await import(chrome.runtime.getURL('drawbook.js')).catch(() => null);
-      let book = bk && bk.fromBook(q, wants3d(q));
+      let book = bk && bk.isOnly && bk.isOnly(q) ? bk.fromBookOrKit(q, wants3d(q), await import(chrome.runtime.getURL('livedraw.js')).catch(() => null)) : bk && bk.fromBook(q, wants3d(q)); // (v336: "only ...": the kit's whole object first)
       if (!book && bk && bk.fromKit) book = bk.fromKit(q, wants3d(q), await import(chrome.runtime.getURL('livedraw.js')).catch(() => null)); // (v330: one animal, appliance, food or vehicle, from the kits)
       const fromBook = book ? parse(JSON.stringify(book)) : null;
       if (fromBook && fromBook.kind === 'card') {

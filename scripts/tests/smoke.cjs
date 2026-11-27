@@ -1054,6 +1054,36 @@ test('v320 Blender models and real materials: the book’s airplane and bicycle 
   } finally { await ctx.close(); }
 });
 
+test('v336 zooming is the Labs anatomy way (zoom where the fingers are, right up close, two fingers move it, a double tap flies in, a resize keeps your view); "only ..." is the object itself, whole: a closed refrigerator, a whole apple, the heart with nothing running round it', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 900 }, server: false, book: true, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: async () => ({ text: 'Words.' }) });
+  const r = await page.evaluate(async () => {
+    const [bk, m] = await Promise.all([liveBookLoad(), liveDrawLoad()]);
+    const one = (q, d) => { const x = bk.fromBookOrKit(q, d, m); return x ? { book: x.book, flows: (x.flows || []).length, parts: x.parts.map((p) => p.label), s: x.parts[0].shapes[0] } : null; };
+    return { fridge: one('only show me the refrigerator', true), how: one('how does a refrigerator work', true), apple: one('just an apple', true), heart: one('only show me the heart', false), heart3: one('only show me the heart', true), full: one('show me the heart in 3D', true) };
+  });
+  expect(r.fridge.book === 'kit:fridge' && !r.fridge.s.pose && r.how.book === 'fridge', '"only the refrigerator" is the whole closed refrigerator (how it works is still the book): ' + JSON.stringify([r.fridge, r.how.book]));
+  expect(r.apple.book === 'kit:apple' && r.apple.s.view !== 'both' && r.apple.s.view !== 'cut', '"just an apple": a whole apple, not cut open: ' + JSON.stringify(r.apple.s));
+  expect(r.heart.flows === 0 && !r.heart.parts.some((p) => /flow/i.test(p)) && r.heart3.flows === 0 && r.full.flows >= 3, '"only the heart": no blood running round it, no flow part: ' + JSON.stringify([r.heart.parts, r.heart3.flows, r.full.flows]));
+  // a rock in 3D (it holds still): the wheel zooms in where the pointer is, and a resize keeps that view
+  await page.evaluate(() => liveDrawReply('show me a rock', true));
+  await page.waitForSelector('#chat-log .ld .ld-stage canvas', { timeout: 30000 });
+  await page.waitForFunction(() => document.querySelector('#chat-log .ld .ld-live.off'), null, { timeout: 60000 }); await page.waitForTimeout(1500);
+  const stage = await page.$('#chat-log .ld .ld-stage'); await stage.scrollIntoViewIfNeeded(); await page.waitForTimeout(500);
+  const ink = async () => { const png = await stage.screenshot(); return page.evaluate(async (b64) => { const img = new Image(); img.src = 'data:image/png;base64,' + b64; await img.decode(); const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const g = c.getContext('2d'); g.drawImage(img, 0, 0); const d = g.getImageData(0, 0, c.width, c.height).data, bg = [d[0], d[1], d[2]]; let n = 0; for (let i = 0; i < d.length; i += 16) if (Math.abs(d[i] - bg[0]) + Math.abs(d[i + 1] - bg[1]) + Math.abs(d[i + 2] - bg[2]) > 40) n++; return n; }, png.toString('base64')); };
+  const before = await ink(), box = await stage.boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  for (let k = 0; k < 6; k++) { await page.mouse.wheel(0, -200); await page.waitForTimeout(80); }
+  await page.waitForTimeout(1200);
+  const zoomed = await ink();
+  expect(zoomed > before * 1.4, 'the wheel zooms in on it: ' + JSON.stringify([before, zoomed]));
+  await page.evaluate(() => { const s = document.querySelector('#chat-log .ld .ld-stage'); s.style.width = (s.offsetWidth - 6) + 'px'; }); await page.waitForTimeout(1200);
+  const kept = await ink();
+  expect(kept > before * 1.3, 'a resize keeps your view (it does not jump back out): ' + JSON.stringify([before, zoomed, kept]));
+  const src = fs.readFileSync(fileAt('livedraw.js'), 'utf8');
+  expect(/controls\.enablePan = true; controls\.screenSpacePanning = true/.test(src) && /R \* \.03/.test(src) && /addEventListener\('dblclick'/.test(src) && /controls\.addEventListener\('start'/.test(src), 'two fingers move it, right up close, a double tap flies in, your touch wins over her glide');
+  expect(!errors.length, 'page errors: ' + errors.join(' | '));
+  await ctx.close();
+});
 test('v335 every group and the sky are in the kits before any AI: dinosaurs, land, sea, farm, rainforest, desert and polar animals, birds, insects, pets, a forest, foods, vehicles, a cloud, the sun, the moon, snow, a storm, rain, lightning, a rock, a t-rex, rainy weather; a 3D habitat stands on an island of its own ground; "only show me the heart" has no blood running round it; labels hide and show, a tapped name picks its part', async (b) => {
   const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, book: true, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: async () => ({ text: 'Words.' }) });
   const r = await page.evaluate(async () => {

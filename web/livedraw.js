@@ -647,7 +647,7 @@ export async function render(host, rawSpec, opts = {}) {
   let mv = null; const mvHost = spec.mode === '3d' ? el('div', 'ld-mv') : null;
   const machineOn = async () => {
     if (mv) return mv;
-    let m = null; try { m = await import('./isoview.js?v=335'); } catch (e) { return null; }
+    let m = null; try { m = await import('./isoview.js?v=336'); } catch (e) { return null; }
     mv = m.machine(mvHost, spec, { dark: !lightPage() });
     if (mv) {
       const row = el('div', 'ld-mv-acts');
@@ -2968,7 +2968,7 @@ export function kitFind(asked = '') {
 }
 const APPL_H2 = { fridge: 200, vacuum: 200, fan: 200, aircon: 180, washer: 170, microwave: 90 };
 // the drawing (or the 3D model) of one thing the kit knows, from kitFind
-export function kitSpec(hit, want3d = false) {
+export function kitSpec(hit, want3d = false, opts = {}) {
   if (!hit || !hit.info) return null;
   if (hit.type === 'scene') return sceneSpec(hit.info, !!want3d);
   if (hit.type === 'nature') return natureSpec(hit.info, !!want3d);
@@ -2981,19 +2981,19 @@ export function kitSpec(hit, want3d = false) {
       { id: kind, label: kitCap(name), say: `The ${name} is a ${cls}. It lives in ${home} and eats ${food}. ${fact}.`, shapes: [d3 ? { t: 'animal', kind, pos: [0, mid ? 1 : 0, 0], w: 4.5 } : { t: 'animal', kind, x: 200, y: mid ? 140 : 236, w: w2 }] });
   }
   if (type === 'appliance') {
-    const A = info, name = A.what.replace(/^an? /, ''), open = !!APPL_OPEN[kind];
-    return base(`How ${A.what} works`, `${kitCap(A.what)}: ${A.views.split(';')[0].replace(/^front: /, '')}.`, A.works, `a real ${name} in a home`, [`What are the main parts of ${A.what}?`, `How does ${A.what} use electricity?`],
+    const A = info, name = A.what.replace(/^an? /, ''), open = !!APPL_OPEN[kind] && !opts.only; // (v336: "only the refrigerator": shut, whole, as you would see it)
+    return base(opts.only ? kitCap(name) : `How ${A.what} works`, `${kitCap(A.what)}: ${A.views.split(';')[0].replace(/^front: /, '')}.`, A.works, `a real ${name} in a home`, [`What are the main parts of ${A.what}?`, `How does ${A.what} use electricity?`],
       { id: kind, label: kitCap(name), say: `Its main parts: ${A.parts.join(', ')}.`, shapes: [d3 ? { t: 'appliance', kind, pos: [0, 0, 0], h: +(APPL[kind] ? 4.5 * APPL[kind].H / Math.max(APPL[kind].W, APPL[kind].H, APPL[kind].D) : 4.5).toFixed(2), ...(open ? { pose: 'open' } : {}) } : { t: 'appliance', kind, x: 200, y: 236, h: APPL_H2[kind] || 140, view: open ? 'open' : 'front' }] });
   }
   if (type === 'food') {
-    const [, , grp, nut, src, fact] = info, name = FOOD_NAMES[kind] || kind, A = FOOD[kind] || FOOD.apple, view = A.cut ? 'both' : 'whole';
+    const [, , grp, nut, src, fact] = info, name = FOOD_NAMES[kind] || kind, A = FOOD[kind] || FOOD.apple, view = A.cut && !opts.only ? 'both' : 'whole'; // (v336: "only an apple": the whole apple)
     const w2 = Math.round(Math.min(220, 150 / Math.max(0.3, A.asp || 1)));
     return base(kitCap(name), `${fact}.`, `Group: ${grp}. It gives ${nut}. ${kitCap(src)}.`, `a real ${name} on a table`, [`Why is ${name} good for you?`, `Where does ${name} come from?`],
-      { id: kind, label: kitCap(name), say: `${kitCap(name)}: ${grp}. It gives ${nut}.${A.cut ? ' Beside it, one cut open to show inside.' : ''}`, shapes: [d3 ? { t: 'food', kind, pos: [0, 0, 0], w: A.cut ? 2.4 : 4, ...(A.cut ? { view } : {}) } : { t: 'food', kind, x: 200, y: 200, w: w2, ...(A.cut ? { view } : {}) }] });
+      { id: kind, label: kitCap(name), say: `${kitCap(name)}: ${grp}. It gives ${nut}.${A.cut ? ' Beside it, one cut open to show inside.' : ''}`, shapes: [d3 ? { t: 'food', kind, pos: [0, 0, 0], w: A.cut ? 2.4 : 4, ...(A.cut ? { view } : {}) } : { t: 'food', kind, x: 200, y: 200, w: w2, ...(A.cut && view !== 'whole' ? { view } : {}) }] });
   }
   if (type === 'vehicle') {
     const V = info, name = V.what.replace(/^an? /, '');
-    return base(`How ${V.what} works`, `${kitCap(V.what)}: ${V.views.split(';')[0].replace(/^side: /, '')}.`, V.works, `a real ${name} on a road`, [`What are the main parts of ${V.what}?`, `How does ${V.what} stop?`],
+    return base(opts.only ? kitCap(name) : `How ${V.what} works`, `${kitCap(V.what)}: ${V.views.split(';')[0].replace(/^side: /, '')}.`, V.works, `a real ${name} on a road`, [`What are the main parts of ${V.what}?`, `How does ${V.what} stop?`],
       { id: kind, label: kitCap(name), say: `Its main parts: ${V.parts.join(', ')}.`, shapes: [d3 ? { t: 'vehicle', kind, pos: [0, 0, 0], w: 4 } : { t: 'vehicle', kind, x: 200, y: 220, w: 300, view: 'side' }] });
   }
   return null;
@@ -3269,6 +3269,11 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
   if (matte) scene.add(new T.AmbientLight(0xffffff, .7)); // (matte: plain, bright colours for a model that floats over any page, with no shine to go dark)
   const controls = new OrbitControls(cam, canvas); controls.enableDamping = true; controls.enablePan = false; controls.minDistance = 2; controls.maxDistance = 40;
   controls.zoomToCursor = true; // (v335) a pinch or the wheel zooms in on the part under your fingers, as in the Labs' anatomy
+  // (v336) and, as there, two fingers (or a right drag) move it, so you can go to the part you zoomed into; your own touch
+  // always wins over a glide of hers, and the view stays where you left it
+  controls.enablePan = true; controls.screenSpacePanning = true;
+  let userMoved = false;
+  controls.addEventListener('start', () => { userMoved = true; camTo = null; aimTo = null; });
   if (!zoom) controls.enableZoom = false; // (a model that floats over a page: the wheel still scrolls the page)
   // (turn: the model turns slowly by itself until the student takes hold of it)
   // turn: true goes all the way round; 'sway' rocks gently about the best side, so a long model is never seen end on
@@ -3339,7 +3344,7 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
   const box = new T.Box3().setFromObject(model), size = box.getSize(new T.Vector3()), mid = box.getCenter(new T.Vector3());
   model.position.sub(mid); model.updateMatrixWorld(true);
   const R = Math.max(size.x, size.y, size.z, 1);
-  controls.minDistance = Math.max(.25, R * .12); // (v335: close enough to see a small part)
+  controls.minDistance = Math.max(.03, R * .03); // (v336: right up close to a small part, as in the Labs' anatomy)
   // (v310) a flat model (the solar system, an atom's shells) is seen from higher up, so it fills the frame instead of a thin line
   const VIEW = (size.y < Math.max(size.x, size.z) * .3 ? new T.Vector3(.35, .95, .75) : new T.Vector3(.55, .38, 1.02)).normalize();
   const narrowFit = callout && W() < 520 && spec.parts.filter((p) => p.label).length > 6; // (v310: numbers, not name columns)
@@ -3416,11 +3421,24 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
   };
   // (v335) picked from its name or by a tap: with many parts the camera also goes in close to it (tapped again: it stands back)
   const pickAndGo = (g) => { pick(g); if (picked === g && groups.length >= 4 && view && view.focus) view.focus(g.userData.i); };
+  // (v336) a double tap or double click flies in close to that very spot, as in the Labs' anatomy
+  const flyIn = (x, y) => {
+    const r = canvas.getBoundingClientRect(); pt.set(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1); ray.setFromCamera(pt, cam);
+    const hit = ray.intersectObjects(groups.filter((g) => g.visible), true).find((h) => h.object.visible && !(h.object.material && h.object.material.opacity < .1));
+    if (!hit) return false;
+    const dist = cam.position.distanceTo(controls.target), dir = cam.position.clone().sub(controls.target).normalize();
+    userMoved = true; aimTo = hit.point.clone(); camTo = hit.point.clone().add(dir.multiplyScalar(Math.max(controls.minDistance * 1.6, dist * .42)));
+    if (still()) { controls.target.copy(aimTo); cam.position.copy(camTo); aimTo = camTo = null; }
+    return true;
+  };
+  let lastTap = { t: 0, x: 0, y: 0 };
+  canvas.addEventListener('dblclick', (e) => { e.preventDefault(); flyIn(e.clientX, e.clientY); });
   // a tap (not a drag) picks the part under the finger
   const ray = new T.Raycaster(), pt = new T.Vector2(); let down = null;
   canvas.addEventListener('pointerdown', (e) => { down = [e.clientX, e.clientY]; });
   canvas.addEventListener('pointerup', (e) => {
     if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 6) return;
+    if (e.pointerType === 'touch') { const now = performance.now(); if (now - lastTap.t < 320 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 30) { lastTap.t = 0; flyIn(e.clientX, e.clientY); return; } lastTap = { t: now, x: e.clientX, y: e.clientY }; }
     const r = canvas.getBoundingClientRect(); pt.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
     ray.setFromCamera(pt, cam);
     const hits = ray.intersectObjects(groups.filter((g) => g.visible && !(g.userData.part.shell && (opened || exploded))), true);
@@ -3512,7 +3530,8 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
   };
   raf = requestAnimationFrame(tick);
   const io = !offscreen && 'IntersectionObserver' in window ? new IntersectionObserver((en) => { visible = en.some((x) => x.isIntersecting); }) : null; if (io) io.observe(stage);
-  const ro = 'ResizeObserver' in window ? new ResizeObserver(() => { renderer.setSize(W(), H()); cam.aspect = W() / H(); cam.updateProjectionMatrix(); if (!exploded) { home.copy(VIEW).multiplyScalar(fitDist()); camTo = cam.position.clone().normalize().multiplyScalar(home.length()); } }) : null; if (ro) ro.observe(stage);
+  let lastWH = '';
+  const ro = 'ResizeObserver' in window ? new ResizeObserver(() => { const wh = W() + 'x' + H(); if (wh === lastWH) return; lastWH = wh; renderer.setSize(W(), H()); cam.aspect = W() / H(); cam.updateProjectionMatrix(); if (!exploded && !userMoved) { home.copy(VIEW).multiplyScalar(fitDist()); camTo = cam.position.clone().normalize().multiplyScalar(home.length()); } }) : null; if (ro) ro.observe(stage); // (v336: a real change of size only; once you have zoomed or turned it, your view is kept)
   const gone = new MutationObserver(() => { if (!stage.isConnected) { cancelAnimationFrame(raf); renderer.dispose(); io && io.disconnect(); ro && ro.disconnect(); gone.disconnect(); } });
   gone.observe(document.body, { childList: true, subtree: true });
   const byPart = (i) => groups.find((g) => g.userData.i === i) || null;
