@@ -6,7 +6,7 @@
 
 // a question is about the book's subject when it names it and asks for little else ("draw a bicycle", "how does a
 // bicycle work in 3D"); a narrow question ("how do a bicycle's gears shift") is the AI's, which can focus on that
-const ASKING = /\b(draw|sketch|show|build|make|create|model|diagram|illustrate|explain|teach|how|what|does|do|is|are|works?|working|parts?|label(?:led|ed)?|the|an?|of|me|us|please|pls|po|in|3d|2d|three[\s-]?d|picture|drawing|simple|whole|full|real|realistic|for|with|its|it|and|can|you|i|want|need|see|look|like|naman|paano|ano|ang|ng|mo|ko|gumagana|iguhit|ipakita|human|structure|detailed|basic|quick|nice|cool|cute|step|steps|by|our|this|that|again|now|then|kindly|work|function|functions|looks|inside|about|also|too|one|some|really|pretty|fly|flies|flying|fly\?|move|moves|moving|run|runs|go|goes|stay|stays|up|illustrations?|diagrams?|video|moving|animation|animated|visuals?)\b/gi;
+const ASKING = /\b(draw|sketch|show|build|make|create|model|diagram|illustrate|explain|teach|how|what|does|do|is|are|works?|working|parts?|label(?:led|ed)?|the|an?|of|me|us|please|pls|po|in|3d|2d|three[\s-]?d|picture|drawing|simple|whole|full|real|realistic|for|with|its|it|and|can|you|i|want|need|see|look|like|naman|paano|ano|ang|ng|mo|ko|gumagana|iguhit|ipakita|human|structure|detailed|basic|quick|nice|cool|cute|step|steps|by|our|this|that|again|now|then|kindly|work|function|functions|looks|inside|about|also|too|one|some|really|pretty|fly|flies|flying|fly\?|move|moves|moving|run|runs|go|goes|stay|stays|up|illustrations?|diagrams?|video|moving|animation|animated|visuals?|only|just|again|instead|whole|entire|again)\b/gi;
 
 const BOOK = [
   {
@@ -728,13 +728,13 @@ const words = (q) => String(q || '').toLowerCase().replace(/[^a-z0-9\s-]/g, ' ')
 
 // the book's drawing for a question, or null. want3d: the student asked for 3D (a 3D model when the book has one,
 // else its flat drawing); otherwise a flat drawing, or the model when the book only has the model.
-export function fromBook(question, want3d = false) {
+export function fromBook(question, want3d = false, loose = false) { // (loose, v333: when every AI failed, the book's drawing of a subject the question names, even with more asked)
   const q = fixTypos(question);
   if (q.length > 160) return null;
   for (const e of BOOK) {
     if (!e.is.test(q) || (e.not && e.not.test(q))) continue;
     const left = words(q.replace(new RegExp(e.is.source, 'gi'), ' ').replace(e.ok ? new RegExp(e.ok.source, 'gi') : /$^/, ' ')).filter((w) => w.length > 2); // (e.ok: more words that still ask for this very subject)
-    if (left.length) return null; // (a narrow question, about one part or for a project: the AI's, which can focus on it)
+    if (left.length && !loose) return null; // (a narrow question, about one part or for a project: the AI's, which can focus on it)
     const spec = (want3d && e['3d']) || e['2d'] || e['3d'];
     if (!spec) return null;
     const out = JSON.parse(JSON.stringify({ ...spec, book: e.key }));
@@ -749,12 +749,12 @@ export function fromBook(question, want3d = false) {
 }
 // (v330) one animal, appliance, food or vehicle asked for by name and nothing more ("draw a lion", "how does a toaster
 // work", "a sandwich in 3D"): built from the kits (m: livedraw.js, which has them), so it never waits for the AI
-export function fromKit(question, want3d, m) {
+export function fromKit(question, want3d, m, loose = false) {
   if (!m || !m.kitFind || String(question || '').length > 160) return null;
   if (m.kitNames && !KIT_WORDS.length) knowWords(m.kitNames());
   const q = fixTypos(question);
   for (const h of m.kitFind(q)) {
-    if (words(q.replace(new RegExp(h.re.source, 'gi'), ' ')).filter((w) => w.length > 2).length) continue; // (asks for more: the AI's)
+    if (!loose && words(q.replace(new RegExp(h.re.source, 'gi'), ' ')).filter((w) => w.length > 2).length) continue; // (asks for more: the AI's)
     const spec = m.kitSpec(h, want3d);
     if (spec) return { ...spec, book: 'kit:' + h.kind };
   }

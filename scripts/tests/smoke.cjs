@@ -1053,6 +1053,40 @@ test('v320 Blender models and real materials: the book’s airplane and bicycle 
   } finally { await ctx.close(); }
 });
 
+test('v333 "only show me the heart" is the book heart; when every AI fails, she shows her own drawing of what was asked (not an error); the extension reads every equation a page shows when it is highlighted (KaTeX, MathML, MathJax 2 and 3, Wikipedia, pictures of equations), and all of a long highlight', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, book: true, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: async () => { throw new Error('busy'); } });
+  await ctx.route(/api\.groq\.com/, (r) => r.fulfill({ status: 503, json: { error: { message: 'over capacity' } } }));
+  const only = await page.evaluate(async () => { const x = await liveDrawBook('only show me the heart', true); return x && x.spec.book; });
+  expect(only === 'heart', '"only show me the heart" is the book heart, with no AI: ' + only);
+  // every AI is down: "show me how the heart pumps blood to the lungs and body" (more than the book asks for) is still the heart
+  await page.evaluate(() => liveDrawReply('show me how the heart pumps blood to the lungs and body', true));
+  await page.waitForFunction(() => document.querySelector('#chat-log .ld .ld-stage') || document.querySelector('#chat-log .bubble-error, #chat-log .err-card, #chat-log [class*="error"]'), null, { timeout: 60000 });
+  const shown = await page.evaluate(() => ({ drawing: !!document.querySelector('#chat-log .ld .ld-stage'), title: (document.querySelector('#chat-log .ld-title') || {}).textContent || '', error: /Something didn.t work/.test(document.querySelector('#chat-log').innerText) }));
+  expect(shown.drawing && /heart/i.test(shown.title) && !shown.error, 'with every AI down she shows her own heart, not an error: ' + JSON.stringify(shown));
+  // the extension's highlight reader (content.js selectionText), on every way a page shows an equation
+  const src = fs.readFileSync(fileAt('extension/content.js'), 'utf8'), at = src.indexOf('function selectionText(sel) {');
+  let i = src.indexOf('{', at), d = 0; for (; i < src.length; i++) { if (src[i] === '{') d++; else if (src[i] === '}' && !--d) break; }
+  const fn = src.slice(at, i + 1);
+  const read = await page.evaluate((fn) => {
+    document.body.innerHTML = `<div id="m">
+      <p>KaTeX: <span class="katex"><span class="katex-mathml"><math><semantics><mrow><msup><mi>x</mi><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">x^2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true">x2</span></span></p>
+      <p>MathML: <math><mfrac><mn>1</mn><mn>2</mn></mfrac></math></p>
+      <p>MathJax 2: <span class="MathJax_Preview"></span><span class="MathJax">drawn</span><script type="math/tex">\\sqrt{b^2-4ac}</script></p>
+      <p>MathJax 3: <mjx-container class="MathJax" jax="CHTML"><mjx-math aria-hidden="true"><mjx-mi></mjx-mi></mjx-math><mjx-assistive-mml><math><msub><mi>v</mi><mn>0</mn></msub></math></mjx-assistive-mml></mjx-container></p>
+      <p>Wikipedia: <span class="mwe-math-element"><span class="mwe-math-mathml-inline" style="display:none"><math><semantics><mi>E</mi><annotation encoding="application/x-tex">E=mc^{2}</annotation></semantics></math></span><img alt="{\\displaystyle E=mc^{2}}"></span></p>
+      <p>A picture: <img alt="F = ma"> and H<sub>2</sub>O at 25 °C, π ≈ 3.14</p>
+      <p>${'Long highlight. '.repeat(200)}END</p></div>`;
+    const selectionText = new Function(fn + '; return selectionText;')();
+    const r = document.createRange(); r.selectNodeContents(document.getElementById('m')); const g = getSelection(); g.removeAllRanges(); g.addRange(r);
+    return selectionText(g);
+  }, fn);
+  for (const want of ['x^2', '(1)/(2)', '\\sqrt{b^2-4ac}', 'v_(0)', 'E=mc^{2}', 'F = ma', 'H_(2)O', '25 °C', 'π ≈ 3.14', 'END']) expect(read.includes(want), `the highlight reader keeps "${want}": ` + read.slice(0, 400));
+  expect(!/drawn/.test(read) && (read.match(/E=mc\^\{2\}/g) || []).length === 1, 'no equation read twice, and no drawn copy: ' + read.slice(0, 400));
+  const ext = fs.readFileSync(fileAt('extension/content.js'), 'utf8');
+  expect(!/slice\(0, 1500\)/.test(ext) && /boxText\.slice\(0, 6000\)/.test(ext), 'a long highlight or snip is read in full (6000 letters, not 1500)');
+  expect(!errors.length, 'page errors: ' + errors.join(' | '));
+  await ctx.close();
+});
 test('v332 a typo never hides a drawing ("shoe me how the heart works", "drw the water cycle", "a toastr"), but "what shoe should I buy" and "I drew a cat" stay as written; the 3D heart beats with blood flowing, the lungs breathe with air flowing, light runs through the eye; a kit food or appliance pulls apart; a drawing from the book or a kit is sketched a moment before it is drawn', async (b) => {
   const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, book: true, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: async () => ({ text: 'Words answer.' }) });
   const r = await page.evaluate(async () => {
@@ -1289,7 +1323,7 @@ test('v324 the nature kit: a tree, a flower, a leaf, a cloud, the sun, rain, sno
   expect(!errors.length, 'page errors: ' + errors.join(' | '));
   await ctx.close();
 });
-test('v322 Draw It: a chat answers in words (no 3D model under every answer); Draw It, below Chats, is a place for drawings and 3D models, where Machine view still draws a model with Anatomy’s kit; (v323) a chat draws too, when asked with the words that ask to be shown', async (b) => {
+test('v322 (v333: no Draw It) a chat answers in words (no 3D model under every answer); a drawing or 3D model is made in the chat it is asked in, where Machine view still draws a model with Anatomy’s kit; (v323) a chat draws too, when asked with the words that ask to be shown', async (b) => {
   const noun = fs.readFileSync(fileAt('tests/fixtures/live/noun3d.json'), 'utf8'), jet = fs.readFileSync(fileAt('tests/fixtures/live/jet3d.json'), 'utf8');
   const asks = [];
   const fake = (body) => { const all = JSON.stringify(body.messages || []); if (/here by building a 3D model/.test(all)) { asks.push(all); return { text: /jet/i.test(all) ? jet : noun }; } if (/You check drawings/.test(all)) return { text: '{}' }; return { text: /jet/i.test(all) ? 'A jet engine sucks air in at the front, squeezes it, burns fuel in it, and the hot gas spins a turbine and pushes out the back.' : 'A **noun** is a word that names a person, a place, a thing or an idea. In "Maria went to Manila with her book", the nouns are Maria, Manila and book.' }; };
@@ -1305,16 +1339,14 @@ test('v322 Draw It: a chat answers in words (no 3D model under every answer); Dr
       const words = await page.evaluate(() => ({ models: document.querySelectorAll('#chat-log .ld').length, saved: state.messages.filter((m) => m.model).length, draw: isDrawChat() }));
       expect(words.models === 0 && words.saved === 0 && !words.draw && !asks.length, name + ': a chat answers in words, no 3D model under it: ' + JSON.stringify({ ...words, asks: asks.length }));
       expect(!(await page.evaluate(() => !!document.getElementById('every-model-toggle'))), name + ': the old "3D model with every answer" setting is gone');
-      // Draw It: its own chat, where it is built in 3D
-      if (name === 'desktop') { await page.click('#side-nav [data-page="draw"]'); await page.waitForSelector('#chat-log .desk-draw'); }
-      else { await page.click('#tabbar [data-tab="draw"]'); }
-      const opened = await page.evaluate(() => ({ draw: isDrawChat(), empty: !state.messages.length, tab: (document.querySelector('#tabbar .on') || {}).dataset?.tab || '', nav: (document.querySelector('#side-nav .on') || {}).dataset?.page || '' }));
-      expect(opened.draw && opened.empty && (name === 'desktop' ? opened.nav === 'draw' : opened.tab === 'draw'), name + ': Draw It opens a drawing chat of its own: ' + JSON.stringify(opened));
+      // (v333) no Draw It: not in the menu or the tab bar; asked in a chat, it is built there, in 3D
+      const gone = await page.evaluate(() => ({ nav: !!document.querySelector('#side-nav [data-page="draw"]'), tab: !!document.querySelector('#tabbar [data-tab="draw"]') }));
+      expect(!gone.nav && !gone.tab, name + ': Draw It is gone from the menu and the tab bar: ' + JSON.stringify(gone));
       await page.fill('#prompt-input', 'what is a noun? show it in 3D'); await page.click('#send-btn');
       await page.waitForFunction(() => /The noun sorter/.test((document.querySelector('#chat-log .ld-title') || {}).textContent || ''), null, { timeout: 30000 });
-      expect(asks.length >= 1, name + ': in Draw It it is built in 3D');
+      expect(asks.length >= 1, name + ': asked in 3D, it is built in 3D, in the chat');
       const lists = await page.evaluate(() => ({ drawChats: state.chats.filter((c) => c.kind === 'draw' && c.messages.length).length, plain: state.chats.filter((c) => !c.kind && c.messages.length).length }));
-      expect(lists.drawChats === 1 && lists.plain === 1, name + ': the chat and the drawing are kept apart: ' + JSON.stringify(lists));
+      expect(lists.drawChats === 0 && lists.plain === 1, name + ': the drawing is in the chat it was asked in: ' + JSON.stringify(lists));
       await page.waitForFunction(() => document.querySelector('#chat-log .ld .ld-live.off'), null, { timeout: 30000 }).catch(() => {});
       if (process.env.SHOTS) { await page.locator('#chat-log .ld').last().scrollIntoViewIfNeeded(); await page.waitForTimeout(1200); await page.screenshot({ path: `${process.env.SHOTS}/v322-${name}-draw-it.png` }); }
       // Machine view: the same model, drawn with Anatomy's kit
@@ -1330,13 +1362,10 @@ test('v322 Draw It: a chat answers in words (no 3D model under every answer); Dr
       const after = await page.evaluate(() => ({ len: document.querySelector('#chat-log .ld .iv svg').innerHTML.length, back: [...document.querySelectorAll('#chat-log .ld .ld-mv-acts .ld-btn')].map((x) => x.textContent).join() }));
       expect(after.len !== before && /Put it back/.test(after.back), name + ': it turns and comes apart: ' + JSON.stringify(after));
       if (name === 'desktop') {
-        // the Chats page lists the chat, not the drawing; Draw It lists the drawing
+        // the Chats page lists the chat (with its drawing in it)
         await page.click('#side-nav [data-page="chats"]'); await page.waitForSelector('#chat-log .desk-chats');
         const cards = await page.evaluate(() => [...document.querySelectorAll('#chat-log .dk-chat-card b')].map((x) => x.textContent));
-        expect(cards.length === 1 && /noun/.test(cards[0]) && !/3D/.test(cards[0]), 'Chats lists the chat only: ' + JSON.stringify(cards));
-        await page.click('#side-nav [data-page="draw"]'); await page.waitForSelector('#chat-log .desk-draw');
-        const mine = await page.evaluate(() => [...document.querySelectorAll('#chat-log .dk-draw-list button')].map((x) => x.textContent));
-        expect(mine.length === 1 && /3D/.test(mine[0]), 'Draw It lists the drawing: ' + JSON.stringify(mine));
+        expect(cards.length === 1 && /noun/.test(cards[0]), 'Chats lists the chat: ' + JSON.stringify(cards));
         // (v323) a chat draws again, in the chat itself, when asked: the owner's words (draw, illustrate, build, make,
         // show...) bring "How should I show it?"; a question to explain, or a reviewer or quiz to make, does not
         const words = await page.evaluate(() => ['illustrate the water cycle', 'can you build a volcano', 'please show me the lungs', 'map out the digestive system', 'assemble a bicycle', 'make me a reviewer on cells', 'create a quiz about plants', 'show me the steps to solve 2x+3=7', 'explain photosynthesis', 'what is a pencil made of', 'compose a poem about the sea'].map((q) => liveShowWords(q) ? 1 : 0).join(''));
@@ -1423,8 +1452,7 @@ test('v316 the drawing book, grown by the team (app): an AI drawing that passed 
   // an approved drawing: shown at once, like the book, with no AI
   await page.evaluate((sp) => { localStorage.setItem('cassie.teamDrawings', JSON.stringify({ at: Date.now(), list: [{ subject: 'geyser', mode: '2d', spec: { ...sp, title: 'How a geyser erupts' } }] })); chatLog.innerHTML = ''; state.messages = []; }, good);
   drawCalls.length = 0;
-  await page.evaluate(() => openDrawIt()); // (v322: drawings are made in Draw It; a chat answers in words)
-  await page.fill('#prompt-input', 'how does a geyser work?'); await page.click('#send-btn');
+  await page.evaluate((q) => liveDrawReply(q), 'how does a geyser work?'); // (v333: no Draw It: asked to be drawn, in the chat)
   await page.waitForFunction(() => /How a geyser erupts/.test((document.querySelector('#chat-log .ld-title') || {}).textContent || ''), null, { timeout: 20000 });
   expect(!drawCalls.length, 'the approved drawing is shown with no AI: ' + drawCalls.length);
   expect(!errors.length, 'page errors: ' + errors.join(' | '));
@@ -1590,7 +1618,7 @@ test('v274 (390x844 and 1280x800): the follow-up pills show after an explanation
       await page.waitForTimeout(600);
       if (phone) {
         const tabs = await page.$$eval('#tabbar .tab', (a) => a.map((x) => x.dataset.tab).join(','));
-        expect(tabs === 'home,chat,draw,labs,games,you', `${size}: the tab bar has no Cards tab (and Draw It, v322): ` + tabs);
+        expect(tabs === 'home,chat,labs,games,you', `${size}: the tab bar has no Cards tab (and no Draw It, v333): ` + tabs);
         const mb = await page.$eval('.hub-menu', (x) => { const r = x.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), label: x.getAttribute('aria-label'), left: r.right <= document.querySelector('.hub-who').getBoundingClientRect().left + 1, name: document.querySelector('.hub-me').scrollWidth <= document.querySelector('.hub-me').clientWidth + 1 }; });
         expect(mb.w >= 48 && mb.h >= 48 && mb.label === 'Open menu' && mb.left && mb.name, `${size}: Home has the menu button, before the greeting, 48px, and the greeting is not cut off: ` + JSON.stringify(mb));
         await page.click('.hub-menu');
@@ -2248,7 +2276,7 @@ test('computer Home is a study dashboard: Hi and the two main buttons, four real
     if (scheme === 'light') {
       // the sidebar and the top bar
       const side = await page.evaluate(() => ({ groups: [...document.querySelectorAll('.side-group')].map((x) => x.textContent), nav: [...document.querySelectorAll('.side-nav [data-page], .side-nav a')].filter((x) => !x.hidden).map((x) => x.querySelector('span').textContent.trim()), badge: document.querySelector('#side-nav [data-page="plan"] .side-badge').textContent, apps: [...document.querySelectorAll('#side-apps .side-tool')].map((x) => x.dataset.tip).join(), general: [...document.querySelectorAll('#side-general .side-tool')].filter((x) => !x.hidden).map((x) => x.dataset.tip).join(), topIcons: [...document.querySelectorAll('.topbar-actions > button')].filter((x) => x.getClientRects().length).map((x) => x.id).join(), ask: getComputedStyle(document.getElementById('composer')).display, ext: document.querySelector('.side-ext').getAttribute('href'), pomo: getComputedStyle(document.getElementById('pomo')).display }));
-      expect(side.groups.join() === 'Menu,General' && side.nav.join() === 'Home,Chats,Draw It,Study plan,Lessons,Calendar,Progress,Help' && side.apps === 'Learn,Games,Board' && side.general === 'Settings,Memory,Help' && side.badge === '1' && side.ext === 'https://chromewebstore.google.com/detail/hnafgijhojdheggkcjliffbgpdhikbpj' && side.pomo === 'none', 'the sidebar: ' + JSON.stringify(side));
+      expect(side.groups.join() === 'Menu,General' && side.nav.join() === 'Home,Chats,Study plan,Lessons,Calendar,Progress,Help' && side.apps === 'Learn,Games,Board' && side.general === 'Settings,Memory,Help' && side.badge === '1' && side.ext === 'https://chromewebstore.google.com/detail/hnafgijhojdheggkcjliffbgpdhikbpj' && side.pomo === 'none', 'the sidebar: ' + JSON.stringify(side));
       expect(await page.locator('#side-nav [data-page="home"]').getAttribute('aria-current') === 'page', 'Home is the page you are on');
       expect(side.topIcons === 'top-theme,top-bell,top-me' && side.ask === 'none', 'like the reference: only light or dark, the bell and you in the top bar, and no ask box on Home: ' + JSON.stringify(side));
       // search: Ctrl K, then pages, tools and chats as you type
@@ -8067,8 +8095,7 @@ test('v315 drawings: the book dragon is a solid illustrated animal; "make it 3D"
   const d = await page.evaluate(async () => { const bk = await liveBookLoad(), m = await liveDrawLoad(); const sp = m.clean(bk.fromBook('draw a dragon')); return { n: sp.parts.length, labels: sp.parts.map((p) => p.label).join(','), solid: sp.parts.filter((p) => p.shapes.some((x) => x.solid)).length, issues: m.check(sp, 'draw a dragon') }; });
   expect(d.n === 9 && /Horns/.test(d.labels) && /Spines/.test(d.labels) && d.solid >= 8 && !d.issues.length, 'the dragon: 9 parts (horns and spines too), solid like an illustration, and it passes every check: ' + JSON.stringify(d));
   // a book drawing, then "make it 3D": the same bicycle, in 3D, from the book
-  await page.evaluate(() => openDrawIt()); // (v322: drawings are made in Draw It; a chat answers in words)
-  await page.fill('#prompt-input', 'how does a bicycle work'); await page.click('#send-btn');
+  await page.evaluate((q) => liveDrawReply(q), 'how does a bicycle work'); // (v333: no Draw It: asked to be drawn, in the chat)
   await page.waitForSelector('#chat-log .ld .ld-motion', { timeout: 40001 });
   const row = await page.evaluate(() => [...document.querySelectorAll('#chat-log .ld .ld-acts button')].filter((x) => !x.hidden).map((x) => x.textContent.trim()));
   expect(!row.some((t) => /^(Listen|Quiz me|Real photo|See it flat)$/.test(t)) && row.includes('See it in 3D') && row.includes('Pause'), 'the drawing’s row: no Listen, Quiz me or Real photo: ' + row.join(', '));
@@ -8078,7 +8105,7 @@ test('v315 drawings: the book dragon is a solid illustrated animal; "make it 3D"
   expect(two.title === 'How a bicycle works' && !two.row.includes('See it flat') && !calls.some((c) => /explains by DRAWING/.test(c.sys)), '"make it 3D": the same bicycle, built in 3D from the book: ' + JSON.stringify(two));
   // an AI drawing, then "3D please": the AI builds THAT subject in 3D
   await page.evaluate(() => { chatLog.innerHTML = ''; state.messages = []; });
-  await page.fill('#prompt-input', 'how the printer works?'); /* (v330: not the blender, which the kit now draws with no AI) */ await page.click('#send-btn');
+  await page.evaluate(() => liveDrawReply('how the printer works?')); /* (v330: not the blender, which the kit now draws with no AI; v333: asked to be drawn, in the chat) */
   await page.waitForFunction(() => document.querySelector('#chat-log .ld .ld-live.off'), null, { timeout: 40003 });
   calls.length = 0;
   await page.fill('#prompt-input', '3D please'); await page.click('#send-btn');
@@ -8137,8 +8164,7 @@ test('v314 moving drawings: blood flows round the heart, lungs and body (blue to
   // "how does a bicycle work": drawn at once (no "How should I show it?"), wheels turning; See it in 3D builds it from the book, with no AI
   await page.evaluate(() => { chatLog.innerHTML = ''; state.messages = []; });
   sys.length = 0;
-  await page.evaluate(() => openDrawIt()); // (v322: drawings are made in Draw It; a chat answers in words)
-  await page.fill('#prompt-input', 'how does a bicycle work'); await page.click('#send-btn');
+  await page.evaluate((q) => liveDrawReply(q), 'how does a bicycle work'); // (v333: no Draw It: asked to be drawn, in the chat)
   await page.waitForSelector('#chat-log .ld .ld-motion', { timeout: 40000 }); // (once it has drawn itself)
   expect(!(await page.$('.ld-pop')) && (await page.textContent('#chat-log .ld-other')).trim() === 'See it in 3D' && !!(await page.$('#chat-log .ld-motion')), 'drawn at once, moving, with See it in 3D');
   await page.click('#chat-log .ld-other');
@@ -9780,7 +9806,7 @@ test('extension: the pop-up is for highlights (a code screenshot opens it too, a
     await page.evaluate((r) => eval(r).querySelector('.sub-btn[data-sub="long"]').click(), R);
     await page.waitForFunction((r) => /prints each one doubled/.test(eval(r).querySelector('.popover').innerText), R, { timeout: 20000 });
     const sent = await sw.evaluate(() => ({ p: self.__prompts.slice(), img: self.__images.slice() }));
-    expect(sent.p.length === 1 && /^data:image\//.test(sent.img[0]) && /copy out exactly every word and every line of code/.test(sent.p[0]) && /keeps its line breaks and indentation/.test(sent.p[0]) && /Never just ask for more context/.test(sent.p[0]), 'a picture went to Cassie with the copy-first prompt: ' + JSON.stringify([sent.img, sent.p[0] && sent.p[0].slice(0, 200)]));
+    expect(sent.p.length === 1 && /^data:image\//.test(sent.img[0]) && /copy out exactly everything you can read/.test(sent.p[0]) && /every equation/.test(sent.p[0]) && /every line of code/.test(sent.p[0]) && /keeps its line breaks and indentation/.test(sent.p[0]) && /Never just ask for more context/.test(sent.p[0]), 'a picture went to Cassie with the copy-first prompt: ' + JSON.stringify([sent.img, sent.p[0] && sent.p[0].slice(0, 200)]));
     const pre = await page.evaluate((r) => (eval(r).querySelector('.popover .body pre') || {}).textContent || '', R);
     u = await ui();
     expect(/What I read/.test(u.text) && /for i in range\(3\):\n {4}print\(i \* 2\)/.test(pre) && !(await boardOpen()), 'the pop-up shows What I read with the code, indent kept: ' + JSON.stringify(pre));
@@ -11083,6 +11109,21 @@ test('Cassie’s live drawing in 3D: asked for 3D, or to be shown how parts go t
     await toEnd(); await page.waitForTimeout(900);
     c = await card(); m = await model();
     expect(c.status === 'done' && c.drawn === '7' && m.tags.join() === '2 Fan,3 Compressor,4 Combustor,5 Turbine,6 Nozzle,7 Hot gas out' && c.words.length === 9, 'the whole model, every part named, and all her words: ' + JSON.stringify([c.status, c.drawn, m.tags, c.words.length]));
+    // (v333) the drawing over the page moves by its top bar and resizes by its corner, and stays where it is put
+    {
+      const at = (sel) => page.evaluate(([h, q]) => { const e = document.querySelector(h).shadowRoot.querySelector(q), b = e.getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; }, [LIVE, sel]);
+      const before = (await model()).float, g = await at('.lv-float .lv-grip');
+      await page.mouse.move(g[0], g[1]); await page.mouse.down(); await page.mouse.move(g[0] + 120, g[1] + 60, { steps: 6 }); await page.mouse.up();
+      const moved = (await model()).float, k = await at('.lv-float .lv-fsize');
+      await page.mouse.move(k[0], k[1]); await page.mouse.down(); await page.mouse.move(k[0] - 140, k[1] - 90, { steps: 6 }); await page.mouse.up();
+      const sized = (await model()).float;
+      expect(Math.abs(moved[0] - (before[0] + 120)) <= 3 && Math.abs(moved[1] - (before[1] + 60)) <= 3 && moved[2] === before[2], 'the drawing moves by its bar: ' + JSON.stringify([before, moved]));
+      expect(Math.abs(sized[2] - (moved[2] - 140)) <= 3 && Math.abs(sized[3] - (moved[3] - 90)) <= 3 && sized[0] === moved[0], 'and resizes by its corner: ' + JSON.stringify([moved, sized]));
+      await page.waitForTimeout(600);
+      if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/live-3d-moved.png' });
+      await page.evaluate(() => dispatchEvent(new Event('resize'))); await page.waitForTimeout(300);
+      expect(JSON.stringify((await model()).float) === JSON.stringify(sized), 'and it stays where it was put: ' + JSON.stringify((await model()).float));
+    }
     expect(!/can(no|’|')t draw/i.test(c.text) && /so here is one/.test(c.text) && !/[–—]/.test(c.text + m.tags.join(' ')), 'she says the page lacks it and builds it: ' + c.text.slice(0, 160));
     if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/live-3d-done.png' });
     const controls = await page.evaluate((h) => { const r = document.querySelector(h).shadowRoot; return [...r.querySelectorAll('.lv-card button, .lv-card input, .lv-clear3')].filter((b) => b.offsetParent && !b.classList.contains('ld-tag')).map((b) => { const q = b.getBoundingClientRect(); return [(b.getAttribute('aria-label') || b.textContent).trim(), Math.round(q.width), Math.round(q.height)]; }); }, LIVE);

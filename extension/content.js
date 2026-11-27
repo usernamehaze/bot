@@ -784,6 +784,22 @@
     try {
       box = document.createElement('div');
       for (let i = 0; i < sel.rangeCount; i++) box.appendChild(sel.getRangeAt(i).cloneContents());
+      // (v333) every way a page shows an equation is read as the equation, never lost or read twice:
+      // Wikipedia: the TeX in its annotation (or the picture's alt text), not the hidden MathML plus the picture
+      box.querySelectorAll('.mwe-math-element').forEach((k) => {
+        const tex = k.querySelector('annotation[encoding="application/x-tex"]'), img = k.querySelector('img[alt]');
+        k.replaceWith(document.createTextNode(' ' + (tex ? tex.textContent : img ? img.getAttribute('alt') : k.textContent) + ' '));
+      });
+      // MathJax 3: its characters are drawn by CSS (no text at all): the MathML it keeps for screen readers, else its label
+      box.querySelectorAll('mjx-container').forEach((k) => {
+        const mml = k.querySelector('mjx-assistive-mml math, math'), label = k.getAttribute('aria-label');
+        if (mml) { const m = mml.cloneNode(true); k.replaceWith(m); } else k.replaceWith(document.createTextNode(' ' + (label || k.textContent) + ' '));
+      });
+      // MathJax 2: the TeX sits in the <script type="math/tex"> beside the drawn copy
+      if (box.querySelector('script[type^="math/tex"]')) box.querySelectorAll('.MathJax_Preview, .MathJax, .MathJax_Display, .MathJax_SVG, .MathJax_CHTML').forEach((k) => k.remove()); // (the drawn copy goes: the TeX below says it)
+      box.querySelectorAll('script[type^="math/tex"]').forEach((k) => k.replaceWith(document.createTextNode(' ' + k.textContent + ' ')));
+      // a picture of an equation or a word (its alt text says what it is)
+      box.querySelectorAll('img[alt]').forEach((k) => { const t = (k.getAttribute('alt') || '').trim(); if (t) k.replaceWith(document.createTextNode(' ' + t + ' ')); });
       // KaTeX: use the original TeX annotation, dropping the duplicated render.
       box.querySelectorAll('.katex').forEach((k) => {
         const tex = k.querySelector('annotation[encoding="application/x-tex"]');
@@ -1598,11 +1614,11 @@
     if (!draw && /\b(graph|plot|sketch|draw)\b/i.test(q || '')) { const eq = B.findEquation(q) || B.findEquation(reply); if (eq) draw = B.graphSpec(eq); }
     return draw ? { reply: clean, draw } : clean;
   };
-  const SNIP_PROMPT = (ctx) => `A student snipped this part of a webpage to study it (a graph, diagram, picture, equation, or question). Page context:\n"""\n${ctx}\n"""\n\nFirst, copy out exactly every word and every line of code you can read in the picture, even in an unusual font or style, into "copied": code keeps its line breaks and indentation (use \\n for new lines), and nothing is left out or invented; leave it empty only if nothing is readable. Then look at the picture carefully and teach it like a friendly step-by-step tutor: what it shows, how to read it, and the reasoning behind it. If it is a question or code, work it out or explain what the code does step by step and give the answer. If the picture has nothing you can read, say what it shows and make the last step ONE specific question about it; never just ask for more context. Reply with ONLY minified JSON, no prose, no code fence, exactly: {"headline":"one short sentence naming what this is","copied":"the exact text or code you read","steps":["step 1","step 2","step 3"]}. Give 3 to 6 short steps, max ~20 words each. Read every label and number you can see; don't invent ones you can't.`;
+  const SNIP_PROMPT = (ctx) => `A student snipped this part of a webpage to study it (a graph, diagram, picture, equation, or question). Page context:\n"""\n${ctx}\n"""\n\nFirst, copy out exactly everything you can read in the picture, even in an unusual font or style, into "copied": every word, letter, number and symbol, every equation (as plain math: x^2, x_1, (a)/(b), √(x), ≤, π), every label on a diagram or graph (its axes and their numbers), every cell of a table, and every line of code: code keeps its line breaks and indentation (use \\n for new lines), and nothing is left out or invented; leave it empty only if nothing is readable. Then look at the picture carefully and teach it like a friendly step-by-step tutor: what it shows, how to read it, and the reasoning behind it. If it is a question or code, work it out or explain what the code does step by step and give the answer. If the picture has nothing you can read, say what it shows and make the last step ONE specific question about it; never just ask for more context. Reply with ONLY minified JSON, no prose, no code fence, exactly: {"headline":"one short sentence naming what this is","copied":"the exact text or code you read","steps":["step 1","step 2","step 3"]}. Give 3 to 6 short steps, max ~20 words each. Read every label and number you can see; don't invent ones you can't.`;
 
   // The words inside the snipped box, sent along with the picture: if a model
   // struggles to read the screenshot, Cassie still knows the question.
-  const withBoxText = (prompt, boxText) => boxText ? `${prompt}\n\nText found in the snipped part of the page (use it if the picture is hard to read):\n"""\n${boxText.slice(0, 2500)}\n"""` : prompt;
+  const withBoxText = (prompt, boxText) => boxText ? `${prompt}\n\nText found in the snipped part of the page (use it if the picture is hard to read):\n"""\n${boxText.slice(0, 6000)}\n"""` : prompt;
   const SEEMS_BLANK = /\b(completely|entirely|totally|mostly|appears|seems|looks)\s+(to be\s+)?(dark|black|blank|empty)\b|\bcan(?:not|'t|’t)\s+see\s+(the|any|anything)\b|\bunable to see\b|\bre-?upload\b/i;
 
   // Explain a picture (a snip, or one pasted/dropped on the board) into the side board.
@@ -1937,7 +1953,7 @@
   }
   // Draw: what was highlighted, drawn on her card beside the page (live.js), flat or in 3D
   function runDraw(text, rect, kind) {
-    const what = String(text || '').trim().slice(0, 1500) || 'the part of the page I highlighted';
+    const what = String(text || '').trim().slice(0, 6000) || 'the part of the page I highlighted'; // (v333: all of it, not the first 1500 letters)
     const q = kind === '3d' ? `Show this as a 3D model I can turn around: "${what}"` : `Draw this as a flat labelled drawing so I can understand it: "${what.replace(/\b(3d|three[\s-]?d)\b/gi, '')}"`;
     pendingPic = null; codeRun = null;
     if (careFirst(q, rect)) return;
@@ -2117,8 +2133,8 @@ Situation: "${text}"`;
       : mode === 'answer' ? 'Then work out the correct answer carefully and give ONLY the final answer (for multiple choice, the right option).'
       : mode === 'code' ? 'Then write clean, working code that solves or implements it, in one fenced code block, and say in 1 or 2 short sentences how it works.'
       : 'Then explain it step by step, like a friendly tutor, and give the answer with why.';
-    const prompt = `A student highlighted this part of a webpage${document.title ? ` (page: ${document.title})` : ''}${text ? `. The words they selected: """${text.slice(0, 1500)}"""` : ''}.
-First write the line "What I read:" and under it copy out exactly every word and every line of code you can read in the picture, even in an unusual font or style. Code goes in a fenced code block and keeps its line breaks and indentation. Leave nothing out and invent nothing.
+    const prompt = `A student highlighted this part of a webpage${document.title ? ` (page: ${document.title})` : ''}${text ? `. The words they selected: """${text.slice(0, 6000)}"""` : ''}.
+First write the line "What I read:" and under it copy out exactly everything you can read in the picture, even in an unusual font or style: every word, letter, number and symbol, every equation (as plain math: x^2, x_1, (a)/(b), √(x), ≤, π), every label on a diagram or graph (its axes and their numbers), every cell of a table, and every line of code. Code goes in a fenced code block and keeps its line breaks and indentation. Leave nothing out and invent nothing.
 ${todo}
 If the picture has nothing you can read, say what it shows and ask ONE specific question about it. Never just ask for more context.`;
     convoLabel = `${mode === 'answer' ? 'Answer' : mode === 'code' ? 'Code' : 'Explain'}: ${text || 'a picture'}`; // (explain-short and explain-long are Explain)

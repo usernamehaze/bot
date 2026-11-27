@@ -646,6 +646,14 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
       font: 600 14px/1.3 ${FONT}; transform: rotate(-2deg); box-shadow: 0 4px 12px rgba(0,0,0,.2); }
     .lv-paper .lv-sticky { display: inline-block; }
     .lv-float .lv-sticky { position: absolute; left: 16px; bottom: 16px; z-index: 2; margin: 0; max-width: 220px; } /* (low in the corner, clear of the names beside the model) */
+    /* (v333) the drawing over the page moves (the bar along its top) and resizes (its corner); the model still turns by dragging it */
+    .lv-grip { position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 120px; height: 28px; z-index: 3; cursor: grab; touch-action: none; display: grid; place-items: center; }
+    .lv-grip::before { content: ""; width: 44px; height: 5px; border-radius: 99px; background: var(--p-grey); opacity: .7; }
+    .lv-grip:hover::before, .lv-grip:focus-visible::before { opacity: 1; }
+    .lv-float.lv-moving .lv-grip { cursor: grabbing; }
+    .lv-fsize { position: absolute; right: 0; bottom: 0; width: 28px; height: 28px; z-index: 3; cursor: nwse-resize; touch-action: none; }
+    .lv-fsize::before { content: ""; position: absolute; right: 7px; bottom: 7px; width: 12px; height: 12px; border-right: 2px solid var(--p-grey); border-bottom: 2px solid var(--p-grey); border-radius: 0 0 4px 0; opacity: .8; }
+    .lv-grip:focus-visible, .lv-fsize:focus-visible { outline: 2px solid var(--p-grey); outline-offset: 2px; border-radius: 6px; }
     .lv .lv-clear3 { position: absolute; top: 16px; right: 16px; z-index: 2; border-color: var(--edge); box-shadow: 0 4px 16px rgba(0,0,0,.25); }
     .ld-canvas { display: block; width: 100% !important; height: 100% !important; cursor: grab; touch-action: none; outline: none; }
     .ld-canvas:active { cursor: grabbing; }
@@ -838,7 +846,7 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
         </div>
         ${inPanel ? '' : `<button type="button" class="lv-size" aria-label="Resize the card" title="Drag to resize. Arrow keys work too. Double click the top bar to reset.">${ICON.size}</button>`}
       </div>
-      <div class="lv-float" hidden><div class="lv-stage lv-stage-float" role="img"></div><button type="button" class="lv-clear3">Clear</button></div>`;
+      <div class="lv-float" hidden><div class="lv-stage lv-stage-float" role="img"></div><button type="button" class="lv-clear3">Clear</button><div class="lv-grip" role="button" tabindex="0" aria-label="Move the drawing (drag, or the arrow keys)" title="Drag to move"></div><div class="lv-fsize" role="button" tabindex="0" aria-label="Resize the drawing (drag, or Shift and the arrow keys)" title="Drag to resize"></div></div>`;
     root.appendChild(wrapEl);
     (inPanel ? opts.mount : document.documentElement).appendChild(host);
     const $ = (s) => root.querySelector(s);
@@ -876,6 +884,28 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
     const isFlat = () => cur.dim === 'flat'; // (a flat drawing in the Cassie app's form, drawn by its own drawer)
     const lightPaper = () => !(window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
     const cardStage = $('.lv-stage-card'), floatEl = $('.lv-float'), floatStage = $('.lv-stage-float');
+    // (v333) move the drawing by its top bar, resize it by its corner (a finger, a mouse, or the keyboard); kept on screen
+    {
+      const fit = (r) => { const w = Math.max(260, Math.min(r.w, innerWidth - 16)), h = Math.max(200, Math.min(r.h, innerHeight - 16)); return { w, h, l: Math.max(8, Math.min(r.l, innerWidth - w - 8)), t: Math.max(8, Math.min(r.t, innerHeight - h - 8)) }; };
+      const now = () => { const b = floatEl.getBoundingClientRect(); return { l: b.left, t: b.top, w: b.width, h: b.height }; };
+      const put = (r) => { const f = fit(r); floatEl.dataset.own = '1'; Object.assign(floatEl.style, { left: Math.round(f.l) + 'px', top: Math.round(f.t) + 'px', width: Math.round(f.w) + 'px', height: Math.round(f.h) + 'px' }); };
+      const drag = (el, size) => {
+        el.addEventListener('pointerdown', (e) => {
+          if (e.button > 0) return; e.preventDefault(); e.stopPropagation();
+          const start = now(), x0 = e.clientX, y0 = e.clientY; el.setPointerCapture(e.pointerId); floatEl.classList.add('lv-moving');
+          const move = (ev) => { const dx = ev.clientX - x0, dy = ev.clientY - y0; put(size ? { ...start, w: start.w + dx, h: start.h + dy } : { ...start, l: start.l + dx, t: start.t + dy }); };
+          const up = () => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up); floatEl.classList.remove('lv-moving'); };
+          el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+        });
+        el.addEventListener('keydown', (e) => {
+          const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key]; if (!d) return;
+          e.preventDefault(); e.stopPropagation(); const r = now(), k = e.altKey ? 4 : 24;
+          put(size || e.shiftKey ? { ...r, w: r.w + d[0] * k, h: r.h + d[1] * k } : { ...r, l: r.l + d[0] * k, t: r.t + d[1] * k });
+        });
+      };
+      drag(floatEl.querySelector('.lv-grip'), false); drag(floatEl.querySelector('.lv-fsize'), true);
+      addEventListener('resize', () => { if (floatEl.dataset.own && !floatEl.hidden) put(now()); });
+    }
     let model = null, floating = false, picked = -1, built = 0, lastPic = '', focusLater = -1; // (focusLater: the part a follow-up is about, picked out once it is all drawn)
     let views = [], cursor = null;
     let at = -1, playing = false, alive = true, cleared = false, done = false;
@@ -1013,7 +1043,7 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
     }
     // where the model floats: in the room beside her card, in the middle of it
     function placeFloat() {
-      if (!floating) return;
+      if (!floating || floatEl.dataset.own) return; // (v333: once moved or resized by the student, it stays where they put it)
       const cw = card.offsetWidth, m = 16, free = innerWidth - cw - m * 3, w = Math.max(280, Math.min(720, free)), h = Math.max(240, Math.min(Math.round(w * 0.66), innerHeight - 96));
       const left = card.dataset.side === 'left' ? cw + m * 2 + (free - w) / 2 : m + (free - w) / 2;
       Object.assign(floatEl.style, { left: Math.round(left) + 'px', top: Math.round((innerHeight - h) / 2) + 'px', width: Math.round(w) + 'px', height: Math.round(h) + 'px' });
@@ -1566,7 +1596,17 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
         return fromBook;
       }
     }
-    const got = await from({ send, ask: prompt({ q, page, draw }), count: numbered ? page.items.length : 0, draw });
+    let got;
+    try { got = await from({ send, ask: prompt({ q, page, draw }), count: numbered ? page.items.length : 0, draw }); } catch (e) {
+      // (v333) every AI failed (busy, or the day's share used up): her own drawing of what was asked, from her book or her
+      // kits, instead of "couldn't answer" ("airplane", "only show me the heart"); otherwise the error, as before
+      const own = draw || String(q).trim().split(/\s+/).length <= 4 ? await (async () => { const bk = await import(chrome.runtime.getURL('drawbook.js')).catch(() => null); if (!bk) return null; return bk.fromBook(q, wants3d(q), true) || (bk.fromKit ? bk.fromKit(q, wants3d(q), await import(chrome.runtime.getURL('livedraw.js')).catch(() => null), true) : null); })().catch(() => null) : null;
+      const card = own ? parse(JSON.stringify(own)) : null;
+      if (!card || card.kind !== 'card') throw e;
+      const near = T.follow.at();
+      play(card.scene, { q, send, page: { title: page.title }, about: null, pointer: near ? { x: near.x - 16, y: near.y - 18 } : null });
+      return card;
+    }
     if (got.kind === 'card') {
       const about = got.scene.about && got.scene.about.el ? (() => { const it = page.items[got.scene.about.el - 1]; return it ? { x: it.box[0], y: it.box[1], w: it.box[2], h: it.box[3] } : null; })() : got.scene.about;
       const near = T.follow.at();

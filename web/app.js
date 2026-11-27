@@ -2841,7 +2841,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=332'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=333'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2863,7 +2863,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=332'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=333'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -3139,7 +3139,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=332').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=333').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -3778,7 +3778,7 @@ let topHits = [], topAt = 0;
 function topSearchHits(q) {
   q = q.trim().toLowerCase();
   if (!q) return [];
-  const pages = [['Home', () => deskGo('home')], ['Chats', () => deskGo('chats')], ['Study plan', () => deskGo('plan')], ['Calendar', () => deskGo('calendar')], ['Progress', () => deskGo('progress')], ['New chat', () => deskGo('chat')], ['Draw It', () => deskGo('draw')], ['Settings', () => openSettings('all')], ['Memory', () => document.getElementById('memory-btn').click()], ['Learn', () => document.getElementById('labs-btn').click()], ['Games', () => document.getElementById('games-btn').click()], ['Board', () => document.getElementById('board-btn').click()]]
+  const pages = [['Home', () => deskGo('home')], ['Chats', () => deskGo('chats')], ['Study plan', () => deskGo('plan')], ['Calendar', () => deskGo('calendar')], ['Progress', () => deskGo('progress')], ['New chat', () => deskGo('chat')], ['Settings', () => openSettings('all')], ['Memory', () => document.getElementById('memory-btn').click()], ['Learn', () => document.getElementById('labs-btn').click()], ['Games', () => document.getElementById('games-btn').click()], ['Board', () => document.getElementById('board-btn').click()]]
     .map(([t, go]) => ({ t, kind: 'Page', go }));
   const tools = HOME_EXAMPLES.map((ex) => ({ t: ex.label, kind: 'Tool', go: () => { if (state.messages.length || deskPage !== 'chat') deskGo('chat'); runTool(ex); } }));
   const chats = state.chats.filter((c) => c.messages && c.messages.length).map((c) => ({ t: c.title || deriveTitle(c.messages) || 'Chat', kind: 'Chat', go: () => selectChat(c.id) }));
@@ -3855,7 +3855,7 @@ function setDeskPage(page) { deskPage = DESK_PAGES[page] ? page : 'home'; try { 
 /* (v322) Draw It: drawings and 3D models have their own place, below Chats. In a chat Cassie answers in words (no
    model is built under every answer); in Draw It whatever is asked is drawn, and a 3D model is built when it is asked
    for. "Draw a heart" typed in a chat opens a new Draw It chat and is drawn there. */
-function isDrawChat(c = curChat()) { return !!(c && c.kind === 'draw'); }
+function isDrawChat(c = curChat()) { return false && !!c; } // (v333: no Draw It: every drawing is made in the chat it is asked in)
 function chatPageOf() { return isDrawChat() ? 'draw' : 'chat'; }
 function deskInChat() { return deskPage === 'chat' || deskPage === 'draw'; } // (a chat, new or not: the ask box shows)
 function drawIcon(three) { return three ? '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/>' : '<path d="M4 20l4-1 11-11-3-3L5 16z"/>'; }
@@ -3906,7 +3906,7 @@ function routeNow() {
   const ov = routeOverlay(); if (ov) return '/app/' + ov;
   const c = curChat(), R = document.documentElement;
   const onChat = sideWide.matches ? (state.messages.length > 0 || deskInChat()) : R.classList.contains('tab-chat');
-  if (onChat && c && state.messages.length) return `/app/${c.kind === 'draw' ? 'draw' : 'chat'}/${c.id}`;
+  if (onChat && c && state.messages.length) return `/app/chat/${c.id}`;
   if (!sideWide.matches) return onChat ? (isDrawChat() ? '/app/draw' : '/app/chat') : '/app';
   const r = routeTable()[deskPage]; return '/app' + (r ? '/' + r : '');
 }
@@ -3938,7 +3938,7 @@ function routeOpen(path) {
       if (routeOverlay() !== first) { const b = document.getElementById({ learn: 'labs-btn', games: 'games-btn', board: 'board-btn', memory: 'memory-btn' }[first]); if (b) b.click(); }
     } else if (page) {
       if (sideWide.matches) deskGo(page);
-      else { const t = document.querySelector(`#tabbar [data-tab="${page === 'home' ? 'home' : page === 'draw' ? 'draw' : 'chat'}"]`); if (t) t.click(); else if (page === 'draw') openDrawIt(); }
+      else { const t = document.querySelector(`#tabbar [data-tab="${page === 'home' ? 'home' : 'chat'}"]`); if (t) t.click(); } // (v333: an old /app/draw opens the chat)
     }
   } catch (e) { /* the page stays as it is */ }
   routeBusy = false;
@@ -3960,7 +3960,7 @@ let deskChatsFilter = 'all';
 function deskChats() {
   const el = document.createElement('div');
   el.className = 'desk desk-chats';
-  const all = state.chats.filter((c) => c.messages && c.messages.length && c.kind !== 'draw').sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)); // (v322: drawings are in Draw It)
+  const all = state.chats.filter((c) => c.messages && c.messages.length).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)); // (v333: drawings made in Draw It before are in the chats too)
   const week = Date.now() - 7 * 864e5;
   const FILTERS = [['all', 'All'], ['week', 'This week'], ['files', 'With files'], ['older', 'Older']];
   const keep = (c) => deskChatsFilter === 'all' || (deskChatsFilter === 'week' && (c.updatedAt || 0) >= week) || (deskChatsFilter === 'older' && (c.updatedAt || 0) < week) || (deskChatsFilter === 'files' && c.messages.some((m) => m.display && /\(attached:/.test(m.display)));
@@ -4423,7 +4423,7 @@ function deskCalendar() {
 }
 function deskGo(page) {
   deskCloseOthers();
-  if (page === 'draw') { openDrawIt(); return; } // (v322: Draw It is a drawing chat of its own)
+  if (page === 'draw') page = 'chat'; // (v333: Draw It is gone: drawings are made in the chats; an old /app/draw opens a chat)
   if (state.messages.length || isDrawChat()) createNewChat();
   setDeskPage(page);
   renderHistory();
@@ -7713,11 +7713,11 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=332')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=333')));
 // (v310) Cassie's drawing book: a checked drawing of a common subject (a bicycle, the heart, the solar system...) shows
 // at once, right every time, with no AI and no question used (offline too). Anything else is drawn by the AI.
 let liveBookLib = null;
-const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=332').then((bk) => { liveBookNow = bk; return bk; }).catch(() => null)));
+const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=333').then((bk) => { liveBookNow = bk; return bk; }).catch(() => null)));
 // (v332) a typo never hides a drawing: "shoe me how the heart works", "drw the water cycle" are read as meant (drawbook.js
 // fixTypos, which knows the asking words, the book's subjects and the kits' names); loaded once she is idle
 let liveBookNow = null;
@@ -7763,6 +7763,15 @@ async function liveDrawSuggest(question, spec, first) {
     const r = await fetch(SERVER + '/drawings/suggest', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ uid: installId(), subject, mode: sp.mode, spec: keep, png: png && png.length <= 290000 ? png : '' }), signal: waitAtMost(15000) });
     if (r.ok) { sent.push(key); try { localStorage.setItem('cassie.suggested', JSON.stringify(sent.slice(-200))); } catch (e) { /* full */ } }
   } catch (e) { /* tried again next time it is drawn */ }
+}
+async function liveDrawLoose(subject, want3d) { // (v333) the book's or a kit's drawing of a subject the question names, even with more asked
+  if (window.CASSIE_NO_BOOK) return null;
+  const bk = await liveBookLoad(), m = await liveDrawLoad();
+  const raw = bk && ((bk.fromBook && bk.fromBook(subject, want3d, true)) || (bk.fromKit && bk.fromKit(subject, want3d, m, true)));
+  const spec = raw && m.clean(raw);
+  if (!spec) return null;
+  spec.q = String(subject).slice(0, 300); spec.book = raw.book;
+  return { text: JSON.stringify(raw), spec, book: true };
 }
 async function liveDrawBook(subject, want3d) {
   if (window.CASSIE_NO_BOOK) return null; // (tests of the AI's own drawing turn the book off)
@@ -7927,6 +7936,7 @@ async function liveDrawReply(text, want3d = LIVE_3D_RE.test(text), image = null,
       else home.away(null);
       return;
     }
+    if (first === TOO_LONG && !image) { const own = await liveDrawLoose(subject, want3d).catch(() => null); if (own) first = own; } // (v333: too slow: her own drawing of it, when she has one)
     if (first === TOO_LONG) {
       typing.remove(); done(); setCursorMode('idle');
       const say = 'This drawing is taking too long. Try again, or I can explain it in words.';
@@ -7946,11 +7956,16 @@ async function liveDrawReply(text, want3d = LIVE_3D_RE.test(text), image = null,
     }
   } catch (err) {
     clearTimeout(slow1); clearTimeout(slow2);
-    const gone = !home.here();
-    typing.remove(); done(); setCursorMode('idle');
-    if (gone) return;
-    renderError(err, () => liveDrawReply(label, want3d, image), 'unknown');
-    return;
+    // (v333) every AI failed (busy, or the day's share used up): her own drawing of what the question names, from her
+    // book or her kits, instead of an error ("only show me the heart" after the heart: the heart)
+    const own = !image && home.here() ? await liveDrawLoose(subject, want3d).catch(() => null) : null;
+    if (own) { typing.remove(); first = own; } else {
+      const gone = !home.here();
+      typing.remove(); done(); setCursorMode('idle');
+      if (gone) return;
+      renderError(err, () => liveDrawReply(label, want3d, image), 'unknown');
+      return;
+    }
   }
   const fenced = (sp) => '```cassie-draw\n' + JSON.stringify(sp) + '\n```';
   const note = (sp) => `[I drew a live ${sp.mode === '3d' ? '3D model' : 'diagram'}: ${sp.title}. Parts: ${sp.parts.map((p) => p.label).join(', ')}. ${sp.summary}]`;
@@ -9278,7 +9293,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=332');
+      exploreMod = await import('./explore/cell3d.js?v=333');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -9328,7 +9343,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=332');
+      labsMod = await import('./labs/labs.js?v=333');
       islandRest();
     }
     labsMod.open({
@@ -11293,10 +11308,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=332').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=333').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=332', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=333', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
