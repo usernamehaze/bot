@@ -1055,6 +1055,29 @@ test('v320 Blender models and real materials: the book’s airplane and bicycle 
   } finally { await ctx.close(); }
 });
 
+test('v342 people from everywhere: a Filipino hero with an accent in his name (José Rizal, typed "jose rizal"), a local television host the English encyclopedia has no article on (from the people database, in English or Filipino), a real person is never taken for a thing; a volcano is still made', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'iPhone 13', server: false, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: async () => ({ text: 'Words.' }) });
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  await ctx.route(/wikipedia\.org\/w\/api\.php/, (r) => { const u = decodeURIComponent(r.request().url());
+    return r.fulfill({ json: { query: { pages: /rizal/i.test(u) ? { 1: { index: 1, title: 'José Rizal', description: 'Filipino nationalist and polymath (1861–1896)', thumbnail: { source: 'https://upload.wikimedia.org/rizal.jpg' }, fullurl: 'https://en.wikipedia.org/wiki/Jos%C3%A9_Rizal' } }
+      : /atienza/i.test(u) ? { 1: { index: 1, title: 'Atienza', description: 'Surname' } } : { 1: { index: 1, title: 'Volcano', description: 'Rupture in the crust of a planet' } } } } }); });
+  const wd = [];
+  await ctx.route(/wikidata\.org\/w\/api\.php/, (r) => { const u = decodeURIComponent(r.request().url()); wd.push(u.match(/action=(\w+)/)[1] + (u.match(/language=(\w+)/) || ['', ''])[1]);
+    if (/wbsearchentities/.test(u)) return r.fulfill({ json: { search: /atienza/i.test(u) ? [{ id: 'Q7', label: 'Kim Atienza', aliases: ['Kuya Kim'] }] : /volcano/i.test(u) ? [{ id: 'Q8072', label: 'volcano' }] : [] } });
+    return r.fulfill({ json: { entities: { Q7: { claims: { P31: [{ mainsnak: { datavalue: { value: { id: 'Q5' } } } }], P18: [{ mainsnak: { datavalue: { value: 'Kim Atienza 2019.jpg' } } }] }, labels: { en: { value: 'Kim Atienza' } }, descriptions: { en: { value: 'Filipino television host' } }, sitelinks: { tlwiki: { url: 'https://tl.wikipedia.org/wiki/Kim_Atienza' } } },
+      Q8072: { claims: { P31: [{ mainsnak: { datavalue: { value: { id: 'Q8072' } } } }] }, labels: { en: { value: 'volcano' } } } } } }); });
+  await ctx.route(/upload\.wikimedia\.org|commons\.wikimedia\.org\/wiki\/Special:FilePath/, (r) => r.fulfill({ contentType: 'image/png', body: png }));
+  await page.evaluate(() => { window.generateImage = async () => { window.__made = (window.__made || 0) + 1; const c = document.createElement('canvas'); c.width = 8; c.height = 8; return { src: c.toDataURL('image/png'), keep: false }; }; });
+  const ask = async (q) => { const n = await page.evaluate(() => state.messages.filter((m) => m.role === 'assistant').length); await page.fill('#prompt-input', q); await page.click('#send-btn'); await page.waitForFunction((n) => state.messages.filter((m) => m.role === 'assistant').length > n, n, { timeout: 30000 }); await page.waitForTimeout(400); return page.evaluate(() => { const m = state.messages[state.messages.length - 1]; return { say: m.display, pics: (m.webPics || []).map((p) => p.src + '|' + p.page) }; }); };
+  const rizal = await ask('make me an image of jose rizal');
+  expect(/picture of José Rizal from the web/.test(rizal.say) && rizal.pics.length === 1 && /rizal\.jpg/.test(rizal.pics[0]), '"jose rizal" is José Rizal, from the encyclopedia: ' + JSON.stringify(rizal));
+  const kim = await ask('can you find me a picture of kim atienza');
+  expect(/picture of Kim Atienza from the web/.test(kim.say) && kim.pics.length === 1 && /Special:FilePath\/Kim%20Atienza%202019\.jpg/.test(kim.pics[0]) && /tl\.wikipedia\.org\/wiki\/Kim_Atienza/.test(kim.pics[0]), 'a local TV host only the people database knows: his own photo, linked to his page: ' + JSON.stringify([kim, wd]));
+  const v = await ask('make me an image of a volcano');
+  expect(!v.pics.length && (await page.evaluate(() => window.__made)) === 1, 'a volcano is not a person: her picture maker makes it: ' + JSON.stringify(v));
+  expect(!errors.length, 'page errors: ' + errors.join(' | '));
+  await ctx.close();
+});
 test('v340 (v341: one picture, the right one) a picture of a person or a character is a real picture from the web (never made up): Albert Einstein from the encyclopedia, a game character from the picture libraries, each saying where it is from; a picture she makes is kept on this device, so it is still there after leaving the chat and coming back', async (b) => {
   const { ctx, page, errors } = await open(b, { device: 'iPhone 13', server: false, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: async () => ({ text: 'Words.' }) });
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
@@ -5352,7 +5375,7 @@ test('privacy.html names every outside service the code calls (a new one fails u
   const SERVICES = [ // [which addresses, the name privacy.html must use]
     [/^api\.groq\.com$/, 'Groq'], [/^generativelanguage\.googleapis\.com$/, 'Google Gemini'], [/^api\.anthropic\.com$/, 'Anthropic'], [/^openrouter\.ai$/, 'OpenRouter'],
     [/^api\.elevenlabs\.io$/, 'ElevenLabs'], [/^image\.pollinations\.ai$/, 'Pollinations'], [/^api\.openalex\.org$/, 'OpenAlex'],
-    [/\.wikipedia\.org$/, 'Wikipedia'], [/^api\.worldbank\.org$/, 'World Bank'], [/^huggingface\.co$/, 'Hugging Face'],
+    [/\.wikipedia\.org$/, 'Wikipedia'], [/\.wikidata\.org$/, 'Wikidata'], [/^api\.worldbank\.org$/, 'World Bank'], [/^huggingface\.co$/, 'Hugging Face'],
     [/^(accounts|www)\.google(apis)?\.com$|^docs\.google\.com$/, 'Google'], [/^appleid\.apple\.com$/, 'Apple'], [/^api\.paymongo\.com$/, 'PayMongo'],
     [/\.workers\.dev$/, 'Cloudflare'], // Cassie's own server runs on Cloudflare
     [/^(commons|upload)\.wikimedia\.org$/, 'Wikimedia Commons'], [/^api\.openverse\.org$/, 'Openverse'], // (v305) reference pictures for drawings (and museum credit links)

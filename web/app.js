@@ -2841,7 +2841,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=341'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=342'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2863,7 +2863,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=341'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=342'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -3139,7 +3139,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=341').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=342').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -7715,11 +7715,11 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=341')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=342')));
 // (v310) Cassie's drawing book: a checked drawing of a common subject (a bicycle, the heart, the solar system...) shows
 // at once, right every time, with no AI and no question used (offline too). Anything else is drawn by the AI.
 let liveBookLib = null;
-const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=341').then((bk) => { liveBookNow = bk; return bk; }).catch(() => null)));
+const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=342').then((bk) => { liveBookNow = bk; return bk; }).catch(() => null)));
 // (v332) a typo never hides a drawing: "shoe me how the heart works", "drw the water cycle" are read as meant (drawbook.js
 // fixTypos, which knows the asking words, the book's subjects and the kits' names); loaded once she is idle
 let liveBookNow = null;
@@ -8162,16 +8162,41 @@ async function handleImageRequest(text, subject) {
    A real person (Albert Einstein), a character (from a game, a show, a book) or anyone at all ("a girl reading") is
    never drawn or made up: her picture maker gets faces wrong. She looks on the web instead: the encyclopedia's own
    picture of that person or character first, then free picture libraries; each picture says where it is from. */
-const HUMAN_WORDS = /\b(person|people|man|men|woman|women|boy|boys|girl|girls|child|children|kid|kids|baby|babies|teen(ager)?s?|student|students|teacher|teachers|doctor|nurse|farmer|worker|family|crowd|face|faces|portrait|selfie|human|humans|lady|gentleman|grandma|grandpa|mother|father|mom|dad|character|characters|hero|heroine|villain|cosplay|actor|actress|singer|celebrity|president|king|queen|prince|princess|scientist|inventor|athlete|player)\b/i;
-const PERSON_DESC = /\b(born|died|\(\d{3,4}|physicist|scientist|inventor|engineer|actor|actress|singer|rapper|musician|band|artist|painter|sculptor|writer|author|novelist|poet|politician|president|prime minister|senator|king|queen|emperor|empress|prince|princess|monarch|saint|pope|footballer|basketball|athlete|boxer|player|cyclist|swimmer|gymnast|philosopher|mathematician|chemist|biologist|astronomer|astronaut|activist|revolutionary|national hero|leader|general|soldier|businessm(a|e)n|entrepreneur|director|comedian|dancer|chef|model|youtuber|streamer|personality|character|fictional|anime|manga|video game|comic|superhero|villain|mascot|cartoon|protagonist)\b/i;
+const HUMAN_WORDS = /\b(person|people|man|men|woman|women|boy|boys|girl|girls|child|children|kid|kids|baby|babies|teen(ager)?s?|student|students|teacher|teachers|doctor|nurse|farmer|worker|family|crowd|face|faces|portrait|selfie|human|humans|lady|gentleman|grandma|grandpa|mother|father|mom|dad|character|characters|hero|heroine|villain|cosplay|actor|actress|singer|celebrity|president|king|queen|prince|princess|scientist|inventor|athlete|player|tao|lalaki|babae|bata|guro|lola|lolo|nanay|tatay|kuya|ate|bayani|artista|mang-aawit)\b/i; // (v342: and in Filipino)
+const PERSON_DESC = /\(\s*(?:born\s+|b\.\s*|c\.\s*)?\d{3,4}\s*[–-]|\b(born|died|nationalist|patriot|polymath|reformist|propagandist|freedom fighter|scholar|educator|novelist|playwright|composer|conductor|tycoon|billionaire|philanthropist|socialite|royal|nobleman|noblewoman|explorer|navigator|conquistador|missionary|physicist|scientist|inventor|engineer|actor|actress|singer|rapper|musician|band|artist|painter|sculptor|writer|author|novelist|poet|politician|president|prime minister|senator|king|queen|emperor|empress|prince|princess|monarch|saint|pope|footballer|basketball|athlete|boxer|player|cyclist|swimmer|gymnast|philosopher|mathematician|chemist|biologist|astronomer|astronaut|activist|revolutionary|national hero|leader|general|soldier|businessm(a|e)n|entrepreneur|director|comedian|dancer|chef|model|youtuber|streamer|personality|character|fictional|anime|manga|video game|comic|superhero|villain|mascot|cartoon|protagonist|host|presenter|newscaster|broadcaster|journalist|vlogger|influencer|tiktoker|beauty queen|pageant|mayor|governor|congressman|congresswoman|councilor|senator|cabinet|secretary|judge|lawyer|priest|bishop|cardinal|nun|teacher|professor|doctor|nurse|coach|martyr|hero)\b/i; // (v342: everyone a student might look up, wherever they are from)
 const WIKI = 'https://en.wikipedia.org/w/api.php', COMMONS = 'https://commons.wikimedia.org/w/api.php', OPENVERSE = 'https://api.openverse.org/v1/images/';
 const webJson = async (url, ms = 8000) => { const r = await fetch(url, { signal: waitAtMost(ms) }); if (!r.ok) throw new Error('web ' + r.status); return r.json(); };
-const wordsOf = (t) => String(t || '').toLowerCase().replace(/\([^)]*\)/g, ' ').match(/[a-z0-9]+/g) || [];
+const wordsOf = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\([^)]*\)/g, ' ').match(/[a-z0-9]+/g) || []; // (v342: José is jose, Niño is nino)
 // the encyclopedia's best article for it: its title, what it is, and its picture
 async function wikiLook(subject) {
   const q = `${WIKI}?action=query&format=json&origin=*&generator=search&gsrsearch=${encodeURIComponent(subject)}&gsrlimit=5&prop=pageimages|description|info&inprop=url&piprop=thumbnail&pithumbsize=900`;
   const d = await webJson(q);
   return Object.values((d.query && d.query.pages) || {}).sort((a, b) => (a.index || 0) - (b.index || 0)).map((p) => ({ title: p.title, desc: p.description || '', src: p.thumbnail && p.thumbnail.source, page: p.fullurl }));
+}
+// (v342) people from everywhere: the open people database knows people of every country (a Filipino host, a local
+// hero) whom the English encyclopedia may have no article on, says whether each is a real person or a character, and
+// links each one's photo. Searched in English, then in Filipino.
+const WIKIDATA = 'https://www.wikidata.org/w/api.php';
+const CHARACTER_KINDS = new Set(['Q95074', 'Q15632617', 'Q1114461', 'Q15773347', 'Q15711870', 'Q4271324', 'Q20085850', 'Q3658341', 'Q80447738']);
+async function peopleLook(subject) {
+  const want = wordsOf(subject).filter((w) => w.length > 1);
+  for (const lang of ['en', 'tl']) {
+    const found = await webJson(`${WIKIDATA}?action=wbsearchentities&format=json&origin=*&type=item&limit=7&language=${lang}&uselang=en&search=${encodeURIComponent(subject)}`);
+    const ids = (found.search || []).filter((h) => { const t = wordsOf(h.label + ' ' + ((h.aliases || []).join(' '))); return want.every((w) => t.includes(w)); }).map((h) => h.id).slice(0, 5);
+    if (!ids.length) continue;
+    const d = await webJson(`${WIKIDATA}?action=wbgetentities&format=json&origin=*&props=claims|labels|descriptions|sitelinks/urls&languages=en|tl&ids=${ids.join('|')}`);
+    for (const id of ids) {
+      const e = d.entities && d.entities[id]; if (!e) continue;
+      const kinds = ((e.claims && e.claims.P31) || []).map((c) => c.mainsnak && c.mainsnak.datavalue && c.mainsnak.datavalue.value && c.mainsnak.datavalue.value.id);
+      const human = kinds.includes('Q5'), character = kinds.some((k) => CHARACTER_KINDS.has(k));
+      if (!human && !character) continue;
+      const file = (((e.claims && e.claims.P18) || [])[0] || {}).mainsnak, img = file && file.datavalue && file.datavalue.value;
+      const label = (e.labels && (e.labels.en || e.labels.tl) || {}).value || subject, desc = (e.descriptions && (e.descriptions.en || e.descriptions.tl) || {}).value || '';
+      const link = e.sitelinks && (e.sitelinks.enwiki || e.sitelinks.tlwiki); const page = link ? link.url : `https://www.wikidata.org/wiki/${id}`;
+      return { name: label, desc, human, character, src: img ? `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(img)}?width=900` : null, page };
+    }
+  }
+  return null;
 }
 async function commonsLook(subject, n = 3) {
   const q = `${COMMONS}?action=query&format=json&origin=*&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(subject + ' filetype:bitmap')}&gsrlimit=${n + 3}&prop=imageinfo&iiprop=url&iiurlwidth=900`;
@@ -8190,9 +8215,13 @@ async function webPicturesOf(subject) {
   const want = wordsOf(s).filter((w) => w.length > 1);
   const named = hits.find((h) => { const t = wordsOf(h.title.replace(/\([^)]*\)/g, ' ')); return want.length && want.every((w) => t.includes(w)) || t.length && t.every((w) => want.includes(w)); });
   const franchise = hits.slice(0, 3).find((h) => /\b(video game|anime|manga|comic|cartoon|film|series|novel|franchise|characters)\b/i.test(h.desc + ' ' + h.title));
-  const human = HUMAN_WORDS.test(s), person = named && PERSON_DESC.test(named.desc), character = !named && !!franchise;
+  let human = HUMAN_WORDS.test(s), person = named && PERSON_DESC.test(named.desc), character = !named && !!franchise;
+  // (v342) not a person the English encyclopedia knows (with a picture): the people database, from every country
+  let who = null;
+  if (!(person && named.src)) { try { who = await peopleLook(s); } catch (e) { who = null; } }
+  if (who) { person = true; human = human || who.human; }
   if (!human && !person && !character) return null; // (not a person: her picture maker, as before)
-  const name = named && person ? named.title : s;
+  const name = who && !(named && person && named.src) ? who.name : named && person ? named.title : s;
   // (v341) one picture, the right one. A picture library is searched for the name with what it belongs to ("Furina" with
   // "Genshin Impact"), and a picture counts only when its own title or tags say so: a same-named snake genus never does.
   const ctx = [...new Set([...wordsOf((name.match(/\(([^)]*)\)/) || [])[1] || ''), ...(character ? wordsOf(franchise.title) : [])])].filter((w) => w.length > 2 && !want.includes(w));
@@ -8200,9 +8229,10 @@ async function webPicturesOf(subject) {
   const q = [s, ...ctx].join(' ');
   let pic = null;
   if (named && named.src && person) pic = { title: named.title, src: named.src, page: named.page, from: 'the encyclopedia' };
+  if (!pic && who && who.src) pic = { title: who.name, src: who.src, page: who.page, from: 'the encyclopedia' };
   if (!pic) { try { pic = (await commonsLook(q, 6)).find((p) => fits(p.title)); if (pic) pic = { ...pic, from: 'a free picture library' }; } catch (e) { pic = null; } }
   if (!pic) { try { pic = (await openverseLook(q, 8)).find((p) => fits(p.title + ' ' + (p.tags || ''))); if (pic) pic = { ...pic, from: 'a free picture library' }; } catch (e) { pic = null; } }
-  return { name, pics: pic ? [pic] : [], page: named && person ? named.page : null };
+  return { name, pics: pic ? [pic] : [], page: who ? who.page : named && person ? named.page : null };
 }
 function addWebPictures(bubble, list) {
   const row = document.createElement('div'); row.className = 'web-pics';
@@ -9387,7 +9417,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=341');
+      exploreMod = await import('./explore/cell3d.js?v=342');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -9437,7 +9467,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=341');
+      labsMod = await import('./labs/labs.js?v=342');
       islandRest();
     }
     labsMod.open({
@@ -11407,10 +11437,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=341').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=342').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=341', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=342', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
