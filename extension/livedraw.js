@@ -619,20 +619,35 @@ export async function render(host, rawSpec, opts = {}) {
     a.href = spec.ref.url; a.target = '_blank'; a.rel = 'noopener';
     r.appendChild(a); host.appendChild(r);
   }
+  // (v334) step by step, to read at your own pace: each part's words are added to this list as it is drawn, and stay
+  // (a drawing from history, or Draw again, has them all); it folds away with a tap
   host.appendChild(acts);
-  const setSay = async (text, type) => {
+  const stepsBox = el('details', 'ld-steps-box'); stepsBox.open = true;
+  const stepsHead = el('summary', 'ld-steps-head', 'Step by step'), stepsList = el('ol', 'ld-steps');
+  stepsBox.append(stepsHead, stepsList); stepsBox.hidden = true;
+  host.insertBefore(stepsBox, acts);
+  const addStep = (label, text) => {
+    if (!text && !label) return;
+    const li = el('li', 'ld-stepi'); if (label) li.appendChild(el('b', null, label)); if (text && text !== label) li.appendChild(document.createTextNode((label ? ': ' : '') + text));
+    stepsList.appendChild(li); stepsBox.hidden = false;
+  };
+  const allSteps = () => { stepsList.replaceChildren(); spec.parts.forEach((p) => addStep(p.label, p.say)); };
+  const setSay = async (text, type, label) => {
     if (!type) { say.textContent = text; return; }
+    if (label !== undefined) addStep(label, text);
     say.textContent = '';
     // (v310) typed by the clock, not by the frame: about a second a sentence even on a slow or busy phone
     const t0 = performance.now(), total = Math.min(1100, text.length * 14);
     for (let n = 0; n < text.length;) { n = Math.max(n + 1, Math.ceil(text.length * Math.min(1, (performance.now() - t0) / total))); say.textContent = text.slice(0, n); if (n < text.length) await sleep(16); }
+    // (v334) then time to read it before the next part: about a fifth of a second a word, 1.2 to 4 seconds
+    if (label !== undefined) await sleep(Math.min(4000, Math.max(1200, text.split(/\s+/).length * 200)) * (window.CASSIE_READ_SPEED ?? 1));
   };
   const view = spec.mode === '3d' ? await draw3d(stage, spec, { animate, setSay, hint, real: true, callout: true }) : draw2d(stage, spec, { animate, setSay, hint });
   // (v319) Machine view: the same 3D model drawn the Anatomy way (isoview.js), with no WebGL; on a phone with no 3D it is the view
   let mv = null; const mvHost = spec.mode === '3d' ? el('div', 'ld-mv') : null;
   const machineOn = async () => {
     if (mv) return mv;
-    let m = null; try { m = await import('./isoview.js?v=333'); } catch (e) { return null; }
+    let m = null; try { m = await import('./isoview.js?v=334'); } catch (e) { return null; }
     mv = m.machine(mvHost, spec, { dark: !lightPage() });
     if (mv) {
       const row = el('div', 'ld-mv-acts');
@@ -656,7 +671,7 @@ export async function render(host, rawSpec, opts = {}) {
   if (view) {
     if (view.open) { const ob = btn('Open it up', () => { const on = view.open(); setLabel(ob, on ? 'Close the case' : 'Open it up'); ob.setAttribute('aria-pressed', String(on)); }, 'ld-open', 'open'); ob.setAttribute('aria-pressed', 'false'); }
     if (view.explode) { const pb = btn('Pull apart', () => { const on = view.explode(); setLabel(pb, on ? 'Put it back' : 'Pull apart'); pb.setAttribute('aria-pressed', String(on)); }, '', 'apart'); pb.setAttribute('aria-pressed', 'false'); }
-    btn('Draw again', async () => { await view.play(true); done(); if (view.move) view.move(); }, '', 'redo');
+    btn('Draw again', async () => { stepsList.replaceChildren(); await view.play(true); done(); if (view.move) view.move(); }, '', 'redo');
     if (mvHost) { // (v319) the 3D model, or the same model as an Anatomy machine drawing
       const mb = btn('Machine view', async () => { const on = mvHost.hidden; if (on && !(await machineOn())) return; mvHost.hidden = !on; stage.hidden = on; setLabel(mb, on ? '3D view' : 'Machine view'); mb.setAttribute('aria-pressed', String(on)); }, 'ld-mv-btn', 'cube');
       mb.setAttribute('aria-pressed', 'false');
@@ -685,6 +700,7 @@ export async function render(host, rawSpec, opts = {}) {
     const askBtn = btn('', () => {}, 'ld-askpart', 'ask'); askBtn.hidden = true;
     const allBtn = btn('Show all', () => { if (view.unpick) view.unpick(); allBtn.hidden = true; }, 'ld-showall', 'open'); allBtn.hidden = true;
     if (spec.mode === '3d' && view.setOpen && view.open) { view.setOpen(true); const ob = acts.querySelector('.ld-open'); if (ob) { setLabel(ob, 'Close the case'); ob.setAttribute('aria-pressed', 'true'); } }
+    if (!animate) allSteps(); else if (spec.fresh) spec.parts.filter((p) => !spec.fresh.includes(p.id)).forEach((p) => addStep(p.label, p.say)); // (v334: shown at once: all its steps; a follow-up: the ones already there)
     await view.play(); done();
     // (v314) once it is drawn, it moves: Pause and Play, and Next step for a drawing with something flowing through it
     if (view.motion) {
@@ -949,7 +965,7 @@ function draw2d(stage, spec, { animate, setSay, hint }) {
       if (spec.intro) await setSay(spec.intro, true);
       for (let i = 0; i < groups.length; i++) {
         if (old(i)) continue;
-        const talk = setSay(spec.parts[i].say || spec.parts[i].label, true);
+        const talk = setSay(spec.parts[i].say || spec.parts[i].label, true, spec.parts[i].label);
         for (const n of groups[i].children) {
           n.style.visibility = '';
           if (n.tagName === 'text') { const full = n.textContent; n.textContent = ''; for (let k = 1; k <= full.length; k++) { n.textContent = full.slice(0, k); await sleep(22); } continue; }
@@ -3410,7 +3426,7 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
         g.visible = true;
         const t0 = performance.now();
         await new Promise((res) => { const step = () => { const k = Math.min(1, (performance.now() - t0) / 550); const e = 1 - Math.pow(1 - k, 3); g.scale.setScalar(.6 + .4 * e); fade(g, sh ? Math.min(e, .14) : e); if (k < 1) requestAnimationFrame(step); else res(); }; requestAnimationFrame(step); });
-        await setSay(g.userData.part.say || g.userData.part.label, true);
+        await setSay(g.userData.part.say || g.userData.part.label, true, g.userData.part.label);
         await sleep(450);
       }
     },

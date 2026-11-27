@@ -4292,6 +4292,18 @@ html.lg-refract.native .tabbar { background: linear-gradient(var(--lg-tint), var
 .ld-tag { position: absolute; transform: translate(-50%, -50%); pointer-events: auto; min-height: 28px; padding: 2px var(--sp-3, 12px); border-radius: 99px; border: 1px solid var(--lg-line, var(--border)); background: color-mix(in srgb, var(--surface) 88%, transparent); color: var(--text); font: 600 12px/1 inherit; white-space: nowrap; cursor: pointer; }
 .ld-hint { position: absolute; left: 10px; bottom: 8px; right: 10px; font-size: .74rem; color: var(--muted); pointer-events: none; }
 .ld-say { margin: 0; min-height: 1.5em; line-height: 1.5; }
+/* (v334) step by step under every drawing: each part's words stay, to read at your own pace */
+.ld-steps-box { margin: var(--sp-3, 12px) 0 0; }
+.ld-steps-box[hidden] { display: none; }
+.ld-steps-head { cursor: pointer; font-weight: 650; font-size: .92rem; color: var(--muted); min-height: 44px; display: flex; align-items: center; list-style: none; -webkit-tap-highlight-color: transparent; }
+.ld-steps-head::-webkit-details-marker { display: none; }
+.ld-steps-head::after { content: ""; width: 7px; height: 7px; margin-left: var(--sp-2, 8px); border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg) translateY(-2px); transition: transform .2s ease; }
+.ld-steps-box:not([open]) .ld-steps-head::after { transform: rotate(-45deg); }
+.ld-steps { margin: 0; padding: 0 0 0 1.4em; display: grid; gap: var(--sp-2, 8px); line-height: 1.5; }
+.ld-stepi { animation: ldStepIn .35s ease both; }
+.ld-stepi b { font-weight: 650; }
+@keyframes ldStepIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .ld-stepi { animation: none; } }
 .ld-acts { display: flex; flex-wrap: wrap; gap: var(--sp-2, 8px); }
 .ld-btn { min-height: 40px; padding: 0 var(--sp-4, 16px); border-radius: 999px; border: 1px solid var(--border); background: transparent; color: var(--text); font: inherit; font-size: .9rem; font-weight: 600; cursor: pointer; }
 .ld-btn[aria-pressed="true"] { background: var(--text); color: var(--bg); border-color: var(--text); }

@@ -85,6 +85,7 @@ async function open(browser, { server = true, state = {}, fakeGroq, lite = 'on',
     window.CASSIE_SERVER = srv; // '' = no server (never the real one in tests)
     if (!book) window.CASSIE_NO_BOOK = true; // (the AI's own drawing is what most tests check; v310 turns the book on)
     window.CASSIE_BOOK_MS = 0; // (v332: her short sketching pause before a book drawing: the v332 test checks it, the rest skip it)
+    window.CASSIE_READ_SPEED = 0; // (v334: her pause to read each step while drawing: the v334 test checks it, the rest skip it)
     if (seedJson && !sessionStorage.getItem('seeded')) { sessionStorage.setItem('cassie.deskPage', 'chat'); /* (a computer starts on Home, with no ask box: the tests start in a new chat, and the dashboard tests open Home) */ localStorage.setItem('cassie.v2', seedJson); localStorage.setItem('cassie.labs.ui', '{"tries":"max"}'); sessionStorage.setItem('seeded', '1'); } // (the tests read the goals: keep "Try this" open on phone screens)
   }, [server ? SERVER : '', seed ? JSON.stringify(seed) : '', !!book]);
   await ctx.route(/pollinations\.ai/, (route) => route.fulfill({ body: PNG, contentType: 'image/png', headers: { 'access-control-allow-origin': '*' } })); // (the picture service allows other sites to use its pictures)
@@ -1053,6 +1054,31 @@ test('v320 Blender models and real materials: the book’s airplane and bicycle 
   } finally { await ctx.close(); }
 });
 
+test('v334 step by step under every drawing: each part’s words are added as it is drawn and stay to read (a drawing from history has them all, Draw again starts them fresh, the list folds away); and she waits for them to be read before the next part', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, book: true, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: async () => ({ text: 'Words.' }) });
+  const steps = () => page.evaluate(() => { const l = [...document.querySelectorAll('#chat-log .ld')].pop(), box = l.querySelector('.ld-steps-box'); return { shown: !!box && !box.hidden, open: !!box && box.open, items: [...l.querySelectorAll('.ld-stepi')].map((x) => x.textContent) }; });
+  // drawn now, at a reader's pace: the volcano's 6 parts take time to read, and the list grows as they are drawn
+  await page.evaluate(() => { window.CASSIE_READ_SPEED = 1; window.__t0 = performance.now(); liveDrawReply('draw a volcano', false); });
+  await page.waitForFunction(() => document.querySelectorAll('#chat-log .ld .ld-stepi').length >= 2, null, { timeout: 30000 });
+  const mid = await steps();
+  await page.waitForFunction(() => document.querySelector('#chat-log .ld .ld-live.off'), null, { timeout: 90000 });
+  const took = await page.evaluate(() => performance.now() - window.__t0), end = await steps();
+  expect(mid.items.length >= 2 && mid.items.length < 6, 'the steps are added as each part is drawn: ' + mid.items.length);
+  expect(end.shown && end.open && end.items.length === 6 && end.items.every((x) => /\w+: \w/.test(x)) && /^Volcano cone: /.test(end.items[0]), 'once drawn, all six steps stay, each its name and words: ' + JSON.stringify(end.items));
+  expect(took >= 6 * 1200, 'she waits for each step to be read before drawing the next: ' + Math.round(took) + ' ms for 6 parts');
+  // folds away and opens again
+  await page.click('#chat-log .ld .ld-steps-head'); const shut = await steps(); await page.click('#chat-log .ld .ld-steps-head');
+  expect(!shut.open && (await steps()).open, 'the list folds away with a tap, and opens again');
+  // from history: all of them at once; Draw again: fresh, not twice
+  await page.evaluate(() => { window.CASSIE_READ_SPEED = 0; const m = state.messages.find((x) => x.display); chatLog.innerHTML = ''; renderMessage('assistant', m.display); });
+  await page.waitForSelector('#chat-log .ld .ld-stepi'); const old = await steps();
+  expect(old.items.length === 6, 'a drawing from history has all its steps: ' + old.items.length);
+  await page.click('#chat-log .ld [data-act="redo"], #chat-log .ld button:has-text("Draw again")');
+  await page.waitForFunction(() => [...document.querySelectorAll('#chat-log .ld')].pop().querySelectorAll('.ld-stepi').length >= 6, null, { timeout: 40000 }).catch(() => {}); await page.waitForTimeout(1500);
+  expect((await steps()).items.length === 6, 'Draw again starts the steps fresh, never twice: ' + (await steps()).items.length);
+  expect(!errors.length, 'page errors: ' + errors.join(' | '));
+  await ctx.close();
+});
 test('v333 "only show me the heart" is the book heart; when every AI fails, she shows her own drawing of what was asked (not an error); the extension reads every equation a page shows when it is highlighted (KaTeX, MathML, MathJax 2 and 3, Wikipedia, pictures of equations), and all of a long highlight', async (b) => {
   const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, book: true, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: async () => { throw new Error('busy'); } });
   await ctx.route(/api\.groq\.com/, (r) => r.fulfill({ status: 503, json: { error: { message: 'over capacity' } } }));
@@ -10234,7 +10260,7 @@ test('Cassie’s live drawing in the extension (3.67): Ctrl twice opens “Ask C
     expect((await shots()) === 2 && !(await popText()), 'one more picture for this question, and her answer box makes way for the card');
     // beat 1 draws its own 2 parts, one after the other; the other 14 wait
     let seen = { moving: false, mid: false, cursor: false, early: false, counts: new Set() };
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < 120; i++) { // (v334: a step lasts as long as it takes to read, so its parts are drawn over longer)
       const c = await card();
       if (c.beat !== '0') break;
       if (c.moving === '1') seen.moving = true;
@@ -11119,10 +11145,17 @@ test('Cassie’s live drawing in 3D: asked for 3D, or to be shown how parts go t
       const sized = (await model()).float;
       expect(Math.abs(moved[0] - (before[0] + 120)) <= 3 && Math.abs(moved[1] - (before[1] + 60)) <= 3 && moved[2] === before[2], 'the drawing moves by its bar: ' + JSON.stringify([before, moved]));
       expect(Math.abs(sized[2] - (moved[2] - 140)) <= 3 && Math.abs(sized[3] - (moved[3] - 90)) <= 3 && sized[0] === moved[0], 'and resizes by its corner: ' + JSON.stringify([moved, sized]));
+      // (v334) from every corner: the top left one grows it up and left, the corner across stays put
+      const nw = await at('.lv-float .lv-fsize[data-corner="nw"]');
+      await page.mouse.move(nw[0], nw[1]); await page.mouse.down(); await page.mouse.move(nw[0] - 60, nw[1] - 40, { steps: 6 }); await page.mouse.up();
+      const tl = (await model()).float;
+      expect(Math.abs(tl[0] - (sized[0] - 60)) <= 3 && Math.abs(tl[1] - (sized[1] - 40)) <= 3 && Math.abs(tl[0] + tl[2] - (sized[0] + sized[2])) <= 3 && Math.abs(tl[1] + tl[3] - (sized[1] + sized[3])) <= 3, 'and from its top left corner, the bottom right staying put: ' + JSON.stringify([sized, tl]));
+      const corners = await page.evaluate((h) => [...document.querySelector(h).shadowRoot.querySelectorAll('.lv-float .lv-fsize')].map((e) => e.dataset.corner).join(), LIVE);
+      expect(corners === 'se,sw,ne,nw', 'a handle on every corner: ' + corners);
       await page.waitForTimeout(600);
       if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/live-3d-moved.png' });
       await page.evaluate(() => dispatchEvent(new Event('resize'))); await page.waitForTimeout(300);
-      expect(JSON.stringify((await model()).float) === JSON.stringify(sized), 'and it stays where it was put: ' + JSON.stringify((await model()).float));
+      expect(JSON.stringify((await model()).float) === JSON.stringify(tl), 'and it stays where it was put: ' + JSON.stringify((await model()).float));
     }
     expect(!/can(no|’|')t draw/i.test(c.text) && /so here is one/.test(c.text) && !/[–—]/.test(c.text + m.tags.join(' ')), 'she says the page lacks it and builds it: ' + c.text.slice(0, 160));
     if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/live-3d-done.png' });

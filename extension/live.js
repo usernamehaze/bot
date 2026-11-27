@@ -651,10 +651,16 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
     .lv-grip::before { content: ""; width: 44px; height: 5px; border-radius: 99px; background: var(--p-grey); opacity: .7; }
     .lv-grip:hover::before, .lv-grip:focus-visible::before { opacity: 1; }
     .lv-float.lv-moving .lv-grip { cursor: grabbing; }
-    .lv-fsize { position: absolute; right: 0; bottom: 0; width: 28px; height: 28px; z-index: 3; cursor: nwse-resize; touch-action: none; }
-    .lv-fsize::before { content: ""; position: absolute; right: 7px; bottom: 7px; width: 12px; height: 12px; border-right: 2px solid var(--p-grey); border-bottom: 2px solid var(--p-grey); border-radius: 0 0 4px 0; opacity: .8; }
+    .lv-fsize { position: absolute; width: 28px; height: 28px; z-index: 3; touch-action: none; } /* (v334: a handle on every corner) */
+    .lv-fsize[data-corner="se"] { right: 0; bottom: 0; cursor: nwse-resize; } .lv-fsize[data-corner="nw"] { left: 0; top: 0; cursor: nwse-resize; }
+    .lv-fsize[data-corner="sw"] { left: 0; bottom: 0; cursor: nesw-resize; } .lv-fsize[data-corner="ne"] { right: 0; top: 0; cursor: nesw-resize; }
+    .lv-fsize::before { content: ""; position: absolute; width: 12px; height: 12px; border: 0 solid var(--p-grey); opacity: .8; }
+    .lv-fsize[data-corner="se"]::before { right: 7px; bottom: 7px; border-right-width: 2px; border-bottom-width: 2px; border-radius: 0 0 4px 0; }
+    .lv-fsize[data-corner="sw"]::before { left: 7px; bottom: 7px; border-left-width: 2px; border-bottom-width: 2px; border-radius: 0 0 0 4px; }
+    .lv-fsize[data-corner="ne"]::before { right: 7px; top: 7px; border-right-width: 2px; border-top-width: 2px; border-radius: 0 4px 0 0; }
+    .lv-fsize[data-corner="nw"]::before { left: 7px; top: 7px; border-left-width: 2px; border-top-width: 2px; border-radius: 4px 0 0 0; }
     .lv-grip:focus-visible, .lv-fsize:focus-visible { outline: 2px solid var(--p-grey); outline-offset: 2px; border-radius: 6px; }
-    .lv .lv-clear3 { position: absolute; top: 16px; right: 16px; z-index: 2; border-color: var(--edge); box-shadow: 0 4px 16px rgba(0,0,0,.25); }
+    .lv .lv-clear3 { position: absolute; top: 16px; right: 36px; z-index: 2; border-color: var(--edge); box-shadow: 0 4px 16px rgba(0,0,0,.25); }
     .ld-canvas { display: block; width: 100% !important; height: 100% !important; cursor: grab; touch-action: none; outline: none; }
     .ld-canvas:active { cursor: grabbing; }
     .ld-tags { position: absolute; inset: 0; pointer-events: none; }
@@ -786,7 +792,7 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
   }
 
   const tell = (msg) => { try { return chrome.runtime.sendMessage(msg).catch(() => null); } catch (e) { return Promise.resolve(null); } };
-  const readPace = (text) => Math.min(9000, 1400 + String(text || '').length * 45); // (typed: time to read it, as in her lessons)
+  const readPace = (text) => Math.min(12000, 1800 + String(text || '').length * 65); // (typed: time to read it, as in her lessons; v334: a student's pace, about 180 words a minute)
 
   // play(scene, { q, send, mount, about, pointer, page, onBoard, onClose, save, pace })
   //   send(prompt, maxTokens) → her reply: for follow-ups (without it the card has no ask box)
@@ -846,7 +852,7 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
         </div>
         ${inPanel ? '' : `<button type="button" class="lv-size" aria-label="Resize the card" title="Drag to resize. Arrow keys work too. Double click the top bar to reset.">${ICON.size}</button>`}
       </div>
-      <div class="lv-float" hidden><div class="lv-stage lv-stage-float" role="img"></div><button type="button" class="lv-clear3">Clear</button><div class="lv-grip" role="button" tabindex="0" aria-label="Move the drawing (drag, or the arrow keys)" title="Drag to move"></div><div class="lv-fsize" role="button" tabindex="0" aria-label="Resize the drawing (drag, or Shift and the arrow keys)" title="Drag to resize"></div></div>`;
+      <div class="lv-float" hidden><div class="lv-stage lv-stage-float" role="img"></div><button type="button" class="lv-clear3">Clear</button><div class="lv-grip" role="button" tabindex="0" aria-label="Move the drawing (drag, or the arrow keys)" title="Drag to move"></div><div class="lv-fsize" data-corner="se" role="button" tabindex="0" aria-label="Resize the drawing from its bottom right corner (drag, or the arrow keys)" title="Drag to resize"></div><div class="lv-fsize" data-corner="sw" role="button" tabindex="0" aria-label="Resize the drawing from its bottom left corner (drag, or the arrow keys)" title="Drag to resize"></div><div class="lv-fsize" data-corner="ne" role="button" tabindex="0" aria-label="Resize the drawing from its top right corner (drag, or the arrow keys)" title="Drag to resize"></div><div class="lv-fsize" data-corner="nw" role="button" tabindex="0" aria-label="Resize the drawing from its top left corner (drag, or the arrow keys)" title="Drag to resize"></div></div>`;
     root.appendChild(wrapEl);
     (inPanel ? opts.mount : document.documentElement).appendChild(host);
     const $ = (s) => root.querySelector(s);
@@ -889,21 +895,30 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
       const fit = (r) => { const w = Math.max(260, Math.min(r.w, innerWidth - 16)), h = Math.max(200, Math.min(r.h, innerHeight - 16)); return { w, h, l: Math.max(8, Math.min(r.l, innerWidth - w - 8)), t: Math.max(8, Math.min(r.t, innerHeight - h - 8)) }; };
       const now = () => { const b = floatEl.getBoundingClientRect(); return { l: b.left, t: b.top, w: b.width, h: b.height }; };
       const put = (r) => { const f = fit(r); floatEl.dataset.own = '1'; Object.assign(floatEl.style, { left: Math.round(f.l) + 'px', top: Math.round(f.t) + 'px', width: Math.round(f.w) + 'px', height: Math.round(f.h) + 'px' }); };
+      // a corner dragged: that corner moves, the one across from it stays where it is
+      const grow = (r, c, dx, dy) => {
+        const o = { ...r };
+        if (c.includes('e')) o.w = r.w + dx;
+        if (c.includes('w')) { o.w = Math.max(260, r.w - dx); o.l = r.l + r.w - o.w; }
+        if (c.includes('s')) o.h = r.h + dy;
+        if (c.includes('n')) { o.h = Math.max(200, r.h - dy); o.t = r.t + r.h - o.h; }
+        return o;
+      };
       const drag = (el, size) => {
         el.addEventListener('pointerdown', (e) => {
           if (e.button > 0) return; e.preventDefault(); e.stopPropagation();
           const start = now(), x0 = e.clientX, y0 = e.clientY; el.setPointerCapture(e.pointerId); floatEl.classList.add('lv-moving');
-          const move = (ev) => { const dx = ev.clientX - x0, dy = ev.clientY - y0; put(size ? { ...start, w: start.w + dx, h: start.h + dy } : { ...start, l: start.l + dx, t: start.t + dy }); };
+          const move = (ev) => { const dx = ev.clientX - x0, dy = ev.clientY - y0; put(size ? grow(start, size, dx, dy) : { ...start, l: start.l + dx, t: start.t + dy }); };
           const up = () => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up); floatEl.classList.remove('lv-moving'); };
           el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
         });
         el.addEventListener('keydown', (e) => {
           const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key]; if (!d) return;
           e.preventDefault(); e.stopPropagation(); const r = now(), k = e.altKey ? 4 : 24;
-          put(size || e.shiftKey ? { ...r, w: r.w + d[0] * k, h: r.h + d[1] * k } : { ...r, l: r.l + d[0] * k, t: r.t + d[1] * k });
+          put(size || e.shiftKey ? grow(r, size || 'se', d[0] * k, d[1] * k) : { ...r, l: r.l + d[0] * k, t: r.t + d[1] * k });
         });
       };
-      drag(floatEl.querySelector('.lv-grip'), false); drag(floatEl.querySelector('.lv-fsize'), true);
+      drag(floatEl.querySelector('.lv-grip'), false); floatEl.querySelectorAll('.lv-fsize').forEach((h) => drag(h, h.dataset.corner));
       addEventListener('resize', () => { if (floatEl.dataset.own && !floatEl.hidden) put(now()); });
     }
     let model = null, floating = false, picked = -1, built = 0, lastPic = '', focusLater = -1; // (focusLater: the part a follow-up is about, picked out once it is all drawn)

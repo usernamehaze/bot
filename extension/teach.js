@@ -642,7 +642,7 @@
       studio = !!(left && left.on && left.left >= need && audio());
       if (!studio) typing(!!(left && left.guest));
     }
-    const readPace = (text) => Math.min(9000, 1400 + text.length * 45);
+    const readPace = (text) => Math.min(12000, 1800 + text.length * 65); // (v334: a student's reading pace, about 180 words a minute)
     function speakThen(text, then) {
       hush();
       if (!voiceOn || !studio) { timer = setTimeout(then, readPace(text)); return; }
