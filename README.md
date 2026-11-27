@@ -115,4 +115,4 @@ A single test runs with `node smoke.cjs "<part of its name>"`.
 
 ## Team
 
-Cassie is made by **haze!** ([@usernamehaze](https://github.com/usernamehaze)) and **Aecoryn**.
+Cassie is made by **haze!** ([@usernamehaze](https://github.com/usernamehaze)) and **Aecoryn**, with the help of Claude Code.
