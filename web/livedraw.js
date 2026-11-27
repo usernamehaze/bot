@@ -137,7 +137,9 @@ export function clean(raw) {
     from: mode === '3d' && Array.isArray(p && p.from) && p.from.length === 3 && p.from.every((v) => Number.isFinite(+v)) ? p.from.map((v) => num(v, -12, 12)) : null,
     view: mode === '3d' && ['front', 'back', 'left', 'right', 'side', 'top'].includes(p && p.view) ? p.view : null,
     shapes: (Array.isArray(p && p.shapes) ? p.shapes : []).slice(0, mode === '3d' ? 8 : 24).filter((x) => x && typeof x === 'object').map((x) => ({ ...x, t: kindOf(x, mode) })),
-  })).filter((p) => p.shapes.length);
+    // (v343, 3d) a part that is organs of the Labs' 3D body, by their names there; the body's own outline; seen through
+    ...(mode === '3d' && s.atlas === true && Array.isArray(p && p.of) ? { of: p.of.slice(0, 40).map((x) => String(x).replace(/[^a-z0-9_]/gi, '').slice(0, 80)).filter(Boolean), outline: !!p.outline, faint: !!p.faint } : {}),
+  })).filter((p) => p.shapes.length || (p.of && p.of.length));
   if (!parts.length) return null;
   const ref = s.ref && typeof s.ref === 'object' && /^https:\/\//.test(String(s.ref.url || '')) ? { text: words(s.ref.text, 160), url: String(s.ref.url).slice(0, 400) } : null;
   // (v306) an answer to a follow-up: the parts it added or changed are drawn; the rest is shown at once; focus is picked out
@@ -155,10 +157,11 @@ export function clean(raw) {
     const base = { part, of, color: hex(f.color) || (part ? parts.find((q) => q.id === part).color : color(null, 0)), to: hex(f.to), dots: Math.round(num(f.dots, 2, 14, 6)), speed: num(f.speed, 0.3, 3, 1) };
     if (mode === '2d') return typeof f.d === 'string' && f.d.length < 600 && PATH_OK.test(f.d) && /^\s*M/i.test(f.d) ? { ...base, d: f.d } : null;
     const pts = (Array.isArray(f.pts) ? f.pts : []).slice(0, 16).filter((q) => Array.isArray(q) && q.length === 3 && q.every((v) => Number.isFinite(+v))).map((q) => q.map((v) => num(v, -20, 20)));
-    return pts.length >= 2 ? { ...base, pts } : null;
+    const via = s.atlas === true && Array.isArray(f.via) ? f.via.slice(0, 20).map((x) => String(x).replace(/[^a-z0-9_^<>+-]/gi, '').slice(0, 80)).filter(Boolean) : []; // (v343: a path through the body's own organs, worked out once they load)
+    return pts.length >= 2 ? { ...base, pts } : via.length >= 2 ? { ...base, via } : null;
   }).filter(Boolean);
   const glb = mode === '3d' && typeof s.glb === 'string' && /^models\/[\w-]{1,40}\.glb$/.test(s.glb) ? s.glb : null; // (v320: a Blender model from the drawing book, only from Cassie's own folder)
-  return { ...(glb ? { glb } : {}), ...(next.length ? { next } : {}), ...(flows.length ? { flows } : {}), title: words(s.title, 90) || 'How it works', mode, intro: words(s.intro, 300), summary: words(s.summary, 300), photo: words(s.photo, 300), simple: !!s.simple, axis: ['x', 'y', 'z'].includes(s.axis) ? s.axis : 'x', parts, ref, ...(fresh ? { fresh } : {}), ...(focus ? { focus } : {}) };
+  return { ...(glb ? { glb } : {}), ...(mode === '3d' && s.atlas === true ? { atlas: true } : {}), ...(next.length ? { next } : {}), ...(flows.length ? { flows } : {}), title: words(s.title, 90) || 'How it works', mode, intro: words(s.intro, 300), summary: words(s.summary, 300), photo: words(s.photo, 300), simple: !!s.simple, axis: ['x', 'y', 'z'].includes(s.axis) ? s.axis : 'x', parts, ref, ...(fresh ? { fresh } : {}), ...(focus ? { focus } : {}) };
 }
 
 // ---------- is it a good drawing? (2d) the points every shape reaches, and what is wrong ----------
@@ -648,7 +651,7 @@ export async function render(host, rawSpec, opts = {}) {
   let mv = null; const mvHost = spec.mode === '3d' ? el('div', 'ld-mv') : null;
   const machineOn = async () => {
     if (mv) return mv;
-    let m = null; try { m = await import('./isoview.js?v=342'); } catch (e) { return null; }
+    let m = null; try { m = await import('./isoview.js?v=343'); } catch (e) { return null; }
     mv = m.machine(mvHost, spec, { dark: !lightPage() });
     if (mv) {
       const row = el('div', 'ld-mv-acts');
@@ -2969,6 +2972,87 @@ export function kitFind(asked = '') {
   KIT_NATURE.forEach((N) => add('nature', N.t + (N.kind ? ':' + N.kind : ''), N.is, N)); // (v335) the sky's own, a rock
   return all.filter((h) => h.info).sort((a, b) => b.len - a.len); // (the most exact first: a polar bear before a bear)
 }
+// (v343) inside each appliance, in metres from the middle of its floor (front toward +z): its working parts, each named and
+// said what it does, and what flows through them. In 3D the case is see-through to show them (Open it up / Close the case).
+const B = (size, pos, color) => ({ t: 'box', size, pos, color }), C = (r, len, axis, pos, color) => ({ t: 'cylinder', r, len, axis, pos, color }), S = (r, pos, color) => ({ t: 'sphere', r, pos, color }), P = (r, pts, color) => ({ t: 'pipe', r, pts, color });
+const APPL_INSIDE = {
+  fridge: { parts: [
+    ['compressor', 'Compressor', 'At the bottom back: it squeezes the refrigerant gas so it gets hot.', '#3a3f47', [C(0.09, 0.2, 'y', [0.25, 0.12, -0.27])]],
+    ['condenser', 'Condenser coils', 'On the back: the hot refrigerant gives its heat to the room and turns to liquid.', '#2c2c2c', [B([0.75, 1.2, 0.02], [0, 0.8, -0.39])]],
+    ['valve', 'Expansion valve', 'Lets the liquid through a tiny gap: its pressure drops and it gets very cold.', '#b08a3a', [S(0.035, [-0.3, 1.3, -0.33])]],
+    ['evaporator', 'Evaporator coils', 'Inside, at the back: the cold refrigerant boils and takes heat out of the food.', '#8fc8ef', [B([0.7, 0.3, 0.04], [0, 1.45, -0.3])]],
+    ['shelves', 'Shelves', 'Hold the food where the cold air reaches it.', '#e6eef4', [B([0.8, 0.015, 0.6], [0, 0.6, 0.02]), B([0.8, 0.015, 0.6], [0, 0.9, 0.02]), B([0.8, 0.015, 0.6], [0, 1.2, 0.02])]],
+    ['thermostat', 'Thermostat', 'Switches the compressor on when it gets too warm inside, off when it is cold enough.', '#e05a5a', [B([0.06, 0.04, 0.03], [0.32, 1.65, 0.2])]] ],
+    flows: [{ part: ['compressor', 'condenser', 'valve', 'evaporator'], pts: [[0.25, 0.12, -0.27], [0, 0.2, -0.39], [0, 1.3, -0.39], [-0.3, 1.3, -0.33], [-0.3, 1.45, -0.3], [0.3, 1.45, -0.3], [0.3, 0.3, -0.3], [0.25, 0.12, -0.27]], color: '#ff8a5b', to: '#7fb0ff', dots: 8 }] },
+  washer: { parts: [
+    ['drum', 'Drum', 'A steel drum with holes and paddles: it turns the clothes through the soapy water.', '#c8ccd4', [C(0.23, 0.4, 'z', [0, 0.42, 0])]],
+    ['motor', 'Motor', 'Turns the drum, slowly to wash and very fast to spin the water out.', '#3a3f47', [C(0.07, 0.12, 'z', [0.14, 0.1, -0.15])]],
+    ['belt', 'Belt and pulley', 'Carries the motor\'s turning up to the drum.', '#1e1e1e', [P(0.008, [[0.14, 0.1, -0.24], [0, 0.42, -0.24]]), C(0.12, 0.02, 'z', [0, 0.42, -0.24])]],
+    ['inlet', 'Water inlet valve', 'Opens to let clean water in from the tap.', '#4a7ad0', [B([0.06, 0.06, 0.06], [-0.2, 0.78, -0.25])]],
+    ['drawer', 'Detergent drawer', 'The water washes the soap from here into the drum.', '#e8e8e8', [B([0.18, 0.06, 0.2], [-0.17, 0.78, 0.18])]],
+    ['pump', 'Drain pump', 'Pumps the dirty water out at the end.', '#5a7a5a', [S(0.05, [-0.2, 0.07, 0.15])]] ],
+    flows: [{ part: ['inlet', 'drawer', 'drum'], pts: [[-0.2, 0.78, -0.25], [-0.17, 0.78, 0.18], [-0.1, 0.6, 0.15], [0, 0.42, 0.05]], color: '#7ee0e0', dots: 5 }, { part: ['drum', 'pump'], pts: [[0, 0.2, 0], [-0.2, 0.07, 0.15], [-0.25, 0.07, -0.3]], color: '#8a9a7a', dots: 4 }] },
+  microwave: { parts: [
+    ['magnetron', 'Magnetron', 'Behind the controls: it turns electricity into microwaves.', '#8a63c9', [B([0.1, 0.1, 0.12], [0.18, 0.18, -0.05])]],
+    ['waveguide', 'Waveguide', 'A metal channel that carries the waves into the cooking space.', '#b07ad6', [B([0.12, 0.04, 0.1], [0.07, 0.25, -0.05])]],
+    ['transformer', 'High-voltage transformer', 'Makes the high voltage the magnetron needs.', '#3a3f47', [B([0.08, 0.08, 0.08], [0.19, 0.06, -0.1])]],
+    ['turntable', 'Turntable', 'Turns the food so the waves heat it evenly.', '#cfe8f4', [C(0.13, 0.01, 'y', [-0.06, 0.04, 0])]] ],
+    flows: [{ part: ['magnetron', 'waveguide', 'turntable'], pts: [[0.18, 0.18, -0.05], [0.07, 0.25, -0.05], [-0.06, 0.2, 0], [-0.06, 0.06, 0]], color: '#c9a7ff', dots: 5, speed: 1.4 }] },
+  blender: { parts: [
+    ['motor', 'Motor', 'In the heavy base: a strong electric motor spins thousands of times a minute.', '#3a3f47', [C(0.05, 0.08, 'y', [0, 0.06, 0])]],
+    ['shaft', 'Drive shaft', 'Carries the spin up through the bottom of the jar.', '#9aa0aa', [C(0.008, 0.07, 'y', [0, 0.13, 0])]],
+    ['blades', 'Blades', 'Four sharp blades at the bottom of the jar chop and mix the food.', '#c8ccd4', [{ t: 'blades', n: 4, len: 0.05, width: 0.014, hub: 0.012, axis: 'y', pos: [0, 0.17, 0] }]],
+    ['buttons', 'Speed buttons', 'Choose how fast the motor turns.', '#e05a5a', [B([0.08, 0.03, 0.02], [0, 0.07, 0.09])]] ],
+    flows: [{ part: ['blades'], pts: [[0.05, 0.18, 0], [0, 0.22, 0.05], [-0.05, 0.27, 0], [0, 0.32, -0.05], [0.05, 0.27, 0], [0, 0.22, 0.05], [-0.05, 0.18, 0]], color: '#7fd07f', dots: 6, speed: 1.6 }] },
+  toaster: { parts: [
+    ['elements', 'Heating elements', 'Thin nichrome wires on both sides of each slot glow red hot.', '#ff6a3d', [B([0.24, 0.13, 0.005], [0, 0.1, -0.065]), B([0.24, 0.13, 0.005], [0, 0.1, -0.02]), B([0.24, 0.13, 0.005], [0, 0.1, 0.02]), B([0.24, 0.13, 0.005], [0, 0.1, 0.065])]],
+    ['bread', 'Bread in the slots', 'The heat browns the bread on both sides at once.', '#e8c79a', [B([0.2, 0.1, 0.02], [0, 0.12, -0.042]), B([0.2, 0.1, 0.02], [0, 0.12, 0.042])]],
+    ['lever', 'Lever and spring', 'Pushing the lever lowers the bread and switches on the current; a spring pops it back up.', '#3a3f47', [B([0.03, 0.025, 0.05], [0.16, 0.1, 0])], 1],
+    ['timer', 'Browning dial', 'A timer (or a strip that bends with heat) decides when to pop the bread up.', '#e05a5a', [S(0.016, [0.16, 0.05, 0.05])], 1],
+    ['tray', 'Crumb tray', 'Catches the crumbs at the bottom.', '#9aa0aa', [B([0.26, 0.005, 0.15], [0, 0.015, 0])]] ],
+    flows: [{ part: ['elements', 'bread'], pts: [[-0.1, 0.06, -0.065], [-0.1, 0.14, -0.042], [0.1, 0.06, 0.065], [0.1, 0.14, 0.042]], color: '#ffb067', dots: 4, speed: 0.8 }] },
+  coffeemaker: { parts: [
+    ['tank', 'Water tank', 'At the back: holds the cold water.', '#9ad0f0', [B([0.18, 0.2, 0.06], [0, 0.18, -0.09])]],
+    ['heater', 'Heating tube', 'Under the warming plate: heats the water until it bubbles up the tube.', '#ff6a3d', [P(0.008, [[-0.05, 0.03, -0.05], [-0.05, 0.03, 0.08], [0.05, 0.03, 0.08], [0.05, 0.03, -0.05]])]],
+    ['riser', 'Hot water tube', 'Carries the bubbling hot water up to the top.', '#d0d0d0', [P(0.007, [[0, 0.03, -0.05], [0, 0.33, -0.05], [0, 0.33, 0.04]])]],
+    ['basket', 'Filter and coffee', 'The hot water drips over the ground coffee and comes out as coffee.', '#8a5a3a', [C(0.05, 0.05, 'y', [0, 0.27, 0.05])]],
+    ['carafe', 'Carafe', 'Catches the coffee; the warming plate keeps it hot.', '#5a3a2a', [C(0.06, 0.1, 'y', [0, 0.09, 0.05])]] ],
+    flows: [{ part: ['tank', 'heater', 'riser', 'basket', 'carafe'], pts: [[0, 0.1, -0.09], [0, 0.03, -0.05], [0, 0.2, -0.05], [0, 0.33, -0.05], [0, 0.32, 0.05], [0, 0.25, 0.05], [0, 0.14, 0.05]], color: '#7fb0ff', to: '#7a4a2a', dots: 7 }] },
+  vacuum: { parts: [
+    ['brush', 'Brush roll', 'Spins and sweeps the dust up from the floor.', '#d05a3a', [C(0.025, 0.26, 'x', [0, 0.03, 0.08])]],
+    ['hose', 'Hose', 'Carries the dusty air up to the bin.', '#8a8f9a', [P(0.015, [[0, 0.04, 0.05], [0, 0.3, -0.12], [0, 0.55, 0.0]])]],
+    ['bin', 'Dust bin', 'The dust spins out of the air and stays here.', '#9ac0e0', [C(0.07, 0.2, 'y', [0, 0.62, 0.05])]],
+    ['filter', 'Filter', 'Catches the finest dust before the air goes out.', '#f0f0e0', [C(0.065, 0.02, 'y', [0, 0.74, 0.05])]],
+    ['motor', 'Motor and fan', 'The motor spins a fan that pulls the air through, making suction.', '#3a3f47', [C(0.06, 0.12, 'y', [0, 0.35, -0.06])]] ],
+    flows: [{ part: ['brush', 'hose', 'bin', 'filter', 'motor'], pts: [[0, 0.03, 0.1], [0, 0.04, 0.05], [0, 0.3, -0.12], [0, 0.55, 0.0], [0, 0.65, 0.05], [0, 0.75, 0.05], [0, 0.45, -0.06], [0, 0.3, -0.15]], color: '#c8c0b0', dots: 8, speed: 1.4 }] },
+  aircon: { parts: [
+    ['compressor', 'Compressor', 'Squeezes the refrigerant gas so it gets hot.', '#3a3f47', [C(0.08, 0.15, 'y', [0.1, 0.1, -0.08])]],
+    ['condenser', 'Condenser coils', 'At the back: the heat is blown out of the window through the hose.', '#3a3a3a', [B([0.38, 0.25, 0.03], [0, 0.32, -0.16])]],
+    ['evaporator', 'Evaporator coils', 'At the front: cold refrigerant takes the heat out of the room air.', '#8fc8ef', [B([0.38, 0.2, 0.03], [0, 0.56, 0.15])]],
+    ['fan', 'Fan', 'Blows the room air over the cold coils and back out, cool.', '#c8ccd4', [{ t: 'blades', n: 5, len: 0.1, width: 0.03, hub: 0.02, axis: 'z', pos: [0, 0.56, 0.05] }]],
+    ['hose', 'Hot air hose', 'Carries the hot air out of the room.', '#c8ccd4', [P(0.05, [[0, 0.4, -0.19], [0, 0.4, -0.35], [0, 0.6, -0.5]])], 1] ],
+    flows: [{ part: ['compressor', 'condenser', 'evaporator'], pts: [[0.1, 0.1, -0.08], [0, 0.32, -0.16], [-0.15, 0.45, 0], [0, 0.56, 0.15], [0.1, 0.2, 0], [0.1, 0.1, -0.08]], color: '#ff8a5b', to: '#7fb0ff', dots: 6 }, { part: ['fan', 'evaporator'], pts: [[0, 0.56, -0.02], [0, 0.56, 0.15], [0, 0.6, 0.4]], color: '#bfe6ff', dots: 4, speed: 1.4 }] },
+  fan: { parts: [
+    ['blades', 'Blades', 'Three tilted blades push the air forward as they spin.', '#7fb0ff', [{ t: 'blades', n: 3, len: 0.17, width: 0.07, hub: 0.03, axis: 'z', pos: [0, 1.02, 0.02] }]],
+    ['motor', 'Motor', 'An electric motor behind the blades spins them.', '#3a3f47', [C(0.07, 0.12, 'z', [0, 1.02, -0.08])]],
+    ['gear', 'Oscillation gearbox', 'Slowly turns the head from side to side.', '#9aa0aa', [B([0.06, 0.05, 0.06], [0, 0.94, -0.14])]],
+    ['pole', 'Stand pole', 'Holds the head up at the right height.', '#d8dbdf', [C(0.02, 0.8, 'y', [0, 0.5, -0.08])]],
+    ['switch', 'Speed buttons', 'Choose how fast the blades turn.', '#e05a5a', [B([0.1, 0.03, 0.06], [0, 0.04, 0.1])]] ],
+    flows: [{ part: ['blades'], pts: [[0, 1.02, -0.22], [0, 1.02, 0.1], [0, 1.0, 0.55]], color: '#bfe6ff', dots: 4, speed: 1.6 }, { part: ['blades'], pts: [[0.12, 1.1, -0.22], [0.12, 1.1, 0.1], [0.14, 1.12, 0.55]], color: '#bfe6ff', dots: 3, speed: 1.6 }] },
+  ricecooker: { parts: [
+    ['plate', 'Heating plate', 'Under the pot: heats it until the water boils.', '#ff6a3d', [C(0.1, 0.01, 'y', [0, 0.03, 0])]],
+    ['pot', 'Inner pot', 'Holds the rice and water.', '#c8ccd4', [C(0.11, 0.15, 'y', [0, 0.11, 0])]],
+    ['thermostat', 'Thermostat (magnet)', 'Once the water is gone the pot gets hotter than 100 degrees, and it switches to Warm.', '#e05a5a', [C(0.015, 0.03, 'y', [0, 0.012, 0])]],
+    ['vent', 'Steam vent', 'Lets the steam out through the lid.', '#9aa0aa', [S(0.015, [0, 0.27, 0.05])]],
+    ['switch', 'Cook and Warm switch', 'Starts the cooking; it flips to Warm by itself.', '#3a3f47', [B([0.04, 0.03, 0.02], [0, 0.08, 0.15])]] ],
+    flows: [{ part: ['pot', 'vent'], pts: [[0, 0.15, 0], [0, 0.22, 0.03], [0, 0.27, 0.05], [0, 0.4, 0.06]], color: '#f0f0f0', dots: 4, speed: 0.7 }] },
+};
+// (v343) how big a part's shapes are, longest side against the appliance's longest side
+const shapeLong = (shapes, A) => { const lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9]; const add = (q, r = [0, 0, 0]) => q.forEach((v, i) => { lo[i] = Math.min(lo[i], v - r[i]); hi[i] = Math.max(hi[i], v + r[i]); });
+  shapes.forEach((sh) => { if (sh.pts) sh.pts.forEach((q) => add(q, [sh.r, sh.r, sh.r])); else if (sh.size) add(sh.pos, sh.size.map((v) => v / 2)); else if (sh.t === 'blades') add(sh.pos, [sh.len, sh.len, sh.len]); else { const r = sh.r, l = (sh.len || 2 * r) / 2; add(sh.pos, sh.axis === 'x' ? [l, r, r] : sh.axis === 'z' ? [r, r, l] : sh.axis === 'y' ? [r, l, r] : [r, r, r]); } });
+  return +Math.min(1, Math.max(...hi.map((v, i) => v - lo[i])) / Math.max(A.W, A.H, A.D)).toFixed(3); };
+// every number of a shape in metres, made the drawing's size (k: units a metre)
+const scaleShape = (sh, k) => { const o = { ...sh }; for (const key of ['r', 'len', 'width', 'hub', 'tube']) if (o[key] != null) o[key] = +(o[key] * k).toFixed(4); if (o.size) o.size = o.size.map((v) => +(v * k).toFixed(4)); if (o.pos) o.pos = o.pos.map((v) => +(v * k).toFixed(4)); if (o.pts) o.pts = o.pts.map((q) => q.map((v) => +(v * k).toFixed(4))); return o; };
 const APPL_H2 = { fridge: 200, vacuum: 200, fan: 200, aircon: 180, washer: 170, microwave: 90 };
 // the drawing (or the 3D model) of one thing the kit knows, from kitFind
 export function kitSpec(hit, want3d = false, opts = {}) {
@@ -2985,8 +3069,17 @@ export function kitSpec(hit, want3d = false, opts = {}) {
   }
   if (type === 'appliance') {
     const A = info, name = A.what.replace(/^an? /, ''), open = !!APPL_OPEN[kind] && !opts.only; // (v336: "only the refrigerator": shut, whole, as you would see it)
-    return base(opts.only ? kitCap(name) : `How ${A.what} works`, `${kitCap(A.what)}: ${A.views.split(';')[0].replace(/^front: /, '')}.`, A.works, `a real ${name} in a home`, [`What are the main parts of ${A.what}?`, `How does ${A.what} use electricity?`],
-      { id: kind, label: kitCap(name), say: `Its main parts: ${A.parts.join(', ')}.`, shapes: [d3 ? { t: 'appliance', kind, pos: [0, 0, 0], h: +(APPL[kind] ? 4.5 * APPL[kind].H / Math.max(APPL[kind].W, APPL[kind].H, APPL[kind].D) : 4.5).toFixed(2), ...(open ? { pose: 'open' } : {}) } : { t: 'appliance', kind, x: 200, y: 236, h: APPL_H2[kind] || 140, view: open ? 'open' : 'front' }] });
+    const spec = base(opts.only ? kitCap(name) : `How ${A.what} works`, `${kitCap(A.what)}: ${A.views.split(';')[0].replace(/^front: /, '')}.`, A.works, `a real ${name} in a home`, [`What are the main parts of ${A.what}?`, `How does ${A.what} use electricity?`],
+      { id: kind, label: kitCap(name), say: `Its main parts: ${A.parts.join(', ')}.`, shapes: [d3 ? { t: 'appliance', kind, pos: [0, 0, 0], h: +(APPL[kind] ? 4.5 * APPL[kind].H / Math.max(APPL[kind].W, APPL[kind].H, APPL[kind].D) : 4.5).toFixed(2), ...(open && !APPL_INSIDE[kind] ? { pose: 'open' } : {}) } : { t: 'appliance', kind, x: 200, y: 236, h: APPL_H2[kind] || 140, view: open ? 'open' : 'front' }] });
+    // (v343) in 3D, cut open: the case see-through, and inside it each working part, named, with what flows through them
+    const IN = d3 && !opts.only && APPL_INSIDE[kind];
+    if (IN) {
+      const k = 4.5 / Math.max(APPL[kind].W, APPL[kind].H, APPL[kind].D);
+      spec.parts[0].shell = true; spec.parts[0].size = 1; spec.parts[0].inside = null; spec.parts[0].label = `${kitCap(name)} (case)`; spec.parts[0].say = 'The outside case. Open it up to see the parts inside, each named.';
+      IN.parts.forEach(([id, label, say, color, shapes, outside]) => spec.parts.push({ id, label, say, color, size: shapeLong(shapes, APPL[kind]), inside: outside ? null : kind, shapes: shapes.map((x) => scaleShape(x, k)), ...(/blades|motor|drum|turntable|brush/.test(id) ? { spin: true } : {}) }));
+      spec.flows = IN.flows.map((f) => ({ ...f, pts: f.pts.map((q) => q.map((v) => +(v * k).toFixed(4))) }));
+    }
+    return spec;
   }
   if (type === 'food') {
     const [, , grp, nut, src, fact] = info, name = FOOD_NAMES[kind] || kind, A = FOOD[kind] || FOOD.apple, view = A.cut && !opts.only ? 'both' : 'whole'; // (v336: "only an apple": the whole apple)
@@ -3304,13 +3397,23 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
       glb = await new Promise((ok, no) => loader.load(new URL(spec.glb, import.meta.url).href, ok, undefined, no));
     } catch (e) { glb = null; }
   }
+  // (v343) a body system: its organs cut from the Labs' 3D body (explore/organs.js), each part's own organs, in their real places
+  let atlas = null;
+  if (spec.atlas) {
+    try { const om = await import('./explore/organs.js?v=343'); atlas = await om.organs(new URL('./explore/', import.meta.url).href, spec.parts.filter((p) => p.of).map((p) => ({ id: p.id, of: p.of, color: p.color, skin: p.outline, faint: p.faint }))); } catch (e) { atlas = null; }
+    if (!atlas) { renderer.dispose(); canvas.remove(); return null; }
+    (spec.flows || []).forEach((f) => { if (f.via && !f.pts) f.pts = f.via.map((w) => atlas.at(w)).filter(Boolean).map((v) => [v.x, v.y, v.z]); });
+    spec.flows = (spec.flows || []).filter((f) => f.pts && f.pts.length >= 2);
+  }
   const glbPart = (id) => (glb ? glb.scene.getObjectByName(id) : null);
-  stage.dataset.model = glb ? 'blender' : 'built'; // (which one this is: for the tests, and for anyone looking)
+  stage.dataset.model = glb ? 'blender' : atlas ? 'atlas' : 'built'; // (which one this is: for the tests, and for anyone looking)
   const groups = spec.parts.map((p, i) => {
     const g = new T.Group(); g.userData = { i, part: p };
     const mat = finishMat(T, p.color, real ? p.finish : null, { real, matte, glow: p.glow });
     const made = []; // ([shape, its mesh], for the pieces that spin)
     const fromBlender = glbPart(p.id);
+    const fromAtlas = atlas && atlas.groups.get(p.id);
+    if (fromAtlas) [...fromAtlas.children].forEach((ch) => g.add(ch)); // (v343: the organs, already in their places)
     if (fromBlender) {
       const copy = fromBlender.clone(true); copy.position.set(0, 0, 0); copy.rotation.set(0, 0, 0); copy.scale.set(1, 1, 1); // (its parts keep their places in the model)
       copy.traverse((m) => {
@@ -3326,7 +3429,7 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
       });
       [...copy.children].forEach((ch) => { g.add(ch); const ax = ch.userData && ch.userData.spin; if (['x', 'y', 'z'].includes(ax)) made.push([{ t: 'disc', axis: ax }, ch]); });
     }
-    for (const s of fromBlender ? [] : p.shapes) { const own = real && FINISH[s.finish] && s.finish !== p.finish ? finishMat(T, s.color && /^#[0-9a-f]{3,8}$/i.test(s.color) ? s.color : p.color, s.finish, { real, matte, glow: p.glow }) : mat; const m = shape3d(T, s, own, along, v3, AX); if (m) { g.add(m); made.push([s, m]); } }
+    for (const s of fromBlender || fromAtlas ? [] : p.shapes) { const own = real && FINISH[s.finish] && s.finish !== p.finish ? finishMat(T, s.color && /^#[0-9a-f]{3,8}$/i.test(s.color) ? s.color : p.color, s.finish, { real, matte, glow: p.glow }) : mat; const m = shape3d(T, s, own, along, v3, AX); if (m) { g.add(m); made.push([s, m]); } }
     if (real && !p.shell) g.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } });
     // (v280) a part that spins: each of its round pieces (a wheel, disc, gear, fan, shaft) turns in place about its own
     // axle, through its own middle; it never swings round the whole model, and a chain or frame in the part stays still
@@ -3351,7 +3454,8 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
   if (!groups.length) { renderer.dispose(); canvas.remove(); return null; }
   if (animate) { groups.forEach((g) => { g.visible = false; }); model.visible = false; } // (v337: a model about to be built shows nothing first; v339: the whole model is held back too, until its first piece is placed, so not one frame of it shows whole)
   // fit the camera to the whole model
-  const box = new T.Box3().setFromObject(model), size = box.getSize(new T.Vector3()), mid = box.getCenter(new T.Vector3());
+  const box = new T.Box3(); if (atlas) groups.forEach((g) => { if (!g.userData.part.outline) box.expandByObject(g); }); if (box.isEmpty()) box.setFromObject(model); // (v343: a body system is framed on its organs; the body's outline runs off the edges)
+  const size = box.getSize(new T.Vector3()), mid = box.getCenter(new T.Vector3());
   model.position.sub(mid); model.updateMatrixWorld(true);
   const R = Math.max(size.x, size.y, size.z, 1);
   controls.minDistance = Math.max(.03, R * .03); // (v336: right up close to a small part, as in the Labs' anatomy)
@@ -3371,7 +3475,7 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
     let lo = .5, hi = 400; for (let k = 0; k < 40; k++) { const mid = (lo + hi) / 2; if (fits(mid)) hi = mid; else lo = mid; }
     return hi;
   };
-  const fullBox = new T.Box3().setFromObject(model); // (its full size, before the build-up animation shrinks the parts)
+  const fullBox = atlas ? box.clone().translate(mid.clone().negate()) : new T.Box3().setFromObject(model); // (its full size, before the build-up animation shrinks the parts; v343: a body system, its organs)
   if (real) { // (the floor only catches the shadow; and the sun's shadow reaches round the whole model)
     const floor = new T.Mesh(new T.PlaneGeometry(R * 6, R * 6), new T.ShadowMaterial({ opacity: .22 })); floor.rotation.x = -Math.PI / 2; floor.position.y = fullBox.min.y - R * .04; floor.receiveShadow = true; scene.add(floor);
     const sc = sun.shadow.camera; sc.left = sc.bottom = -R * 1.4; sc.right = sc.top = R * 1.4; sc.near = .1; sc.far = R * 8; sun.position.set(R * .7, R * 1.6, R * .9); sc.updateProjectionMatrix();
@@ -3395,9 +3499,9 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
     const curve = new T.CatmullRomCurve3(f.pts.map((q) => new T.Vector3(q[0], q[1], q[2])));
     const L = curve.getLength(); if (!(L > 0.01)) return null;
     // (v332) in a Blender model (a real heart, the lungs) the blood and air run inside solid walls: they are drawn through them, like an X-ray
-    const xray = !!spec.glb, tube = new T.Mesh(new T.TubeGeometry(curve, 64, R * (xray ? 0.009 : 0.006), 6, false), new T.MeshBasicMaterial({ color: new T.Color(f.color), transparent: true, opacity: xray ? 0.45 : 0.3, depthWrite: false, depthTest: !xray }));
+    const xray = !!(spec.glb || spec.atlas), tube = new T.Mesh(new T.TubeGeometry(curve, 64, R * (spec.atlas ? 0.0035 : xray ? 0.009 : 0.006), 6, false), new T.MeshBasicMaterial({ color: new T.Color(f.color), transparent: true, opacity: xray ? 0.45 : 0.3, depthWrite: false, depthTest: !xray }));
     tube.renderOrder = xray ? 10 : 0; flowGroup.add(tube);
-    const c0 = new T.Color(f.color), c1 = new T.Color(f.to || f.color), geo = new T.SphereGeometry(R * (xray ? 0.024 : 0.016), 12, 8);
+    const c0 = new T.Color(f.color), c1 = new T.Color(f.to || f.color), geo = new T.SphereGeometry(R * (spec.atlas ? 0.01 : xray ? 0.024 : 0.016), 12, 8); // (v343: the whole body is big, so its dots are smaller, like the organs' own)
     const dots = Array.from({ length: f.dots }, (_, k) => { const m = new T.Mesh(geo, new T.MeshBasicMaterial({ color: c0.clone(), transparent: true, opacity: 1, depthTest: !xray })); m.renderOrder = xray ? 11 : 0; flowGroup.add(m); return { m, u: k / f.dots }; });
     return { f, curve, L, c0, c1, dots };
   }).filter(Boolean);

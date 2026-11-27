@@ -1055,6 +1055,31 @@ test('v320 Blender models and real materials: the book’s airplane and bicycle 
   } finally { await ctx.close(); }
 });
 
+test('v343 body systems from the Labs body: blood, food, nerve signals and urine each go their real way through the real organs (cut from the 3D body, no AI); an appliance in 3D is shown cut open, each part inside named, with Open it up / Close the case; "only" a toaster is the closed toaster', async (b) => {
+  const drawCalls = [];
+  const { ctx, page, errors } = await open(b, { book: true, lite: 'off', device: 'Desktop Chrome', viewport: { width: 1280, height: 860 }, state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: (body) => { if (/explains by DRAWING/.test(JSON.stringify(body.messages || []))) drawCalls.push(1); return { text: 'Words.' }; } });
+  try {
+    for (const [q, title, need] of [['show me how blood circulates in the body in 3d', /blood/i, ['Heart', 'Arteries', 'Veins', 'Lungs']], ['how does digestion work in 3d', /digest/i, ['Stomach']], ['how does the nervous system work in 3d', /nervous/i, ['Brain', 'Spinal cord']], ['how does the urinary system work in 3d', /kidney/i, ['Kidneys', 'Bladder']]]) {
+      await page.evaluate((q) => { chatLog.innerHTML = ''; state.messages = []; liveDrawReply(q, true); }, q);
+      await page.waitForSelector('#chat-log .ld .ld-live.off', { state: 'attached', timeout: 120000 });
+      const r = await page.evaluate(() => ({ model: document.querySelector('#chat-log .ld-stage').dataset.model, title: document.querySelector('#chat-log .ld-title').textContent, tags: [...document.querySelectorAll('#chat-log .ld-tag')].map((t) => t.textContent.replace(/^\d+\s*/, '').trim()) }));
+      expect(r.model === 'atlas' && title.test(r.title) && need.every((n) => r.tags.includes(n)), q + ': the organs from the Labs body, each named: ' + JSON.stringify(r));
+    }
+    const way = await page.evaluate(async () => { const bk = await liveBookLoad(), m = await liveDrawLoad(); const f = (q) => m.clean(bk.fromBook(q, true)).flows.map((x) => (x.via || []).join('>'));
+      return { blood: f('show me how blood circulates in the body in 3d'), food: f('how does digestion work in 3d') }; });
+    expect(way.blood.some((v) => /right_atrium.*right_ventricle.*pulmonary/.test(v)) && way.blood.some((v) => /left_ventricle.*aorta/.test(v)) && way.food.some((v) => /oesophagus|esophagus/.test(v) && /stomach/.test(v)), 'the blood goes right heart to lungs and left heart out the aorta; food goes down the food pipe to the stomach: ' + JSON.stringify(way));
+    await page.evaluate(() => { chatLog.innerHTML = ''; state.messages = []; liveDrawReply('show me how the toaster works in 3d', true); });
+    await page.waitForSelector('#chat-log .ld .ld-live.off', { state: 'attached', timeout: 90000 });
+    const t = await page.evaluate(() => ({ tags: [...document.querySelectorAll('#chat-log .ld-tag')].map((x) => x.textContent.replace(/^\d+\s*/, '').trim()), open: (document.querySelector('#chat-log .ld .ld-open') || {}).textContent }));
+    expect(['Heating elements', 'Lever and spring', 'Crumb tray'].every((n) => t.tags.includes(n)) && /Close the case/.test(t.open || ''), 'the toaster cut open, its parts inside named, and it can be closed: ' + JSON.stringify(t));
+    await page.click('#chat-log .ld .ld-open');
+    expect(/Open it up/.test(await page.textContent('#chat-log .ld .ld-open')), 'Close the case, then Open it up again');
+    const only = await page.evaluate(async () => { const bk = await liveBookLoad(), m = await liveDrawLoad(); return m.clean(bk.fromBookOrKit('only show me a toaster in 3d', true, m)).parts.map((p) => p.label); });
+    expect(only.length === 1 && only[0] === 'Toaster', 'only a toaster: the closed toaster alone: ' + only.join());
+    expect(!drawCalls.length, 'from the kit and the book: no AI asked');
+    expect(!errors.length, 'page errors: ' + errors.join(' | '));
+  } finally { await ctx.close(); }
+});
 test('v342 people from everywhere: a Filipino hero with an accent in his name (José Rizal, typed "jose rizal"), a local television host the English encyclopedia has no article on (from the people database, in English or Filipino), a real person is never taken for a thing; a volcano is still made', async (b) => {
   const { ctx, page, errors } = await open(b, { device: 'iPhone 13', server: false, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: async () => ({ text: 'Words.' }) });
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');

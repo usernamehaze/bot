@@ -38,7 +38,7 @@ const MALE_ONLY = /^(male_genital_system|urogenital_region_[lr]|urethra)$|penis|
 const SYS_COLOR = { female: '#d98c9a', regions: '#e2b095', skeletal: '#e6d8bd', visceral: '#c98270', cardiovascular: '#c8322f', nervous: '#f0cf5a', muscular: '#b5473e', lymphoid: '#97bf5a' };
 
 // Smooth normals: vertices at the same place share one normal (the files repeat them per triangle)
-function smoothNormals(g) {
+export function smoothNormals(g) { // (v343: also used by organs.js)
   const pos = g.attributes.position, idx = g.index, n = pos.count, key = new Map(), group = new Int32Array(n);
   if (!g.boundingBox) g.computeBoundingBox();
   const { min, max } = g.boundingBox, q = (v, lo, hi) => Math.round(((v - lo) / ((hi - lo) || 1)) * 199999);
