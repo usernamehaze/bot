@@ -1054,6 +1054,38 @@ test('v320 Blender models and real materials: the book’s airplane and bicycle 
   } finally { await ctx.close(); }
 });
 
+test('v335 every group and the sky are in the kits before any AI: dinosaurs, land, sea, farm, rainforest, desert and polar animals, birds, insects, pets, a forest, foods, vehicles, a cloud, the sun, the moon, snow, a storm, rain, lightning, a rock, a t-rex, rainy weather; a 3D habitat stands on an island of its own ground; "only show me the heart" has no blood running round it; labels hide and show, a tapped name picks its part', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, book: true, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: async () => ({ text: 'Words.' }) });
+  const r = await page.evaluate(async () => {
+    const [bk, m] = await Promise.all([liveBookLoad(), liveDrawLoad()]); bk.knowWords(m.kitNames());
+    const qs = [['show me dinosaur', 'kit:dinosaurs'], ['only show me land animals', 'kit:land'], ['sea animals', 'kit:sea'], ['farm animals', 'kit:farm'], ['jungle animals', 'kit:jungle'], ['desert animals', 'kit:desert'], ['polar animals', 'kit:polar'], ['show me birds', 'kit:birds'], ['insects', 'kit:insects'], ['show me pets', 'kit:pets'], ['show me a forest', 'kit:forest'], ['show me food', 'kit:foods'], ['show me vehicles', 'kit:vehicles'], ['draw a cloud', 'kit:cloud'], ['draw the sun', 'kit:sun'], ['show me the moon', 'kit:moon'], ['snow', 'kit:snowflake'], ['a storm', 'kit:cloud:storm'], ['rain', 'kit:cloud:rain'], ['lightning', 'kit:bolt'], ['show me a rock', 'kit:rock'], ['draw a t-rex', 'kit:trex'], ['rainy weather', 'weather'], ['a bird', 'kit:parrot']];
+    const got = [];
+    for (const [q, want] of qs) for (const d of [false, true]) { const x = await liveDrawBook(q, d); got.push({ q: q + (d ? ' (3D)' : ''), want, book: x && x.spec.book, mode: x && x.spec.mode, d }); }
+    const land = m.clean(bk.fromKit('land animals', true, m)), ground = land.parts.find((p) => p.id === 'ground').shapes.map((x) => x.t).join();
+    const heart = (q) => (m.clean(bk.fromBook(q, true)).flows || []).length;
+    return { got, ground, animals: land.parts.filter((p) => p.shapes.some((x) => x.t === 'animal')).length, onlyHeart: heart('only show me the heart'), heart: heart('show me the heart in 3D') };
+  });
+  for (const x of r.got) expect(x.book === x.want && x.mode === (x.d ? '3d' : '2d'), `${x.q}: from the kits (${x.want}), no AI: ` + JSON.stringify(x));
+  expect(/cylinder,ground/.test(r.ground) && r.animals === 6, 'a 3D habitat stands on a raised island of its own ground, each animal its own part: ' + JSON.stringify(r));
+  expect(r.onlyHeart === 0 && r.heart >= 3, '"only show me the heart": the heart alone; the heart: with its blood: ' + JSON.stringify([r.onlyHeart, r.heart]));
+  // the dinosaurs in 3D: built, labels hide and show, a tapped name picks its part
+  await page.evaluate(() => liveDrawReply('show me dinosaur', true));
+  await page.waitForSelector('#chat-log .ld .ld-stage canvas', { timeout: 30000 });
+  await page.waitForFunction(() => document.querySelector('#chat-log .ld .ld-live.off'), null, { timeout: 90000 });
+  const lb = '#chat-log .ld .ld-labels-btn';
+  expect(/Hide labels/.test(await page.textContent(lb)), 'a Hide labels button');
+  await page.click(lb);
+  const off = await page.evaluate(() => { const l = document.querySelector('#chat-log .ld'); return { cls: l.classList.contains('ld-nolabels'), shown: getComputedStyle(l.querySelector('.ld-tags')).display, btn: l.querySelector('.ld-labels-btn').textContent }; });
+  expect(off.cls && off.shown === 'none' && /Show labels/.test(off.btn), 'labels hidden: ' + JSON.stringify(off));
+  await page.click(lb);
+  expect(await page.evaluate(() => getComputedStyle(document.querySelector('#chat-log .ld .ld-tags')).display !== 'none'), 'and shown again');
+  const tag = await page.$('#chat-log .ld .ld-tag:not([hidden])');
+  if (tag) { await tag.click(); await page.waitForTimeout(600); expect(await page.isVisible('#chat-log .ld .ld-showall') || await page.isVisible('#chat-log .ld .ld-askpart'), 'a tapped name picks its part (Ask about it, Show all)'); }
+  const src = fs.readFileSync(fileAt('livedraw.js'), 'utf8');
+  expect(/controls\.zoomToCursor = true/.test(src) && /pickAndGo/.test(src) && /flowWas = flowGroup\.visible; flowGroup\.visible = false/.test(src), 'a pinch zooms on the part under the fingers; a picked part with many around it is gone in close to; pulled apart, the flow hides');
+  expect(!errors.length, 'page errors: ' + errors.join(' | '));
+  await ctx.close();
+});
 test('v334 step by step under every drawing: each part’s words are added as it is drawn and stay to read (a drawing from history has them all, Draw again starts them fresh, the list folds away); and she waits for them to be read before the next part', async (b) => {
   const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, book: true, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: async () => ({ text: 'Words.' }) });
   const steps = () => page.evaluate(() => { const l = [...document.querySelectorAll('#chat-log .ld')].pop(), box = l.querySelector('.ld-steps-box'); return { shown: !!box && !box.hidden, open: !!box && box.open, items: [...l.querySelectorAll('.ld-stepi')].map((x) => x.textContent) }; });

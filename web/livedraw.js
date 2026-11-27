@@ -647,7 +647,7 @@ export async function render(host, rawSpec, opts = {}) {
   let mv = null; const mvHost = spec.mode === '3d' ? el('div', 'ld-mv') : null;
   const machineOn = async () => {
     if (mv) return mv;
-    let m = null; try { m = await import('./isoview.js?v=334'); } catch (e) { return null; }
+    let m = null; try { m = await import('./isoview.js?v=335'); } catch (e) { return null; }
     mv = m.machine(mvHost, spec, { dark: !lightPage() });
     if (mv) {
       const row = el('div', 'ld-mv-acts');
@@ -671,6 +671,8 @@ export async function render(host, rawSpec, opts = {}) {
   if (view) {
     if (view.open) { const ob = btn('Open it up', () => { const on = view.open(); setLabel(ob, on ? 'Close the case' : 'Open it up'); ob.setAttribute('aria-pressed', String(on)); }, 'ld-open', 'open'); ob.setAttribute('aria-pressed', 'false'); }
     if (view.explode) { const pb = btn('Pull apart', () => { const on = view.explode(); setLabel(pb, on ? 'Put it back' : 'Pull apart'); pb.setAttribute('aria-pressed', String(on)); }, '', 'apart'); pb.setAttribute('aria-pressed', 'false'); }
+    // (v335) the names can be hidden, to see the drawing itself, and shown again
+    const lb = btn('Hide labels', () => { const off = host.classList.toggle('ld-nolabels'); setLabel(lb, off ? 'Show labels' : 'Hide labels'); lb.setAttribute('aria-pressed', String(off)); }, 'ld-labels-btn', 'open'); lb.setAttribute('aria-pressed', 'false');
     btn('Draw again', async () => { stepsList.replaceChildren(); await view.play(true); done(); if (view.move) view.move(); }, '', 'redo');
     if (mvHost) { // (v319) the 3D model, or the same model as an Anatomy machine drawing
       const mb = btn('Machine view', async () => { const on = mvHost.hidden; if (on && !(await machineOn())) return; mvHost.hidden = !on; stage.hidden = on; setLabel(mb, on ? '3D view' : 'Machine view'); mb.setAttribute('aria-pressed', String(on)); }, 'ld-mv-btn', 'cube');
@@ -1714,7 +1716,7 @@ const ANIMAL_FACTS = [
   ["guineapig", /\b(guinea ?pigs?|cav(y|ies))\b/i, "mammal", "homes (from South American grasslands)", "hay, grass and vegetables", "scurries, jumps when happy (popcorning)", "It must eat vitamin C every day like us"],
   ["hedgehog", /\b(hedgehogs?)\b/i, "mammal", "gardens and woods", "insects and worms", "scurries, rolls into a ball when scared", "It has about 5,000 spines made of keratin"],
   ["ferret", /\b(ferrets?)\b/i, "mammal", "homes (tamed from polecats)", "meat", "bounds with a long bendy body", "Ferrets sleep about 15 hours a day"],
-  ["trex", /\b(t\.? ?rex|tyrannosaur(us)?( rex)?)\b/i, "reptile (dinosaur, extinct)", "Late Cretaceous North American forests and plains, 66 million years ago", "meat", "walked on two strong back legs, balanced by its tail", "Its bite was the strongest of any land animal ever"],
+  ["trex", /\b(t[.\- ]? ?rex|tyrannosaur(us)?( rex)?)\b/i, "reptile (dinosaur, extinct)", "Late Cretaceous North American forests and plains, 66 million years ago", "meat", "walked on two strong back legs, balanced by its tail", "Its bite was the strongest of any land animal ever"],
   ["raptor", /\b(raptors?|velociraptors?)\b/i, "reptile (dinosaur, extinct)", "Cretaceous Asian deserts", "meat (small animals)", "ran on two legs, slashing with a big toe claw", "It was turkey sized and had feathers"],
   ["triceratops", /\b(triceratops(es)?)\b/i, "reptile (dinosaur, extinct)", "Cretaceous North American plains", "plants (cut with its beak)", "walked on four sturdy legs", "Its three horns and frill may have protected it and shown off to others"],
   ["stegosaurus", /\b(stegosaur(us|uses)?)\b/i, "reptile (dinosaur, extinct)", "Jurassic plains, 150 million years ago", "low plants", "walked on four legs, the back legs longer", "The spikes on its tail (the thagomizer) were for defence"],
@@ -2948,11 +2950,11 @@ export function foodGuide(asked = '') {
 // built straight from the kits: no AI, so it is right every time and shows at once, even when her drawing brain is
 // busy. The book (drawbook.js fromKit) decides when a question asks for just that thing and nothing more. ----------
 const KIT_ALIAS = [
-  { is: /\b(birds?|ibon)\b/i, type: 'animal', kind: 'parrot' }, // (a bird, any bird: a parrot, standing side on)
-  { is: /\b(vehicles?)\b/i, type: 'vehicle', kind: 'sedan' }, // (a vehicle: a car)
+  { is: /\b(bird|ibon)\b/i, type: 'animal', kind: 'parrot' }, // (a bird, any bird: a parrot, standing side on; birds: the birds scene)
+  { is: /\b(vehicle)\b/i, type: 'vehicle', kind: 'sedan' }, // (a vehicle: a car; vehicles: the vehicles scene)
 ];
 const kitCap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
-export const kitNames = () => [ANIMAL_FACTS, FOOD_FACTS].flatMap((t) => t.map((a) => a[1].source)).concat(APPLIANCES.map((a) => a.is.source), VEHICLES.map((v) => v.is.source), KIT_ALIAS.map((a) => a.is.source)).join(' ').replace(/\\[a-z]/gi, ' ').toLowerCase().match(/[a-z]{3,}/g) || []; // (v332: for the typo reader)
+export const kitNames = () => [ANIMAL_FACTS, FOOD_FACTS].flatMap((t) => t.map((a) => a[1].source)).concat(APPLIANCES.map((a) => a.is.source), VEHICLES.map((v) => v.is.source), KIT_ALIAS.map((a) => a.is.source), KIT_SCENES.map((a) => a.is.source), KIT_NATURE.map((a) => a.is.source)).join(' ').replace(/\\[a-z]/gi, ' ').toLowerCase().match(/[a-z]{3,}/g) || []; // (v332: for the typo reader)
 export function kitFind(asked = '') {
   const q = String(asked || ''), all = [], add = (type, kind, re, info) => { const m = q.match(re); if (m) all.push({ type, kind, re, len: m[0].length, info }); };
   ANIMAL_FACTS.forEach((a) => add('animal', a[0], a[1], a));
@@ -2960,12 +2962,16 @@ export function kitFind(asked = '') {
   FOOD_FACTS.forEach((a) => add('food', a[0], a[1], a));
   VEHICLES.forEach((v) => { if (!(v.not && v.not.test(q))) add('vehicle', v.kind, v.is, v); });
   KIT_ALIAS.forEach((a) => add(a.type, a.kind, a.is, a.type === 'animal' ? ANIMAL_FACTS.find((f) => f[0] === a.kind) : VEHICLES.find((v) => v.kind === a.kind)));
+  KIT_SCENES.forEach((sc) => add('scene', sc.key, sc.is, sc)); // (v335) a group, in its home
+  KIT_NATURE.forEach((N) => add('nature', N.t + (N.kind ? ':' + N.kind : ''), N.is, N)); // (v335) the sky's own, a rock
   return all.filter((h) => h.info).sort((a, b) => b.len - a.len); // (the most exact first: a polar bear before a bear)
 }
 const APPL_H2 = { fridge: 200, vacuum: 200, fan: 200, aircon: 180, washer: 170, microwave: 90 };
 // the drawing (or the 3D model) of one thing the kit knows, from kitFind
 export function kitSpec(hit, want3d = false) {
   if (!hit || !hit.info) return null;
+  if (hit.type === 'scene') return sceneSpec(hit.info, !!want3d);
+  if (hit.type === 'nature') return natureSpec(hit.info, !!want3d);
   const { type, kind, info } = hit, d3 = !!want3d;
   const base = (title, intro, summary, photo, next, part) => ({ title, mode: d3 ? '3d' : '2d', ...(d3 ? { axis: 'y' } : { layout: `one ${title.toLowerCase()} in the middle, standing on the ground` }), intro, summary, photo, next, parts: [{ ...part, color: '#888888', ...(d3 ? { size: 1, inside: null } : {}) }] });
   if (type === 'animal') {
@@ -2992,13 +2998,134 @@ export function kitSpec(hit, want3d = false) {
   }
   return null;
 }
+// ---------- (v335) groups and nature, built from the kits: "dinosaurs", "land animals", "sea animals", "farm animals",
+// "birds", "insects", "pets", "food", "vehicles", "a forest", and the sky's own (a cloud, the sun, the moon, snow, a
+// storm, rain, lightning, a rock). Every animal, food or vehicle in a scene is its own part with its name and its facts.
+// In 3D a scene stands on a raised island of its own ground (a diorama), with hills, a pond, trees, grass, clouds and
+// the sun, so a habitat is never one flat plane. ----------
+const KIT_SCENES = [
+  { key: 'dinosaurs', is: /\b(dinosaurs?|dinos|prehistoric (animals?|creatures?|reptiles?)|jurassic|cretaceous)\b/i, title: 'Dinosaurs', biome: 'prehistoric', kinds: ['brachiosaurus', 'trex', 'triceratops', 'stegosaurus', 'raptor', 'pteranodon'], intro: 'Dinosaurs ruled the land for about 165 million years, until an asteroid hit the Earth 66 million years ago.', summary: 'Some ate plants (Brachiosaurus, Triceratops, Stegosaurus), some ate meat (T. rex, raptors); the Pteranodon was a flying reptile that lived beside them.' },
+  { key: 'land', is: /\b((land|wild|safari|savanna|grassland|african) animals?|animals? (on|of|that live on) (the )?land|animals)\b/i, title: 'Land animals', biome: 'savanna', kinds: ['elephant', 'giraffe', 'rhino', 'lion', 'zebra', 'kangaroo'], intro: 'Land animals walk, run or hop on the ground and breathe air with lungs.', summary: 'Each one is made for its home: long legs to run, a long neck to reach leaves, a trunk to grab, strong back legs to hop.' },
+  { key: 'sea', is: /\b((sea|ocean|marine|underwater|water|aquatic) (animals?|creatures?|life)|animals? (in|of|under) the (sea|ocean))\b/i, title: 'Sea animals', biome: 'sea', kinds: ['whale', 'shark', 'dolphin', 'seaturtle', 'octopus', 'jellyfish', 'clownfish', 'crab'], intro: 'Sea animals live in salt water: fish breathe with gills, while whales and dolphins come up to breathe air.', summary: 'The ocean covers most of the Earth and is home to the biggest animal that ever lived, the blue whale.' },
+  { key: 'farm', is: /\b((farm|domestic|barnyard) animals?|animals? (on|in|at) (a|the) farm|livestock)\b/i, title: 'Farm animals', biome: 'farm', kinds: ['horse', 'cow', 'pig', 'sheep', 'goat', 'chicken', 'duck'], intro: 'Farm animals are kept by people for food, wool, milk, eggs and work.', summary: 'Cows give milk, chickens lay eggs, sheep give wool, and horses once pulled the ploughs.' },
+  { key: 'jungle', is: /\b((jungle|rainforest|rain forest|tropical) animals?|animals? (in|of) the (jungle|rainforest))\b/i, title: 'Rainforest animals', biome: 'jungle', kinds: ['gorilla', 'tiger', 'jaguar', 'sloth', 'monkey', 'toucan', 'macaw'], intro: 'Rainforests are hot and wet all year, and hold more kinds of animals than anywhere else on land.', summary: 'Animals live at every level: big cats on the floor, monkeys and sloths in the branches, colourful birds in the treetops.' },
+  { key: 'desert', is: /\b(desert animals?|animals? (in|of) the desert)\b/i, title: 'Desert animals', biome: 'desert', kinds: ['camel', 'snake', 'lizard', 'meerkat', 'hawk'], intro: 'Desert animals live where there is very little rain, with hot days and cold nights.', summary: 'They save water, hide from the sun in burrows and shade, and many come out only at night.' },
+  { key: 'polar', is: /\b((polar|arctic|antarctic|cold|snow|ice) animals?|animals? (in|of) the (arctic|antarctic|poles?|snow))\b/i, title: 'Polar animals', biome: 'polar', kinds: ['polarbear', 'wolf', 'fox', 'penguin'], intro: 'Polar animals live in the coldest places on Earth, on ice and snow.', summary: 'Thick fur, fat (blubber) and small ears keep the heat in; white coats hide them in the snow.' },
+  { key: 'birds', is: /\b(birds|kinds of birds?|types of birds?|mga ibon)\b/i, title: 'Birds', biome: 'sky', kinds: ['eagle', 'owl', 'parrot', 'toucan', 'flamingo', 'penguin', 'hummingbird'], intro: 'Birds have feathers, a beak and wings, and they lay eggs; most of them can fly.', summary: 'Light hollow bones and strong chest muscles let them fly; penguins swim with their wings instead.' },
+  { key: 'insects', is: /\b(insects|bugs|kinds of insects?|types of insects?|mga insekto)\b/i, title: 'Insects and bugs', biome: 'garden', kinds: ['butterfly', 'bee', 'ladybug', 'beetle', 'ant', 'spider'], intro: 'An insect has six legs and three body parts: head, thorax and abdomen.', summary: 'The spider is not an insect: it has eight legs and two body parts, so it is an arachnid.' },
+  { key: 'pets', is: /\b(pets|pet animals?|house ?pets?|animals? at home)\b/i, title: 'Pets', biome: 'home', kinds: ['dog', 'cat', 'rabbit', 'guineapig', 'hamster', 'budgie', 'goldfish'], intro: 'Pets are animals people keep at home and look after.', summary: 'A pet needs food, clean water, a safe home, exercise and a visit to the vet.' },
+  { key: 'forest', is: /\b(forests?|woods|woodland|forest animals?)\b/i, title: 'A forest', biome: 'forest', kinds: ['bear', 'deer', 'fox', 'owl', 'rabbit'], intro: 'A forest is a big area covered with trees, home to many animals.', summary: 'Trees make oxygen and shelter animals; fallen leaves rot and feed the soil.' },
+  { key: 'foods', type: 'food', is: /\b(foods?|meals?|dishes|kinds of foods?|types of foods?|pagkain)\b/i, title: 'Foods', biome: 'table', kinds: ['rice', 'noodles', 'soup', 'pizza', 'burger', 'salad', 'sandwich', 'egg'], intro: 'Food gives your body energy to move, materials to grow and vitamins to stay healthy.', summary: 'A healthy plate has go foods (rice, bread), grow foods (egg, fish, meat) and glow foods (fruits and vegetables).' },
+  { key: 'vehicles', type: 'vehicle', is: /\b(vehicles|kinds of vehicles?|types of (vehicles?|transport(ation)?)|transport(ation)?|means of transport(ation)?|mga sasakyan)\b/i, title: 'Vehicles', biome: 'road', kinds: ['bus', 'firetruck', 'sedan', 'truck', 'motorcycle', 'bicycle'], intro: 'Vehicles carry people and things from place to place.', summary: 'Cars, buses and trucks run on engines or batteries; a bicycle runs on your legs.' },
+];
+const KIT_NATURE = [
+  { is: /\b(clouds?|ulap)\b/i, title: 'A cloud', t: 'cloud', say: 'A cloud is millions of tiny water drops or ice crystals floating in the air.' },
+  { is: /\b(the sun|sun|araw)\b/i, title: 'The Sun', t: 'sun', say: 'The Sun is a star: a huge ball of hot gas that gives the Earth its light and heat.' },
+  { is: /\b(the moon|moon|buwan)\b/i, title: 'The Moon', t: 'moon', say: 'The Moon goes round the Earth once about every 27 days and shines with light from the Sun.' },
+  { is: /\b(snow(flakes?)?|niyebe)\b/i, title: 'A snowflake', t: 'snowflake', say: 'A snowflake is ice crystals that grow six arms as they fall through cold clouds.' },
+  { is: /\b(storms?|thunderstorms?|bagyo)\b/i, title: 'A storm', t: 'cloud', kind: 'storm', say: 'A storm cloud is tall and dark, full of rain, with lightning and thunder.' },
+  { is: /\b(rain|rainy|ulan)\b/i, title: 'Rain', t: 'cloud', kind: 'rain', say: 'Rain falls when the tiny drops in a cloud join into drops too heavy to float.' },
+  { is: /\b(lightning|kidlat)\b/i, title: 'Lightning', t: 'bolt', say: 'Lightning is a giant spark of electricity between a cloud and the ground.' },
+  { is: /\b(rocks?|stones?|bato)\b/i, title: 'A rock', t: 'rock', say: 'Rocks are made of minerals, formed from cooled lava, pressed layers or heat and pressure.' },
+];
+// how long each animal is (in the scene's units): big ones big, small ones still big enough to see
+const KIT_LEN = { elephant: 1.8, giraffe: 1.35, rhino: 1.4, lion: 1.15, zebra: 1.15, kangaroo: 0.85, trex: 2.1, triceratops: 1.6, stegosaurus: 1.7, brachiosaurus: 2.5, raptor: 0.9, pteranodon: 1.3, whale: 2.4, dolphin: 1.1, shark: 1.5, octopus: 0.7, seaturtle: 0.75, clownfish: 0.35, jellyfish: 0.55, crab: 0.45, cow: 1.2, pig: 0.8, horse: 1.3, sheep: 0.8, goat: 0.75, chicken: 0.4, duck: 0.4, tiger: 1.2, gorilla: 0.9, monkey: 0.6, sloth: 0.6, toucan: 0.45, macaw: 0.55, jaguar: 1.05, camel: 1.4, meerkat: 0.35, lizard: 0.5, snake: 0.9, hawk: 0.7, polarbear: 1.3, penguin: 0.5, wolf: 0.95, fox: 0.65, eagle: 0.95, owl: 0.55, parrot: 0.5, flamingo: 0.75, hummingbird: 0.3, butterfly: 0.7, bee: 0.5, ladybug: 0.45, beetle: 0.55, ant: 0.45, spider: 0.55, dog: 0.75, cat: 0.55, rabbit: 0.45, hamster: 0.3, goldfish: 0.35, budgie: 0.35, guineapig: 0.35, deer: 1.05, bear: 1.25 };
+const FLIES = new Set(['pteranodon', 'eagle', 'hawk', 'parrot', 'toucan', 'macaw', 'hummingbird', 'owl', 'butterfly', 'bee', 'budgie']);
+const SWIMS = new Set(['whale', 'shark', 'dolphin', 'seaturtle', 'jellyfish', 'clownfish', 'goldfish']);
+// each biome: its ground, and what grows or stands on it (3D: x, z on an island of radius 3.2; 2D: across the picture)
+const BIOME = {
+  prehistoric: { ground: '#6f9a3e', name: 'Prehistoric forest', say: 'Warm, wet forests of ferns, palms and conifers.', deco3: [['tree', 'palm', -2.4, -1.4, 1.6], ['tree', 'pine', 2.3, -1.6, 1.8], ['tree', 'palm', 2.6, 0.9, 1.3], ['rock', 'mossy', -2.5, 1.2, 0.6], ['pond', '', 1.2, 1.9, 0.8]], deco2: [['tree', 'palm', 30, 100], ['tree', 'pine', 375, 110], ['rock', 'mossy', 345, 40]] },
+  savanna: { ground: '#c2ad5a', name: 'Savanna', say: 'A wide, warm grassland with few trees and a long dry season.', deco3: [['tree', 'bush', -2.5, -1.3, 1.2], ['tree', 'round', 2.4, -1.5, 1.6], ['grass', '', -1.4, 1.9, 0.7], ['grass', '', 1.9, 1.6, 0.6], ['rock', '', 2.6, 0.8, 0.5], ['pond', '', -0.2, 2.2, 0.9]], deco2: [['tree', 'bush', 28, 70], ['tree', 'round', 378, 95], ['grass', '', 200, 60]] },
+  farm: { ground: '#78b04a', name: 'Farm', say: 'Fields and a barnyard, with water and food for the animals.', deco3: [['tree', 'round', -2.5, -1.4, 1.5], ['tree', 'round', 2.6, -1.2, 1.3], ['grass', '', 1.8, 1.9, 0.6], ['pond', '', -1.6, 1.9, 0.8], ['log', '', 2.3, 0.6, 0.6]], deco2: [['tree', 'round', 28, 95], ['grass', '', 330, 55]] },
+  jungle: { ground: '#3f7f2e', name: 'Rainforest', say: 'Tall trees, thick leaves and rain nearly every day.', deco3: [['tree', 'round', -2.4, -1.5, 2.1], ['tree', 'palm', 2.4, -1.3, 1.9], ['tree', 'round', -2.6, 0.9, 1.6], ['tree', 'palm', 2.5, 1.1, 1.5], ['grass', '', 0.4, 2.2, 0.7], ['mushroom', '', -1.3, 2.1, 0.3]], deco2: [['tree', 'round', 26, 120], ['tree', 'palm', 378, 120]] },
+  desert: { ground: '#e3cf9a', name: 'Desert', say: 'Dry sand and rock, hot by day and cold at night.', deco3: [['rock', '', -2.4, -1.4, 0.9], ['rock', '', 2.5, -1.2, 0.7], ['rock', '', 2.2, 1.6, 0.45], ['tree', 'bare', -2.5, 1.2, 1.1]], deco2: [['rock', '', 30, 40], ['rock', '', 370, 35]], sand: true },
+  polar: { ground: '#eef3f8', name: 'Snow and ice', say: 'Ice and snow nearly all year, and freezing sea around it.', deco3: [['rock', '', -2.3, -1.5, 0.9], ['rock', '', 2.4, -1.3, 0.7], ['pond', 'ice', 1.4, 1.8, 1.0], ['tree', 'pine', -2.5, 1.1, 1.3]], deco2: [['tree', 'pine', 30, 100], ['rock', '', 370, 40]], snow: true },
+  sky: { ground: '#78b04a', name: 'Sky and trees', say: 'Birds nest in trees and fly through the open sky.', deco3: [['tree', 'round', -2.2, -1.2, 1.9], ['tree', 'pine', 2.3, -1.4, 1.7], ['pond', '', 1.4, 1.8, 0.9], ['grass', '', -1.6, 1.9, 0.6]], deco2: [['tree', 'round', 34, 110], ['tree', 'pine', 372, 105]] },
+  garden: { ground: '#6fae44', name: 'Garden', say: 'Flowers, leaves and soil: food and shelter for small animals.', deco3: [['flower', '', -2.2, -1.2, 0.9], ['flower', '', 2.3, -1.3, 0.8], ['flower', '', -2.4, 1.1, 0.7], ['grass', '', 2.2, 1.4, 0.6], ['mushroom', '', 0.6, 2.2, 0.35], ['leaf', '', -0.8, 2.3, 0.5]], deco2: [['flower', '', 28, 80], ['flower', '', 376, 80]] },
+  home: { ground: '#d9c29a', name: 'Home', say: 'A safe, warm place with food, water and someone to look after them.', deco3: [['tree', 'bush', -2.4, -1.4, 0.9], ['tree', 'bush', 2.5, -1.3, 0.8], ['grass', '', 2.2, 1.5, 0.5]], deco2: [['tree', 'bush', 30, 60]] },
+  forest: { ground: '#4f8f36', name: 'Forest floor', say: 'Leaves, moss and soil under tall trees.', deco3: [['tree', 'pine', -2.3, -1.5, 2.2], ['tree', 'round', 2.4, -1.4, 2.0], ['tree', 'pine', -2.6, 0.9, 1.7], ['tree', 'round', 2.6, 1.0, 1.6], ['log', '', -0.6, 2.2, 0.8], ['mushroom', '', 1.2, 2.2, 0.35]], deco2: [['tree', 'pine', 26, 120], ['tree', 'round', 380, 115]] },
+  table: { table: true, name: 'Table', say: 'Set out on the table, so you can see each one.' },
+  road: { ground: '#78b04a', road: true, name: 'Road', say: 'A road with two lanes, and grass along both sides.', deco3: [['tree', 'round', -2.6, -1.8, 1.4], ['tree', 'round', 2.6, -1.8, 1.3], ['tree', 'bush', -2.4, 1.9, 0.8]], deco2: [['tree', 'round', 30, 70]] },
+  sea: { sea: true, name: 'Ocean', say: 'Salt water over a sandy floor, with light near the top and dark down deep.' },
+};
+const ANIMAL_INFO = (k) => ANIMAL_FACTS.find((a) => a[0] === k);
+const FOOD_INFO = (k) => FOOD_FACTS.find((a) => a[0] === k);
+function sceneMember(type, kind) {
+  const nm = type === 'animal' ? AN_NAMES[kind] || kind : type === 'food' ? FOOD_NAMES[kind] || kind : (VEHICLES.find((v) => v.kind === kind) || {}).what || kind;
+  const name = kitCap(String(nm).replace(/^an? /, ''));
+  let say = name;
+  if (type === 'animal') { const a = ANIMAL_INFO(kind); if (a) say = `${a[2]}; lives in ${a[3]}; eats ${a[4]}. ${a[6]}.`; }
+  else if (type === 'food') { const a = FOOD_INFO(kind); if (a) say = `${a[2]}: it gives ${a[3]}. ${a[5]}.`; }
+  else { const v = VEHICLES.find((x) => x.kind === kind); if (v) say = String(v.works).split('. ')[0] + '.'; }
+  return { name, say };
+}
+function sceneSpec(sc, d3) {
+  const type = sc.type || 'animal', B = BIOME[sc.biome], parts = [];
+  const head = { title: sc.title, mode: d3 ? '3d' : '2d', intro: sc.intro, summary: sc.summary, photo: `real ${sc.title.toLowerCase()} in their natural home`, next: [`Which of these is the biggest?`, `Where do ${sc.title.toLowerCase()} live?`] };
+  const n = sc.kinds.length;
+  if (d3) {
+    const shapes = [];
+    if (B.table) shapes.push({ t: 'cylinder', r: 3.3, len: 0.16, axis: 'y', pos: [0, -0.08, 0], color: '#c99a6a', finish: 'wood' }, { t: 'cylinder', r: 0.35, len: 1.6, axis: 'y', pos: [0, -0.96, 0], color: '#9a7148', finish: 'wood' });
+    else {
+      // a raised island of its own earth, its ground on top: a diorama, never a flat plane
+      shapes.push({ t: 'cylinder', r: 3.3, len: 0.7, axis: 'y', pos: [0, -0.36, 0], color: B.sea ? '#d9c08a' : B.snow ? '#b8c4d0' : B.sand ? '#c9a86a' : '#6b4a2f' });
+      shapes.push({ t: 'ground', kind: B.sea || B.sand ? 'sand' : B.snow ? 'snow' : '', pos: [0, 0, 0], w: 3.3, ...(B.sea || B.sand || B.snow ? {} : { color: B.ground }) });
+      if (B.road) shapes.push({ t: 'box', size: [6.4, 0.05, 1.7], pos: [0, 0.03, 0.2], color: '#4a4a52' }, { t: 'box', size: [0.6, 0.06, 0.08], pos: [-2, 0.04, 0.2], color: '#f3f0e6' }, { t: 'box', size: [0.6, 0.06, 0.08], pos: [0, 0.04, 0.2], color: '#f3f0e6' }, { t: 'box', size: [0.6, 0.06, 0.08], pos: [2, 0.04, 0.2], color: '#f3f0e6' });
+    }
+    parts.push({ id: 'ground', label: B.name, say: B.say, color: '#888888', size: 1, inside: null, shapes });
+    const deco = [];
+    (B.deco3 || []).forEach(([t, kind, x, z, s]) => {
+      if (t === 'pond') deco.push({ t: 'cylinder', r: s, len: 0.05, axis: 'y', pos: [x, 0.03, z], color: kind === 'ice' ? '#cfe6f5' : '#4fa3dd', finish: kind === 'ice' ? 'glass' : 'water' });
+      else if (t === 'tree') deco.push({ t: 'tree', kind, pos: [x, 0, z], h: s });
+      else if (t === 'flower') deco.push({ t: 'flower', pos: [x, 0, z], h: s });
+      else deco.push({ t, ...(kind ? { kind } : {}), pos: [x, 0, z], w: s });
+    });
+    if (!B.table) deco.push({ t: 'cloud', pos: [-1.5, 2.7, -1.6], w: 0.9 }, { t: 'sun', pos: [2.1, 2.9, -1.7], r: 0.28 }); // (low over the island, so the camera frames the animals, not the sky)
+    if (deco.length) parts.push({ id: 'around', label: B.sea ? 'Light from above' : B.table ? 'Plates' : 'Plants and sky', say: B.sea ? 'Sunlight only reaches the top of the sea: deep down it is dark and cold.' : 'What grows and stands around them: their food, shade and shelter.', color: '#888888', size: 0.6, inside: null, shapes: deco.slice(0, 8) });
+    if (B.sea) parts.push({ id: 'water', label: 'Water', say: 'Salt water: fish take in the oxygen dissolved in it through their gills.', color: '#4fa3dd', size: 1, inside: null, shapes: [{ t: 'cylinder', r: 3.2, len: 2.6, axis: 'y', pos: [0, 1.3, 0], color: '#4fa3dd', finish: 'water' }] });
+    // the members: two rows, big ones at the back, each its own part; flyers in the air, swimmers in the water
+    const order = sc.kinds.map((k, i) => ({ k, i, L: 1.3 * (type === 'animal' ? KIT_LEN[k] || 0.9 : type === 'food' ? 0.95 : ({ bus: 2.3, firetruck: 2.2, truck: 2.0, sedan: 1.5, motorcycle: 0.9, bicycle: 0.75 })[k] || 1.4) })); // (a little larger than life against the island, so each one reads)
+    const back = order.filter((o, j) => j % 2 === 0), front = order.filter((o, j) => j % 2 === 1);
+    const lay = (row, z) => row.forEach((o, j) => {
+      const x = row.length === 1 ? 0 : -2.2 + (4.4 * j) / (row.length - 1), fly = type === 'animal' && (FLIES.has(o.k) && (sc.biome === 'sky' || o.k === 'pteranodon' || sc.biome === 'jungle' && o.k !== 'sloth' || sc.biome === 'desert')), swim = type === 'animal' && B.sea && SWIMS.has(o.k);
+      const y = fly ? 1.7 + (j % 2) * 0.45 : swim ? 0.5 + ((j + (z > 0 ? 1 : 0)) % 3) * 0.6 : B.table ? 0.02 : 0;
+      const m = sceneMember(type, o.k), shape = type === 'vehicle' ? { t: 'vehicle', kind: o.k, pos: [x, 0.05, z], w: o.L } : type === 'food' ? { t: 'food', kind: o.k, pos: [x, y, z], w: o.L } : { t: 'animal', kind: o.k, pos: [x, y, z], w: o.L, ...(fly ? { pose: 'fly' } : {}), ...(j % 2 ? { facing: '-x' } : {}) };
+      parts.push({ id: o.k, label: m.name, say: m.say, color: '#888888', size: +Math.min(1, o.L / 6.6).toFixed(2), inside: null, shapes: [shape] }); // (its real length against the whole island)
+    });
+    if (type === 'vehicle') { lay(back, -0.25); lay(front, 0.65); } else { lay(back, -0.7); lay(front, 0.9); }
+    return { ...head, axis: 'y', parts };
+  }
+  // flat: the ground across the bottom (the sea: water from top to bottom), the members in a row or two
+  const shapes2 = B.sea ? [{ t: 'rect', x: 0, y: 0, w2: 400, h: 260, color: '#4fa3dd' }, { t: 'rect', x: 0, y: 236, w2: 400, h: 24, color: '#e3cf9a' }]
+    : B.table ? [{ t: 'rect', x: 10, y: 214, w2: 380, h: 18, color: '#c99a6a' }, { t: 'rect', x: 40, y: 232, w2: 14, h: 28, color: '#9a7148' }, { t: 'rect', x: 346, y: 232, w2: 14, h: 28, color: '#9a7148' }]
+    : [{ t: 'rect', x: 0, y: 222, w2: 400, h: 38, color: B.sand ? '#e3cf9a' : B.snow ? '#eef3f8' : B.ground }, ...(B.road ? [{ t: 'rect', x: 0, y: 228, w2: 400, h: 20, color: '#4a4a52' }, { t: 'line', x1: 10, y1: 238, x2: 390, y2: 238, color: '#f3f0e6' }] : [])];
+  parts.push({ id: 'ground', label: B.name, say: B.say, color: B.sea ? '#4fa3dd' : '#888888', shapes: shapes2 });
+  const deco2 = (B.deco2 || []).map(([t, kind, x0, s0]) => [t, kind, Math.min(352, Math.max(48, x0)), Math.min(96, s0)]).map(([t, kind, x, s]) => (t === 'tree' ? { t, kind, x, y: 224, h: s } : t === 'flower' ? { t, x, y: 224, h: s } : { t, ...(kind ? { kind } : {}), x, y: 224, w: s }));
+  if (!B.sea && !B.table) deco2.push({ t: 'sun', x: 352, y: 34, r: 16 }, { t: 'cloud', x: 70, y: 36, w: 70 });
+  if (deco2.length) parts.push({ id: 'around', label: B.table ? 'Plates' : 'Plants and sky', say: 'What grows and stands around them: their food, shade and shelter.', color: '#888888', shapes: deco2 });
+  const two = n > 4, row1 = sc.kinds.filter((k, i) => !two || i % 2 === 0), row2 = two ? sc.kinds.filter((k, i) => i % 2 === 1) : [];
+  const place = (row, base, small) => row.forEach((k, j) => {
+    const x = Math.round(64 + ((272) * (j + 0.5)) / row.length), L = type === 'animal' ? KIT_LEN[k] || 0.9 : 1;
+    const fly = type === 'animal' && (FLIES.has(k) && (sc.biome === 'sky' || k === 'pteranodon')), swim = type === 'animal' && B.sea && SWIMS.has(k);
+    const w = Math.round(Math.min(272 / row.length - 6, (type === 'food' ? 62 : type === 'vehicle' ? 70 + L * 10 : 34 + L * 40) * (small ? 0.85 : 1)));
+    const m = sceneMember(type, k), y = fly ? base - 120 : swim ? base - 70 - (j % 2) * 40 : base;
+    const shape = type === 'vehicle' ? { t: 'vehicle', kind: k, x, y, w, view: 'side' } : type === 'food' ? { t: 'food', kind: k, x, y, w } : { t: 'animal', kind: k, x, y, w, ...(fly ? { pose: 'fly' } : {}) };
+    parts.push({ id: k, label: m.name, say: m.say, color: '#888888', shapes: [shape] });
+  });
+  place(row1, B.table ? 212 : 226, false); place(row2, B.table ? 150 : 176, true);
+  return { ...head, layout: `${sc.title.toLowerCase()} in their home, side by side, each named`, parts };
+}
+function natureSpec(N, d3) {
+  const sh = d3 ? { t: N.t, ...(N.kind ? { kind: N.kind } : {}), pos: [0, N.t === 'rock' ? 0 : 1, 0], ...(N.t === 'sun' || N.t === 'moon' || N.t === 'snowflake' ? { r: N.t === 'snowflake' ? 2.6 : 1.4 } : { w: 3 }) } : { t: N.t, ...(N.kind ? { kind: N.kind } : {}), x: 200, y: N.t === 'rock' ? 220 : 120, ...(N.t === 'sun' || N.t === 'moon' || N.t === 'snowflake' ? { r: 70 } : N.t === 'bolt' ? { h: 180 } : { w: 220 }) };
+  return { title: N.title, mode: d3 ? '3d' : '2d', ...(d3 ? { axis: 'y' } : { layout: `${N.title.toLowerCase()} in the middle` }), intro: N.say, summary: N.say, photo: `a real ${N.title.toLowerCase()}`, next: [`How does ${N.title.toLowerCase()} form?`], parts: [{ id: N.t, label: N.title.replace(/^(A|The) /, ''), say: N.say, color: '#888888', ...(d3 ? { size: 1, inside: null } : {}), shapes: [sh] }] };
+}
 // (v331) the kit before any AI's own shapes: a part of an AI's drawing that is one thing the kit knows (its name is
 // "Lion", "Toaster", "Camel", "Sandwich", "Car") is drawn with the kit, in that part's place and at its size, instead
 // of the blocks and balls the AI built it from. Its name, words and the rest of the drawing stay as the AI made them.
 const KIT_FILL = /\b(the|an?|whole|body|model|adult|baby|young|male|female|big|small|little|one|its|real|cute|wild)\b/gi;
 function kitOfLabel(label) {
   const l = String(label || '');
-  for (const h of kitFind(l)) if (!/[a-z]{3,}/i.test(l.replace(new RegExp(h.re.source, 'gi'), ' ').replace(KIT_FILL, ' '))) return h;
+  for (const h of kitFind(l)) if (KIT_T.includes(h.type) && !/[a-z]{3,}/i.test(l.replace(new RegExp(h.re.source, 'gi'), ' ').replace(KIT_FILL, ' '))) return h; // (one thing: not a scene or the sky)
   return null;
 }
 const KIT_T = ['animal', 'appliance', 'food', 'vehicle'];
@@ -3141,6 +3268,7 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
   }
   if (matte) scene.add(new T.AmbientLight(0xffffff, .7)); // (matte: plain, bright colours for a model that floats over any page, with no shine to go dark)
   const controls = new OrbitControls(cam, canvas); controls.enableDamping = true; controls.enablePan = false; controls.minDistance = 2; controls.maxDistance = 40;
+  controls.zoomToCursor = true; // (v335) a pinch or the wheel zooms in on the part under your fingers, as in the Labs' anatomy
   if (!zoom) controls.enableZoom = false; // (a model that floats over a page: the wheel still scrolls the page)
   // (turn: the model turns slowly by itself until the student takes hold of it)
   // turn: true goes all the way round; 'sway' rocks gently about the best side, so a long model is never seen end on
@@ -3211,6 +3339,7 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
   const box = new T.Box3().setFromObject(model), size = box.getSize(new T.Vector3()), mid = box.getCenter(new T.Vector3());
   model.position.sub(mid); model.updateMatrixWorld(true);
   const R = Math.max(size.x, size.y, size.z, 1);
+  controls.minDistance = Math.max(.25, R * .12); // (v335: close enough to see a small part)
   // (v310) a flat model (the solar system, an atom's shells) is seen from higher up, so it fills the frame instead of a thin line
   const VIEW = (size.y < Math.max(size.x, size.z) * .3 ? new T.Vector3(.35, .95, .75) : new T.Vector3(.55, .38, 1.02)).normalize();
   const narrowFit = callout && W() < 520 && spec.parts.filter((p) => p.label).length > 6; // (v310: numbers, not name columns)
@@ -3241,7 +3370,7 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
     g.userData.center = at; g.userData.home = g.position.clone();
   });
   // (v314) what moves through it (water, air, blood, electricity): dots along a smooth path, changing colour on the way
-  const flowGroup = new T.Group(); flowGroup.visible = false; model.add(flowGroup);
+  const flowGroup = new T.Group(); flowGroup.visible = false; model.add(flowGroup); let flowWas = false;
   const flow3 = (spec.flows || []).map((f) => {
     const curve = new T.CatmullRomCurve3(f.pts.map((q) => new T.Vector3(q[0], q[1], q[2])));
     const L = curve.getLength(); if (!(L > 0.01)) return null;
@@ -3269,7 +3398,7 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
     order[0].scale.setScalar(sc); order[0].updateMatrixWorld(true);
     return soloPieces;
   };
-  const tagEls = groups.map((g, i) => { const p = g.userData.part; if (!p.label) return null; const t = el('button', 'ld-tag', `${spec.parts.indexOf(p) + 1} ${p.label}`); t.type = 'button'; t.hidden = true; t.addEventListener('click', (e) => { e.stopPropagation(); pick(g); }); tags.appendChild(t); return t; });
+  const tagEls = groups.map((g, i) => { const p = g.userData.part; if (!p.label) return null; const t = el('button', 'ld-tag', `${spec.parts.indexOf(p) + 1} ${p.label}`); t.type = 'button'; t.hidden = true; t.addEventListener('click', (e) => { e.stopPropagation(); pickAndGo(g); }); tags.appendChild(t); return t; });
   let wasCompact = null;
   const legend3 = el('p', 'ld-legend', spec.parts.filter((p) => p.label).map((p) => `${spec.parts.indexOf(p) + 1}\u00a0${p.label.replace(/ /g, '\u00a0')}`).join('   ')); legend3.hidden = true; stage.after(legend3);
   let exploded = false, opened = false, picked = null, raf = 0, last = performance.now(), visible = true, calloutAz = null, calloutApart = false;
@@ -3285,6 +3414,8 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
     if (flowGroup.visible) lay3();
     view.onPick && view.onPick(picked ? picked.userData.part : null);
   };
+  // (v335) picked from its name or by a tap: with many parts the camera also goes in close to it (tapped again: it stands back)
+  const pickAndGo = (g) => { pick(g); if (picked === g && groups.length >= 4 && view && view.focus) view.focus(g.userData.i); };
   // a tap (not a drag) picks the part under the finger
   const ray = new T.Raycaster(), pt = new T.Vector2(); let down = null;
   canvas.addEventListener('pointerdown', (e) => { down = [e.clientX, e.clientY]; });
@@ -3294,7 +3425,7 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
     ray.setFromCamera(pt, cam);
     const hits = ray.intersectObjects(groups.filter((g) => g.visible && !(g.userData.part.shell && (opened || exploded))), true);
     let g = hits.length ? hits[0].object : null; while (g && !groups.includes(g)) g = g.parent;
-    if (g) pick(g); else if (picked) pick(picked);
+    if (g) pickAndGo(g); else if (picked) pick(picked);
   });
   const tmp = new T.Vector3();
   let animators = []; // (v327: filled once the model is built)
@@ -3393,7 +3524,7 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
     // (v314) moving parts: move() once it is built (move(true) even with Reduce Motion); pause() stops them
     motion: motion3,
     get moving() { return moving3; },
-    move(force) { if (!motion3) return false; flowGroup.visible = flow3.length > 0; lay3(); if (still() && !force) return false; moving3 = true; paused3 = false; return true; },
+    move(force) { if (!motion3) return false; flowGroup.visible = flow3.length > 0 && !exploded; flowWas = flow3.length > 0; lay3(); if (still() && !force) return false; moving3 = true; paused3 = false; return true; },
     pause() { moving3 = false; paused3 = true; },
     stepNext() { const list = groups.filter((g) => !g.userData.part.shell); if (!list.length) return -1; const k = list.indexOf(picked), g = list[(k + 1) % list.length]; picked = null; pick(g); if (!moving3) lay3(); return g.userData.i; },
     // one part at a time, for a player with its own pace: show(i) brings part i in (it pops in, slides into its
@@ -3450,6 +3581,7 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
     open: shells.length ? () => { opened = !opened; if (picked) pick(picked); shells.forEach((g) => fade(g, opened ? .14 : 1)); return opened; } : null,
     explode: order.length > 1 || soloKit ? () => {
       exploded = !exploded; if (picked) pick(picked);
+      if (flow3.length) { if (exploded) { flowWas = flowGroup.visible; flowGroup.visible = false; } else flowGroup.visible = flowWas; } // (v335: pulled apart, the parts alone: what flows through them would only float in the gaps)
       if (order.length === 1) soloSplit().forEach((ch) => { ch.userData.apartTo = exploded ? ch.userData.apartHome.clone().add(ch.userData.apartBy) : ch.userData.apartHome.clone(); });
       const gap = R * .22, n = order.length;
       order.forEach((g, k) => { g.userData.to = exploded ? g.userData.home.clone().addScaledVector(ax, (k - (n - 1) / 2) * gap) : g.userData.home.clone(); });

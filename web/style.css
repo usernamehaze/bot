@@ -4292,6 +4292,8 @@ html.lg-refract.native .tabbar { background: linear-gradient(var(--lg-tint), var
 .ld-tag { position: absolute; transform: translate(-50%, -50%); pointer-events: auto; min-height: 28px; padding: 2px var(--sp-3, 12px); border-radius: 99px; border: 1px solid var(--lg-line, var(--border)); background: color-mix(in srgb, var(--surface) 88%, transparent); color: var(--text); font: 600 12px/1 inherit; white-space: nowrap; cursor: pointer; }
 .ld-hint { position: absolute; left: 10px; bottom: 8px; right: 10px; font-size: .74rem; color: var(--muted); pointer-events: none; }
 .ld-say { margin: 0; min-height: 1.5em; line-height: 1.5; }
+/* (v335) Hide labels: the drawing on its own */
+.ld.ld-nolabels .ld-labels, .ld.ld-nolabels .ld-label, .ld.ld-nolabels .ld-tags, .ld.ld-nolabels .ld-tag-lines { display: none !important; }
 /* (v334) step by step under every drawing: each part's words stay, to read at your own pace */
 .ld-steps-box { margin: var(--sp-3, 12px) 0 0; }
 .ld-steps-box[hidden] { display: none; }
