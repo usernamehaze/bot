@@ -84,6 +84,7 @@ async function open(browser, { server = true, state = {}, fakeGroq, lite = 'on',
   await ctx.addInitScript(([srv, seedJson, book]) => {
     window.CASSIE_SERVER = srv; // '' = no server (never the real one in tests)
     if (!book) window.CASSIE_NO_BOOK = true; // (the AI's own drawing is what most tests check; v310 turns the book on)
+    window.CASSIE_BOOK_MS = 0; // (v332: her short sketching pause before a book drawing: the v332 test checks it, the rest skip it)
     if (seedJson && !sessionStorage.getItem('seeded')) { sessionStorage.setItem('cassie.deskPage', 'chat'); /* (a computer starts on Home, with no ask box: the tests start in a new chat, and the dashboard tests open Home) */ localStorage.setItem('cassie.v2', seedJson); localStorage.setItem('cassie.labs.ui', '{"tries":"max"}'); sessionStorage.setItem('seeded', '1'); } // (the tests read the goals: keep "Try this" open on phone screens)
   }, [server ? SERVER : '', seed ? JSON.stringify(seed) : '', !!book]);
   await ctx.route(/pollinations\.ai/, (route) => route.fulfill({ body: PNG, contentType: 'image/png', headers: { 'access-control-allow-origin': '*' } })); // (the picture service allows other sites to use its pictures)
@@ -1052,6 +1053,29 @@ test('v320 Blender models and real materials: the book’s airplane and bicycle 
   } finally { await ctx.close(); }
 });
 
+test('v332 a typo never hides a drawing ("shoe me how the heart works", "drw the water cycle", "a toastr"), but "what shoe should I buy" and "I drew a cat" stay as written; the 3D heart beats with blood flowing, the lungs breathe with air flowing, light runs through the eye; a kit food or appliance pulls apart; a drawing from the book or a kit is sketched a moment before it is drawn', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, book: true, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: async () => ({ text: 'Words answer.' }) });
+  const r = await page.evaluate(async () => {
+    const [bk, m] = await Promise.all([liveBookLoad(), liveDrawLoad()]); bk.knowWords(m.kitNames());
+    const fixed = ['shoe me how the heart works', 'drw the water cycle', 'can you sho me a girafe', 'show me a toastr', 'show me the hart', 'what shoe should I buy', 'I drew a cat yesterday', 'draw a hare', 'draw a leaf', 'how do plants grow'].map((q) => liveTypoFix(q));
+    const found = await Promise.all([['shoe me how the heart works', false], ['how dose the lungs work', true], ['draw me a sandwhich', false], ['show me a toastr', true]].map(([q, d]) => liveDrawBook(q, d).then((x) => x && x.spec.book)));
+    const move = (q) => { const sp = m.clean(bk.fromBook(q, true)); return { beat: sp.parts.filter((p) => p.beat).map((p) => p.beat).join(','), flows: (sp.flows || []).length }; };
+    return { fixed, found, heart: move('heart in 3D'), lungs: move('lungs'), eye: move('eye in 3D') };
+  });
+  expect(JSON.stringify(r.fixed) === JSON.stringify(['show me how the heart works', 'draw the water cycle', 'can you show me a giraffe', 'show me a toaster', 'show me the heart', 'what shoe should I buy', 'I drew a cat yesterday', 'draw a hare', 'draw a leaf', 'how do plants grow']), 'typos read as meant, and real words left alone (a leaf is not a loaf): ' + JSON.stringify(r.fixed));
+  expect(JSON.stringify(r.found) === JSON.stringify(['heart', 'lungs', 'kit:sandwich', 'kit:toaster']), 'with a typo the book and the kits still answer: ' + JSON.stringify(r.found));
+  expect(/beat/.test(r.heart.beat) && r.heart.flows >= 3 && /breathe/.test(r.lungs.beat) && r.lungs.flows >= 2 && r.eye.flows >= 2, 'the heart beats with blood flowing, the lungs breathe with air flowing, light runs through the eye: ' + JSON.stringify(r));
+  // the real way in: asked with typos, sketched a moment first (not at once), then built; the toaster pulls apart
+  await page.evaluate(() => { window.CASSIE_BOOK_MS = null; window.__t0 = performance.now(); liveDrawReply('show me a toastr', true); });
+  await page.waitForSelector('#chat-log .ld .ld-stage canvas', { timeout: 20000 });
+  const waited = await page.evaluate(() => performance.now() - window.__t0);
+  expect(waited >= 1200, 'she sketches a moment before a kit drawing shows: ' + Math.round(waited) + ' ms');
+  await page.waitForSelector('#chat-log .ld [data-act="apart"], #chat-log .ld button:has-text("Pull apart")', { timeout: 15000 });
+  await page.click('#chat-log .ld button:has-text("Pull apart")'); await page.waitForTimeout(800);
+  expect(await page.isVisible('#chat-log .ld button:has-text("Put it back")'), 'the kit toaster pulls apart and can be put back');
+  expect(!errors.length, 'page errors: ' + errors.join(' | '));
+  await ctx.close();
+});
 test('v331 the kit before any AI: a part of the AI’s drawing that is one thing the kit knows (a lion, a camel, a toaster) is drawn with the kit in its place, flat and in 3D; and after the kit, Claude, then Gemini, then the rest', async (b) => {
   let groq = 0;
   const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 860 }, server: false, book: true, lite: 'off', state: { groqKey: 'gsk_test', geminiKey: 'AIza_test', theme: 'dark' }, fakeGroq: async () => { groq++; return { text: 'GROQ' }; } });
@@ -8054,13 +8078,13 @@ test('v315 drawings: the book dragon is a solid illustrated animal; "make it 3D"
   expect(two.title === 'How a bicycle works' && !two.row.includes('See it flat') && !calls.some((c) => /explains by DRAWING/.test(c.sys)), '"make it 3D": the same bicycle, built in 3D from the book: ' + JSON.stringify(two));
   // an AI drawing, then "3D please": the AI builds THAT subject in 3D
   await page.evaluate(() => { chatLog.innerHTML = ''; state.messages = []; });
-  await page.fill('#prompt-input', 'how the blender works?'); await page.click('#send-btn');
+  await page.fill('#prompt-input', 'how the printer works?'); /* (v330: not the blender, which the kit now draws with no AI) */ await page.click('#send-btn');
   await page.waitForFunction(() => document.querySelector('#chat-log .ld .ld-live.off'), null, { timeout: 40003 });
   calls.length = 0;
   await page.fill('#prompt-input', '3D please'); await page.click('#send-btn');
   for (let k = 0; k < 60 && !calls.some((c) => /building a 3D model/.test(c.sys)); k++) await page.waitForTimeout(250);
   const c3 = calls.find((c) => /building a 3D model/.test(c.sys));
-  expect(c3 && /blender/i.test(c3.user) && !/3D please/.test(c3.user), '"3D please" asks for the blender in 3D: ' + (c3 ? c3.user.slice(0, 200) : 'no 3D call'));
+  expect(c3 && /printer/i.test(c3.user) && !/3D please/.test(c3.user), '"3D please" asks for the printer in 3D: ' + (c3 ? c3.user.slice(0, 200) : 'no 3D call'));
   // asked in 3D, the heart is shown in 3D, not drawn flat: (v321) the book's real 3D heart (made from the Labs' scanned
   // body), at once and with no AI; a soft subject the book does not have is still built in 3D by the AI
   await page.evaluate(() => { chatLog.innerHTML = ''; state.messages = []; });
@@ -8071,7 +8095,7 @@ test('v315 drawings: the book dragon is a solid illustrated animal; "make it 3D"
   expect(h3.mode === '3d' && !calls.some((c) => /explains by DRAWING/.test(c.sys)), 'the heart asked in 3D is shown in 3D from the book, no AI: ' + JSON.stringify(h3));
   await page.evaluate(() => { chatLog.innerHTML = ''; state.messages = []; });
   calls.length = 0;
-  await page.fill('#prompt-input', 'show me a jellyfish in 3D'); await page.click('#send-btn');
+  await page.fill('#prompt-input', 'show me a kidney in 3D'); /* (v330: not a jellyfish, which the animal kit now builds with no AI) */ await page.click('#send-btn');
   for (let k = 0; k < 60 && !calls.some((c) => /explains by DRAWING/.test(c.sys)); k++) await page.waitForTimeout(250);
   const h = calls.find((c) => /explains by DRAWING/.test(c.sys));
   expect(h && /building a 3D model/.test(h.sys) && /spheres, capsules and lathes/.test(h.sys) && !/so draw it flat/.test(h.sys), 'a soft thing asked in 3D is built in 3D: ' + (h ? h.sys.slice(0, 160) : 'no call'));
@@ -8215,7 +8239,7 @@ test('v310 drawings, accurate, fast and reliable: her drawing book shows a check
   const hits = await page.evaluate(async () => { const bk = await liveBookLoad(); return ['draw a bicycle', 'make a 3d bicycle', 'how do a bicycle’s gears shift', 'draw a motorbike', 'show me the human heart', 'draw a heart emoji', 'explain the water cycle', 'how does photosynthesis work', 'draw how a volcano erupts', 'how does a jet engine work', 'draw the solar system', 'build an atom in 3D', 'draw a bicycle for my science project', 'paano gumagana ang bisikleta'].map((q) => { const x = bk.fromBook(q, /3d/i.test(q)); return x ? x.book + ':' + x.mode : '-'; }).join(' '); });
   expect(hits === 'bicycle:2d bicycle:3d - - heart:2d - water:2d photosynthesis:2d volcano:2d jet:3d solar:3d atom:3d - bicycle:2d', 'the book answers the subject, the AI answers a narrow question: ' + hits);
   // every book drawing is whole, named and passes the app's own checks for a real figure
-  const book = await page.evaluate(async () => { const bk = await liveBookLoad(), m = await liveDrawLoad(); return bk.bookKeys().map((k) => { const raw = bk.fromBook({ bicycle: 'draw a bicycle', solar: 'the solar system', atom: 'an atom', heart: 'the heart', water: 'the water cycle', photosynthesis: 'photosynthesis', volcano: 'a volcano', jet: 'a jet engine', brain: 'the human brain', fridge: 'how does a fridge work', dragon: 'draw a dragon', earth: 'layers of the earth', animalcell: 'an animal cell', airplane: 'an airplane', camera: 'build a camera', washer: 'how does a washing machine work', circulation: 'draw the circulatory system', eye: 'the human eye', lungs: 'the lungs', skin: 'the layers of the skin', tree: 'the parts of a tree', flower: 'the parts of a flower', garden: 'draw a garden', weather: 'types of weather', car: 'how does a car work', habitats: 'animal habitats', microwave: 'how does a microwave work', appliances: 'home appliances', foodgroups: 'go grow and glow foods', fruitparts: 'parts of a fruit', fruits: 'fruits', vegetables: 'vegetables' }[k], false), sp = m.clean(raw); return [k, sp && sp.parts.length, sp && sp.parts.every((p) => p.label && p.say), sp ? (sp.mode === '2d' ? m.check(sp, sp.title).filter((x) => /leaves (it|them) out|used for more than one/.test(x)) : []) : ['none']]; }); });
+  const book = await page.evaluate(async () => { const bk = await liveBookLoad(), m = await liveDrawLoad(); return bk.bookKeys().map((k) => { const raw = bk.fromBook({ bicycle: 'draw a bicycle', solar: 'the solar system', atom: 'an atom', heart: 'the heart', water: 'the water cycle', photosynthesis: 'photosynthesis', volcano: 'a volcano', jet: 'a jet engine', brain: 'the human brain', fridge: 'how does a fridge work', dragon: 'draw a dragon', earth: 'layers of the earth', animalcell: 'an animal cell', airplane: 'an airplane', camera: 'build a camera', washer: 'how does a washing machine work', circulation: 'draw the circulatory system', eye: 'the human eye', lungs: 'the lungs', skin: 'the layers of the skin', tree: 'the parts of a tree', flower: 'the parts of a flower', garden: 'draw a garden', weather: 'types of weather', car: 'how does a car work', habitats: 'animal habitats', microwave: 'how does a microwave work', appliances: 'home appliances', foodgroups: 'go grow and glow foods', fruitparts: 'parts of a fruit', fruits: 'fruits', vegetables: 'vegetables', rainbow: 'a rainbow' }[k], false), sp = m.clean(raw); return [k, sp && sp.parts.length, sp && sp.parts.every((p) => p.label && p.say), sp ? (sp.mode === '2d' ? m.check(sp, sp.title).filter((x) => /leaves (it|them) out|used for more than one/.test(x)) : []) : ['none']]; }); });
   expect(book.every(([, n, named, bad]) => n >= 4 && named && !bad.length), 'every book drawing is whole and named, with every textbook part: ' + JSON.stringify(book));
   const b3 = await page.evaluate(async () => { const bk = await liveBookLoad(), m = await liveDrawLoad(); const sp = m.clean(bk.fromBook('make a 3d bicycle', true)); return { n: sp.parts.length, labels: sp.parts.map((p) => p.label).join(','), issues: m.check3d(sp) }; });
   expect(b3.n === 11 && /Brakes/.test(b3.labels) && !b3.issues.length, 'the 3D bicycle keeps all 11 parts (brakes too) and passes the model checks: ' + JSON.stringify(b3));

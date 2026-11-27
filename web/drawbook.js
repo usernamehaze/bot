@@ -333,13 +333,15 @@ const BOOK = [
     '2d': { title: 'How a rainbow forms', mode: '2d', layout: 'the sun high on the left, a rain cloud on the right, the rainbow arching across the sky over the ground', intro: 'A rainbow is sunlight split into its colours by raindrops.', summary: 'Sunlight goes into each raindrop, bends, bounces off the back of the drop and bends again on the way out. Each colour bends a different amount, so white light fans out into red, orange, yellow, green, blue, indigo and violet. You see a rainbow with the sun behind you and rain in front of you.', photo: 'a real rainbow over green fields after rain', next: ['Why is red always on the outside of a rainbow?', 'Why do we see rainbows after rain?'],
       parts: [
         { id: 'sun', label: 'Sun', say: 'White sunlight holds every colour mixed together.', color: '#ffc93a', shapes: [{ t: 'sun', x: 60, y: 56, r: 26 }, { t: 'arrow', x1: 104, y1: 58, x2: 262, y2: 62 }] }, // (its light goes into the drops)
-        { id: 'cloud', label: 'Raindrops', say: 'Millions of falling raindrops act like tiny prisms: each one bends the light and bounces it back.', color: '#8b97b3', shapes: [{ t: 'cloud', kind: 'rain', x: 330, y: 60, w: 110 }, { t: 'arrow', x1: 300, y1: 112, x2: 262, y2: 128 }] }, // (and comes back out split into colours)
+        { id: 'cloud', label: 'Rain cloud', say: 'The rain falls from a cloud while the sun shines from the other side of the sky.', color: '#8b97b3', shapes: [{ t: 'cloud', kind: 'grey', x: 330, y: 54, w: 110 }, { t: 'arrow', x1: 372, y1: 64, x2: 372, y2: 92 }] }, // (the rain falls)
+        { id: 'drops', label: 'Raindrops', say: 'Millions of falling raindrops act like tiny prisms: each one bends the light and bounces it back.', color: '#7fb0ff', shapes: [{ t: 'drops', x: 330, y: 92, w: 80 }, { t: 'arrow', x1: 300, y1: 116, x2: 262, y2: 130 }] }, // (and comes back out split into colours)
         { id: 'rainbow', label: 'Rainbow', say: 'Red on the outside, violet on the inside: each colour leaves the drops at its own angle.', color: '#5cc36a', shapes: [{ t: 'rainbow', x: 200, y: 236, r: 140 }] },
       ] },
     '3d': { title: 'How a rainbow forms', mode: '3d', axis: 'y', intro: 'A rainbow is sunlight split into its colours by raindrops: turn it round to see the sun, the rain and the bow.', summary: 'Sunlight goes into each raindrop, bends, bounces off the back of the drop and bends again on the way out. Each colour bends a different amount, so white light fans out into red, orange, yellow, green, blue, indigo and violet. You see a rainbow with the sun behind you and rain in front of you.', photo: 'a real rainbow over green fields after rain', next: ['Why is red always on the outside of a rainbow?', 'Why do we see rainbows after rain?'],
       parts: [
         { id: 'sun', label: 'Sun', say: 'White sunlight holds every colour mixed together.', color: '#ffc93a', size: 0.3, inside: null, shapes: [{ t: 'sun', pos: [-2.4, 3.9, -1.2], r: 0.5 }] },
-        { id: 'cloud', label: 'Raindrops', say: 'Millions of falling raindrops act like tiny prisms: each one bends the light and bounces it back.', color: '#8b97b3', size: 0.4, inside: null, shapes: [{ t: 'cloud', kind: 'rain', pos: [2.7, 3.3, 0.4], w: 1.8 }] },
+        { id: 'cloud', label: 'Rain cloud', say: 'The rain falls from a cloud while the sun shines from the other side of the sky.', color: '#8b97b3', size: 0.4, inside: null, shapes: [{ t: 'cloud', kind: 'grey', pos: [2.7, 3.5, 0.4], w: 1.8 }] },
+        { id: 'drops', label: 'Raindrops', say: 'Millions of falling raindrops act like tiny prisms: each one bends the light and bounces it back.', color: '#7fb0ff', size: 0.3, inside: null, shapes: [{ t: 'drops', pos: [2.7, 2.7, 0.4], w: 1.4 }] },
         { id: 'rainbow', label: 'Rainbow', say: 'Red on the outside, violet on the inside: each colour leaves the drops at its own angle.', color: '#5cc36a', size: 1, inside: null, shapes: [{ t: 'rainbow', pos: [0, 0, 0], r: 3.4 }] },
       ] },
   },
@@ -628,6 +630,33 @@ const MOTION = {
       { part: ['gas', 'ash'], d: 'M214 104 L238 76', color: '#7fb0ff', to: '#a3a3ad', dots: 2 },
     ],
   },
+  // (v332) the Blender heart: its walls beat; blue blood in through the vena cava, through the right side, out to the lungs;
+  // red blood back from the lungs, through the left side, out the aorta (points in the model's own space, from heart.glb)
+  'heart:3d': {
+    beat: ['rightside', 'leftside', 'coronary', 'valves'],
+    flows: [
+      { part: ['venacava', 'rightside', 'pulmonary'], pts: [[-0.95, 2, -0.2], [-0.95, 0.9, -0.1], [-0.8, 0.2, 0.4], [-0.3, -0.6, 0.9], [0.05, 0.4, 0.7], [0.1, 1.5, 0.2]], color: '#5b8cff', dots: 7, speed: 0.9 },
+      { part: ['venacava', 'rightside'], pts: [[-0.95, -1.9, -0.2], [-0.9, -0.7, 0], [-0.8, 0.2, 0.4]], color: '#5b8cff', dots: 3, speed: 0.9 },
+      { part: ['pulmveins', 'leftside', 'aorta'], pts: [[-1.5, 0.5, -1], [-0.3, 0.6, -0.95], [0.4, 0.4, -0.7], [0.7, -0.6, 0.1], [0.1, 0, 0.1], [-0.25, 0.9, 0], [-0.3, 1.6, 0], [-0.7, 1.3, 0]], color: '#ff4a52', dots: 8, speed: 0.9 },
+    ],
+  },
+  // (v332) the Blender lungs breathe: air down the windpipe into each lung (blue), used air back up and out (grey)
+  'lungs:3d': {
+    breathe: ['rightlung', 'leftlung', 'alveoli', 'bronchi', 'diaphragm'],
+    flows: [
+      { part: ['trachea', 'bronchi', 'rightlung'], pts: [[0, 2.4, -0.15], [0, 1.4, -0.15], [0, 0.75, -0.15], [-0.6, 0.3, -0.1], [-1.1, -0.4, 0], [-1.2, -1.2, 0.1]], color: '#8fd3ff', dots: 6, speed: 0.6 },
+      { part: ['trachea', 'bronchi', 'leftlung'], pts: [[0, 2.4, -0.15], [0, 1.4, -0.15], [0, 0.75, -0.15], [0.6, 0.3, -0.1], [1.1, -0.4, 0], [1.2, -1.2, 0.1]], color: '#8fd3ff', dots: 6, speed: 0.6 },
+      { part: ['alveoli', 'trachea'], pts: [[-0.9, -0.8, 0.3], [-0.4, 0.4, 0.1], [0.05, 1.2, 0], [0.05, 2.4, 0]], color: '#b8bcc6', dots: 4, speed: 0.6 },
+    ],
+  },
+  // (v332) the Blender eye: light comes in through the cornea and the lens and lands on the retina; the optic nerve takes it to the brain
+  'eye:3d': {
+    flows: [
+      { part: ['cornea', 'lens', 'retina'], pts: [[2.6, 0.4, 0], [1.4, 0.15, 0], [0.8, 0.05, 0], [-0.4, -0.25, 0], [-1.1, -0.4, 0]], color: '#ffe27a', dots: 5, speed: 1.2 },
+      { part: ['cornea', 'lens', 'retina'], pts: [[2.6, -0.4, 0], [1.4, -0.15, 0], [0.8, -0.05, 0], [-0.4, 0.25, 0], [-1.1, 0.4, 0]], color: '#ffe27a', dots: 5, speed: 1.2 },
+      { part: ['retina', 'opticnerve'], pts: [[-1.1, 0.4, -0.3], [-1.6, 0.7, -0.9], [-2.6, 1.1, -1.8], [-4, 1.5, -2.7]], color: '#ff9e6b', dots: 4, speed: 1.4 },
+    ],
+  },
   'jet:3d': {
     flows: [
       { part: ['fan', 'comp', 'comb', 'turb'], pts: [[-3.6, 0, 0.36], [-2.3, 0, 0.36], [-1.1, 0, 0.3], [0.1, 0, 0.42], [1.3, 0, 0.3], [2.4, 0, 0.2], [4, 0, 0.15]], color: '#7fb0ff', to: '#ff6a3d', dots: 7, speed: 1.6 },
@@ -646,12 +675,61 @@ const MOTION = {
   },
 };
 
+// (v332) a typo ("shoe me how the heart works", "draw a lungs", "how dose a bicycle work") never hides the book's drawing:
+// each word she doesn't know is read as the known word it is one slip from (one letter wrong, missing, extra or two
+// swapped; two slips for a long word). Known words: the asking words, every subject the book and the kits name.
+let VOCAB = null, KIT_WORDS = [], BOOK_WORDS = null;
+// real words that are one or two letters from one she knows, never "corrected" ("leaf" is not "loaf"): made by scripts/typo-keep.mjs
+const KEEP = 'abort abuse acos across acts against airways akin alike alive along alts alveoli analogy anatomica animaln animalsvg animate animatefx anon anterior apart apex appel appl applied applies appln apply appx appxbar araling araw arching area aren armor armour arter arts asgroup asout atob atomsof atworld axes axis baby backbone bagay bago bagong ball ballast balls bank bare bark bars base basepic bases batomic battle bbulkan beach bead beads beak beaks beam bean beard beat beaters beating beats becomes beds been beforee bella belly belongs belt belts bend bent best bhow bhydrologic bias bigger bile bill billion bind bite bits bjet black blackberry bladder blended blinking bloom blown blows blueberry blur bodyd bodyg boiling bold bolt bone bony book books bool borders born bots bottles bowl bracket brackets braking branch brand break breaks breasts breathe bridge bridges broad bronchi browner browser browsers bsiklo btree bubble bubblem bubbles buds buffers buhay builder built bulb bump bumps burn burner bush bushes busy butterfly bvolcano bwater caching calc calculate calculation call calls calm calsave came cand canmake capb caps care carries cart cava ccol ceil ceiling cele cellv centery changes chapter char charat charges chars charset charth chat chats chatter check checked checks cheer cherry child chile chili choices christian circuit circular cite class click clicks clip clips closing clothes clue coast coat coil coin cold colon color colour colours cols colw comb come comes commonly conditioner cone cont conv cooked coolb copper cord core corners cors courses crease created creates creative creator creature crew croc crowd crown cuba cube cups curs cuth cuty cyan cycles cyclone dami damp damping dark darkens dash data datap date daygap deal deck decks deep defer delr derived details dice diet difference differently dimple dirs dirty disc disk disp dist dive dives division doable dock docs doesn dome done dors dotg dots doubles down drag dragging dragmoon drain drains drawers drawinto drawn drawone drawring drew dried drifting drive drives drop duct ducts dull each ears earthly earthm eating eats eglow electrical electron elong engineer enow envs erasing even explained exports eyel eyer face facing factors fade fail fair fall falling farm farms fats fear feather feathers feed feeds feet fern fibre figs file files fill fillets filling find finds fine fingers fins fires firm fist fits five flaring flashing flip flipper flips floating floor flop flowels flowg flyinat foam fold folders folds following follows foodn foot foramina fore foreach forgets fork formats four fraction fractions frag framing free freeze freezes frequency friction friend friends fringed fromc fuel fully gate gates gawa gear gears gets give gives giving glad gland glassc glassm glassy gliding globe glok gloss glowing goal goals gone good grab grabe grabs grade grades grading graduation grain grant graph graphs grass greek grew grip grod groq ground grouped growing grown gtypes haha hair half halves hand hang hanging happened hard harm harming hats have haven haze head headers heap hear hearbtn heard hears heatb heating held helpers hepat here hero hind hippopotamus hips hits hole holes holy homesig homesvg hood hook hooves hope hops horn hose hoses host hour hover however href hull hump humps hurting hwwhere iconsvg idrawing illustrative inferior info init inranges intakes interim intl intro ints iphone iphones iron isday isgroup ison itag january journal jugular juicy jump jumping jumps kaya kcat keep keeps kick kids kits kitted know kung labeled labelh labs lack laid lake lamp lamps lang langs larawan laser late later latin lattice layerof lazy lead leaf lean learner learners leave leaves leaving lecture legl legt lens leonardo less lessons letparts lets lies life limb limbs line lines lining linking listens lite lived liver load loads lock lockers logo logos logs looking lookx looky loop loops loose lose loses lots louvers lower lump lumps luna lying machineon mags mail main makes male mane mant mapsize marching marker markers mars mass matching math mats matters maxp maya meal meat meet meets mention messenger meta mile milky mime mind mine minimal minsize missing modal mode modeel modes molar moles money monsters mood moods more morning moro morph morphed mouseup moved mover mtags mute nail nalways nand nang neach near neat neckd neither nfor none norm nowhere nreal nred nthe nthis null octopus olive onagain once ones onkey onrealistic onteach onto opera opinions options opts organic orion otag outb outx over pace pack pacto padding pads pady pahinga pain painting pair pairing paler pane panes pang panning pans paperc papert para paras parents paris partsel partsof party passage passages past patch patient paying peace peak peaks pearl pegs pens peppered perm peru peso petrol phoneat phoneon phoneq phones phth picksys picktop pics pictures pies pigment pink pins pips pitcher place placeat places plainly plan planask planetat plank planned plans plant planting plants plate plates player players playing plot plus pmove pocket pokeable policy polite poll pond ponds pons pool pools popover pops port post posts posture potw pour precision pref prefers price pricing printing prod prog puck pucks pull pulls pumping purpose push pushing puts putting quickly rail rainy rams rand rang range ranges raspberry rays reach reaching reaction read readers reading reads rear rebuild recycling redo reef reel referenced references refl refrigerant refx refy release reminder removes renal renderer reports research reverse reyes rich ridge ring rise river road rods role roomier root rota rotor round rows sabel sabre said salvage same sample sampler samples sampling sand sans saver saving savings saying says scan scatter scholar seal searchel seat seek seem seems seen sees segs selection sell sells send sends session sets settles setw shaders shading shake share shares sharp sheen sheet shin shining shoe short shorter shot showing shown showq sick signing sila silk simile simpler simply sits skindef skip skips sleep slider sliders sliding slip slips slot slots slow slower slows smoother smoothly sneck snip snips snow soap sofar soil sold solomon solve solves solving song sort sorting sorts sour spaced spaces spacing spade spare spark sparks speak speaks speedup spelled spend spin spinner spinners spoiler spot spots sprocket squeaks srsearch stage stained star starch stars stat station stats steam steep stegosaurus stem stems stepms stepper stomata stool stop stops store stormy story strand strawberry streak streams stretch structureof structures subs sucks sudan summaries summarise summarize superior support supports surgery sway sways sweat sweep swirling tabs tags tail take talking tanong tape taper taxes tayo tbody teacher teachers teal team tear tech teen tell tells than them there thick thickens thicker thin thinking thins thlen thought tick tier tiers time timer timers times tipped toastt toes told toll tone took toolsf toon toparts topo torn totl touches tour tout towards town trace tracing track trackers tracks trail trailing trails trait traits trap traverse tray trayel treated trench trend trex trick tried tries true trunk trunks ttag tuba tuck tucks tumble tumbles turners typed typo typos tyre tyres ulit undo union uout ureters urinary used user users uspeed vals valve valves variation vars vesicle vesicles virtual visuali vnow waddles wait waiting wake walking wantx wanty warming warning watching watering waterm wear wears webb webh webm webp well went were wheat when whether while whose width wind winds wing wire wish witch womb wood woods wool word wording words workers worldat worn worse would written wruns wtags xlabel xrange xref xstep year years ylabel york yrange ystep yung zero zone zooming zout';
+let KEEP_SET = null;
+const vocab = () => {
+  if (VOCAB) return VOCAB;
+  const toks = (list) => list.join(' ').replace(/\\[a-z]/gi, ' ').toLowerCase().match(/[a-z]{3,}/g) || [];
+  const both = (w) => (/s$/.test(w) && w.length > 3 ? [w, w.slice(0, -1)] : [w]); // (a plural and its one: cats, cat)
+  BOOK_WORDS = new Set(toks([ASKING.source, ...BOOK.map((e) => [e.is, e.ok, e.not].filter(Boolean).map((r) => r.source).join(' '))]).flatMap(both));
+  VOCAB = new Set([...BOOK_WORDS, ...toks(KIT_WORDS).flatMap(both)]);
+  return VOCAB;
+}; // (the regexes' own \\b marks out)
+const slips = (a, b, most) => { // edit distance (with two letters swapped as one slip), stopping once it is past "most"
+  if (Math.abs(a.length - b.length) > most) return most + 1;
+  let p2 = null, p = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const c = [i]; let low = i;
+    for (let j = 1; j <= b.length; j++) {
+      c[j] = Math.min(p[j] + 1, c[j - 1] + 1, p[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      if (p2 && i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) c[j] = Math.min(c[j], p2[j - 2] + 1);
+      low = Math.min(low, c[j]);
+    }
+    if (low > most) return most + 1;
+    p2 = p; p = c;
+  }
+  return p[b.length];
+};
+export const typoVocab = () => vocab(); // (for scripts/typo-keep.mjs, which lists the real words near these)
+export function fixTypos(q) {
+  const v = vocab();
+  return String(q || '').replace(/[A-Za-z]{3,}/g, (w, at, all) => {
+    const lw = w.toLowerCase();
+    if (v.has(lw) || v.has(lw.replace(/(es|s)$/, ''))) return w;
+    const real = (KEEP_SET || (KEEP_SET = new Set(KEEP.split(' ')))).has(lw); // (a real word of its own: kept, unless it stands where she is asked to draw)
+    const most = lw.length >= 7 ? 2 : 1;
+    let best = null, bd = most + 1;
+    for (const k of v) { if (k[0] !== lw[0] && lw.length < 5) continue; const d = slips(lw, k, most); const dk = Math.abs(k.length - lw.length), db = best ? Math.abs(best.length - lw.length) : 99, kb = BOOK_WORDS.has(k), bb = !!best && BOOK_WORDS.has(best); if (d < bd || (d === bd && (kb > bb || (kb === bb && (dk < db || (dk === db && k.length > best.length)))))) { bd = d; best = k; } /* (a tie: the book's own words first (hart: heart, not hare), then the nearer length, then the longer word: a typo drops a letter more often than it adds one) */ }
+    const asking = best && bd <= most && /^(draw|show|build|make)$/.test(best);
+    if (asking && (!/^\s+(me|us|a|an|the|how|what|it|my|them|this|that)\b/i.test(all.slice(at + w.length)) || !/^\s*((please|pls|cassie|can you|could you|pwede|paki)[\s,]+)*$/i.test(all.slice(0, at)))) return w; // (a slip into an asking word only where one asks: "shoe me how..." is "show me"; "what shoe should I buy" and "I drew a cat" stay)
+    if (asking) return best; // ("shoe me how...": a real word, but where she is asked)
+    if (real) return w;
+    if (lw.length === 3 && !/^(draw|show)$/.test(best || '')) return w; // (a three-letter word is too short to guess, but "sho", "drw")
+    return best && bd <= most ? best : w;
+  });
+}
+export function knowWords(list) { KIT_WORDS = (list || []).map(String); VOCAB = null; } // (the kits' names, from livedraw.js)
 const words = (q) => String(q || '').toLowerCase().replace(/[^a-z0-9\s-]/g, ' ').replace(ASKING, ' ').split(/\s+/).filter(Boolean);
 
 // the book's drawing for a question, or null. want3d: the student asked for 3D (a 3D model when the book has one,
 // else its flat drawing); otherwise a flat drawing, or the model when the book only has the model.
 export function fromBook(question, want3d = false) {
-  const q = String(question || '');
+  const q = fixTypos(question);
   if (q.length > 160) return null;
   for (const e of BOOK) {
     if (!e.is.test(q) || (e.not && e.not.test(q))) continue;
@@ -663,7 +741,7 @@ export function fromBook(question, want3d = false) {
     const mo = MOTION[e.key + ':' + out.mode]; // (v314) and what moves in it
     if (mo) {
       if (mo.flows && !out.flows) out.flows = JSON.parse(JSON.stringify(mo.flows));
-      out.parts.forEach((p) => { if (mo.spin && mo.spin.includes(p.id)) p.spin = true; if (mo.beat && mo.beat.includes(p.id)) p.beat = true; });
+      out.parts.forEach((p) => { if (mo.spin && mo.spin.includes(p.id)) p.spin = true; if (mo.beat && mo.beat.includes(p.id)) p.beat = true; if (mo.breathe && mo.breathe.includes(p.id)) p.beat = 'breathe'; });
     }
     return out;
   }
@@ -672,8 +750,9 @@ export function fromBook(question, want3d = false) {
 // (v330) one animal, appliance, food or vehicle asked for by name and nothing more ("draw a lion", "how does a toaster
 // work", "a sandwich in 3D"): built from the kits (m: livedraw.js, which has them), so it never waits for the AI
 export function fromKit(question, want3d, m) {
-  const q = String(question || '');
-  if (!m || !m.kitFind || q.length > 160) return null;
+  if (!m || !m.kitFind || String(question || '').length > 160) return null;
+  if (m.kitNames && !KIT_WORDS.length) knowWords(m.kitNames());
+  const q = fixTypos(question);
   for (const h of m.kitFind(q)) {
     if (words(q.replace(new RegExp(h.re.source, 'gi'), ' ')).filter((w) => w.length > 2).length) continue; // (asks for more: the AI's)
     const spec = m.kitSpec(h, want3d);
@@ -684,7 +763,7 @@ export function fromKit(question, want3d, m) {
 export const bookKeys = () => BOOK.map((e) => e.key);
 // (v316) the subject's own words, the way the book matches them: "how does a blender work?" is "blender",
 // "draw me a washing machine" is "machine washing" (sorted, so the order of the words never matters)
-export const subjectOf = (q) => [...new Set(words(String(q || '')).filter((w) => w.length > 2))].sort().join(' ');
+export const subjectOf = (q) => [...new Set(words(fixTypos(q)).filter((w) => w.length > 2))].sort().join(' ');
 // (v316) a drawing the team approved from what students asked (GET /drawings on Cassie's server), matched
 // by its subject's exact words, like the book; the 3D one when 3D is asked, else the flat one
 export function fromVerified(question, want3d, list) {

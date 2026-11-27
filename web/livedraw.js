@@ -632,7 +632,7 @@ export async function render(host, rawSpec, opts = {}) {
   let mv = null; const mvHost = spec.mode === '3d' ? el('div', 'ld-mv') : null;
   const machineOn = async () => {
     if (mv) return mv;
-    let m = null; try { m = await import('./isoview.js?v=331'); } catch (e) { return null; }
+    let m = null; try { m = await import('./isoview.js?v=332'); } catch (e) { return null; }
     mv = m.machine(mvHost, spec, { dark: !lightPage() });
     if (mv) {
       const row = el('div', 'ld-mv-acts');
@@ -2936,6 +2936,7 @@ const KIT_ALIAS = [
   { is: /\b(vehicles?)\b/i, type: 'vehicle', kind: 'sedan' }, // (a vehicle: a car)
 ];
 const kitCap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+export const kitNames = () => [ANIMAL_FACTS, FOOD_FACTS].flatMap((t) => t.map((a) => a[1].source)).concat(APPLIANCES.map((a) => a.is.source), VEHICLES.map((v) => v.is.source), KIT_ALIAS.map((a) => a.is.source)).join(' ').replace(/\\[a-z]/gi, ' ').toLowerCase().match(/[a-z]{3,}/g) || []; // (v332: for the typo reader)
 export function kitFind(asked = '') {
   const q = String(asked || ''), all = [], add = (type, kind, re, info) => { const m = q.match(re); if (m) all.push({ type, kind, re, len: m[0].length, info }); };
   ANIMAL_FACTS.forEach((a) => add('animal', a[0], a[1], a));
@@ -3228,14 +3229,30 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
   const flow3 = (spec.flows || []).map((f) => {
     const curve = new T.CatmullRomCurve3(f.pts.map((q) => new T.Vector3(q[0], q[1], q[2])));
     const L = curve.getLength(); if (!(L > 0.01)) return null;
-    flowGroup.add(new T.Mesh(new T.TubeGeometry(curve, 64, R * 0.006, 6, false), new T.MeshBasicMaterial({ color: new T.Color(f.color), transparent: true, opacity: 0.3, depthWrite: false })));
-    const c0 = new T.Color(f.color), c1 = new T.Color(f.to || f.color), geo = new T.SphereGeometry(R * 0.016, 12, 8);
-    const dots = Array.from({ length: f.dots }, (_, k) => { const m = new T.Mesh(geo, new T.MeshBasicMaterial({ color: c0.clone(), transparent: true, opacity: 1 })); flowGroup.add(m); return { m, u: k / f.dots }; });
+    // (v332) in a Blender model (a real heart, the lungs) the blood and air run inside solid walls: they are drawn through them, like an X-ray
+    const xray = !!spec.glb, tube = new T.Mesh(new T.TubeGeometry(curve, 64, R * (xray ? 0.009 : 0.006), 6, false), new T.MeshBasicMaterial({ color: new T.Color(f.color), transparent: true, opacity: xray ? 0.45 : 0.3, depthWrite: false, depthTest: !xray }));
+    tube.renderOrder = xray ? 10 : 0; flowGroup.add(tube);
+    const c0 = new T.Color(f.color), c1 = new T.Color(f.to || f.color), geo = new T.SphereGeometry(R * (xray ? 0.024 : 0.016), 12, 8);
+    const dots = Array.from({ length: f.dots }, (_, k) => { const m = new T.Mesh(geo, new T.MeshBasicMaterial({ color: c0.clone(), transparent: true, opacity: 1, depthTest: !xray })); m.renderOrder = xray ? 11 : 0; flowGroup.add(m); return { m, u: k / f.dots }; });
     return { f, curve, L, c0, c1, dots };
   }).filter(Boolean);
   let moving3 = false, paused3 = false;
   const lay3 = () => flow3.forEach((x) => x.dots.forEach((d) => { d.m.position.copy(x.curve.getPointAt(Math.min(1, Math.max(0, d.u || 0)))); d.m.material.color.lerpColors(x.c0, x.c1, d.u); d.m.material.opacity = picked && x.f.of.length && !x.f.of.includes(picked.userData.part.id) ? 0.15 : 1; }));
   const order = groups.filter((g) => !g.userData.part.shell).sort((a, b) => a.userData.center.dot(ax) - b.userData.center.dot(ax));
+  // (v332) one kit model (a food, an appliance, a vehicle) pulls apart too: its own pieces spread out from its middle
+  // (a sandwich's layers, a toaster's case off its slots), worked out the first time it is pulled apart
+  const soloKit = order.length === 1 && order[0].userData.part.shapes.some((s) => ['food', 'appliance', 'vehicle'].includes(String(s.t || '').toLowerCase()));
+  let soloPieces = null;
+  const soloSplit = () => {
+    if (soloPieces) return soloPieces;
+    let n = order[0]; while (n.children.length === 1) n = n.children[0];
+    const sc = order[0].scale.x; order[0].scale.setScalar(1); order[0].updateMatrixWorld(true);
+    const inv = n.matrixWorld.clone().invert(), c = new T.Box3().setFromObject(n).getCenter(new T.Vector3()).applyMatrix4(inv);
+    const whole = new T.Box3().setFromObject(n).applyMatrix4(inv).getSize(new T.Vector3()).length();
+    soloPieces = n.children.filter((ch) => ch.isMesh || ch.children.length).map((ch) => { const pc = new T.Box3().setFromObject(ch).getCenter(new T.Vector3()).applyMatrix4(inv), off = pc.sub(c); ch.userData.apartHome = ch.position.clone(); ch.userData.apartBy = off.clone().multiplyScalar(.9).add(off.lengthSq() > 1e-8 ? off.normalize().multiplyScalar(whole * .14) : new T.Vector3()); return ch; }); // (each piece out from the middle: further for one far out, and a gap even for a thin layer close in)
+    order[0].scale.setScalar(sc); order[0].updateMatrixWorld(true);
+    return soloPieces;
+  };
   const tagEls = groups.map((g, i) => { const p = g.userData.part; if (!p.label) return null; const t = el('button', 'ld-tag', `${spec.parts.indexOf(p) + 1} ${p.label}`); t.type = 'button'; t.hidden = true; t.addEventListener('click', (e) => { e.stopPropagation(); pick(g); }); tags.appendChild(t); return t; });
   let wasCompact = null;
   const legend3 = el('p', 'ld-legend', spec.parts.filter((p) => p.label).map((p) => `${spec.parts.indexOf(p) + 1}\u00a0${p.label.replace(/ /g, '\u00a0')}`).join('   ')); legend3.hidden = true; stage.after(legend3);
@@ -3279,6 +3296,7 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
       lay3();
     }
     groups.forEach((g) => { const to = g.userData.to; if (to) { g.position.lerp(to, Math.min(1, dt * 6)); if (g.position.distanceTo(to) < .002) { g.position.copy(to); g.userData.to = null; } } });
+    if (soloPieces) soloPieces.forEach((ch) => { const to = ch.userData.apartTo; if (to) { ch.position.lerp(to, Math.min(1, dt * 6)); if (ch.position.distanceTo(to) < .002) { ch.position.copy(to); ch.userData.apartTo = null; } } }); // (v332)
     groups.forEach((g) => { const sl = g.userData.slide; if (sl) { const k = Math.min(1, Math.max(0, (now - sl.t0 - 400) / 1100)), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2; g.position.lerpVectors(sl.from, g.userData.home, e); if (k >= 1) g.userData.slide = null; } }); // (it waits a moment, then slides home)
     if (aimTo) { controls.target.lerp(aimTo, Math.min(1, dt * 5)); if (controls.target.distanceTo(aimTo) < .005) { controls.target.copy(aimTo); aimTo = null; } }
     if (camTo) { cam.position.lerp(camTo, Math.min(1, dt * 5)); if (cam.position.distanceTo(camTo) < .01) camTo = null; }
@@ -3414,15 +3432,16 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
     get opened() { return opened; },
     setOpen(v) { opened = !!v; shells.forEach((g) => fade(g, opened ? .14 : 1)); },
     open: shells.length ? () => { opened = !opened; if (picked) pick(picked); shells.forEach((g) => fade(g, opened ? .14 : 1)); return opened; } : null,
-    explode: order.length > 1 ? () => {
+    explode: order.length > 1 || soloKit ? () => {
       exploded = !exploded; if (picked) pick(picked);
+      if (order.length === 1) soloSplit().forEach((ch) => { ch.userData.apartTo = exploded ? ch.userData.apartHome.clone().add(ch.userData.apartBy) : ch.userData.apartHome.clone(); });
       const gap = R * .22, n = order.length;
       order.forEach((g, k) => { g.userData.to = exploded ? g.userData.home.clone().addScaledVector(ax, (k - (n - 1) / 2) * gap) : g.userData.home.clone(); });
       shells.forEach((g) => { g.visible = !exploded; });
       // stand back to fit the pulled-apart model (from where the student is looking now)
       const spread = new T.Box3(); groups.forEach((g) => { if (!g.visible) return; const sc = g.scale.x; g.scale.setScalar(1); g.updateMatrixWorld(true); const b = new T.Box3().setFromObject(g); g.scale.setScalar(sc); g.updateMatrixWorld(true); if (g.userData.to) b.translate(g.userData.to.clone().sub(g.position)); spread.union(b); });
       const dir = cam.position.clone().normalize();
-      camTo = dir.multiplyScalar(exploded && !spread.isEmpty() ? fitBox(spread, dir) : home.length());
+      camTo = dir.multiplyScalar((exploded && !spread.isEmpty() ? fitBox(spread, dir) : home.length()) * (exploded && order.length === 1 ? 1.7 : 1)); // (v332: one model's pieces spread past its own box: stand further back)
       return exploded;
     } : null,
   };

@@ -435,7 +435,7 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
         ask = small; reply = await send(ask + nudge, maxTokens);
       }
       const got = parse(reply, count);
-      if (got.kind === 'card' && got.scene.spec && (got.scene.dim === 'flat' || got.scene.dim === '3d')) { const mk = await load3d().catch(() => null); if (mk && mk.kitSwap) mk.kitSwap(got.scene.spec); } // (v331: a part that is one thing the kit knows is drawn with the kit)
+      if (got.kind === 'card' && got.scene.spec && (got.scene.dim === '3d' || (got.scene.dim === 'flat' && lib3d))) { const mk = await load3d().catch(() => null); if (mk && mk.kitSwap) mk.kitSwap(got.scene.spec); } // (v331: a part that is one thing the kit knows is drawn with the kit)
       if (got.kind === 'card' && (got.scene.dim === 'flat' || got.scene.dim === '3d') && !tries) {
         const m = await load3d().catch(() => null), spec = m && m.clean(got.scene.spec);
         // a reply that can't be drawn at all is asked for again now; one that can is shown at once
