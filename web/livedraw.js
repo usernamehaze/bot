@@ -632,7 +632,7 @@ export async function render(host, rawSpec, opts = {}) {
   let mv = null; const mvHost = spec.mode === '3d' ? el('div', 'ld-mv') : null;
   const machineOn = async () => {
     if (mv) return mv;
-    let m = null; try { m = await import('./isoview.js?v=329'); } catch (e) { return null; }
+    let m = null; try { m = await import('./isoview.js?v=330'); } catch (e) { return null; }
     mv = m.machine(mvHost, spec, { dark: !lightPage() });
     if (mv) {
       const row = el('div', 'ld-mv-acts');
@@ -2784,7 +2784,7 @@ function foodShape(s, mk) {
       shadow(-0.46, 0.46);
       const tri = (v0, c, h) => path(g, soft([[-0.44, v0], [0.44, v0], [0.42, v0 + h], [-0.42, v0 + h]]), c, { stroke: edge(c, 0.35) });
       tri(0.03, '#e6c48a', 0.12); path(g, soft([[-0.46, 0.15], [-0.3, 0.2], [-0.1, 0.15], [0.1, 0.2], [0.3, 0.15], [0.46, 0.2], [0.44, 0.24], [-0.44, 0.24]]), '#6fbf3a', { stroke: '#3f8a2a' }); tri(0.22, '#f6c84a', 0.05); tri(0.27, '#e3332a', 0.05); tri(0.32, '#e8a09a', 0.06);
-      path(g, soft([[-0.44, 0.38], [0.44, 0.38], [0.4, 0.6], [0.2, 0.72], [-0.2, 0.72], [-0.4, 0.6]]), grad('#e6c48a', { cx: 0.4, cy: 0.3 }), { stroke: '#a8743a' }); path(g, soft([[-0.38, 0.42], [0.38, 0.42], [0.34, 0.58], [0.18, 0.66], [-0.18, 0.66], [-0.34, 0.58]]), '#f6e4bd', { op: 0.8 });
+      path(g, soft([[-0.44, 0.38], [0.44, 0.38], [0.44, 0.58], [0.4, 0.64], [-0.4, 0.64], [-0.44, 0.58]]), grad('#e6c48a', { cx: 0.4, cy: 0.3 }), { stroke: '#a8743a' }); path(g, soft([[-0.39, 0.42], [0.39, 0.42], [0.39, 0.56], [0.36, 0.6], [-0.36, 0.6], [-0.39, 0.56]]), '#f6e4bd', { op: 0.8 }); // (a flat slice of bread on top, its crust round the edge: not a domed bun, which reads as a burger)
     } else if (A.b === 'burger') {
       shadow(-0.46, 0.46); const bun = '#d98c3a';
       path(g, soft([[-0.42, 0.03], [0.42, 0.03], [0.44, 0.13], [-0.44, 0.13]]), grad(bun, { l: 0.2 }), { stroke: edge(bun, 0.4) });
@@ -2927,6 +2927,53 @@ export function foodGuide(asked = '') {
   hits.forEach(([kind, , grp, nut, src, fact]) => out.push(`About ${FOOD_NAMES[kind] || kind} (draw it with the food kit, kind "${kind}"${FOOD[kind] && FOOD[kind].cut ? ', and view "cut" or "both" shows it cut open' : ''}): group: ${grp}. It gives: ${nut}. Where it comes from: ${src}. ${fact}.`));
   if (/\b(food groups?|go,? grow,? (and )?glow|go foods?|grow foods?|glow foods?|healthy (plate|food|diet|eating)|balanced (diet|meal)|pinggang pinoy|nutrients?|nutrition|food pyramid)\b/i.test(q)) out.push(FOOD_GROUPS);
   return out.join('\n');
+}
+// ---------- (v330) one thing asked for by name ("draw a lion", "show me how a toaster works", "a sandwich in 3D"),
+// built straight from the kits: no AI, so it is right every time and shows at once, even when her drawing brain is
+// busy. The book (drawbook.js fromKit) decides when a question asks for just that thing and nothing more. ----------
+const KIT_ALIAS = [
+  { is: /\b(birds?|ibon)\b/i, type: 'animal', kind: 'parrot' }, // (a bird, any bird: a parrot, standing side on)
+  { is: /\b(vehicles?)\b/i, type: 'vehicle', kind: 'sedan' }, // (a vehicle: a car)
+];
+const kitCap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+export function kitFind(asked = '') {
+  const q = String(asked || ''), all = [], add = (type, kind, re, info) => { const m = q.match(re); if (m) all.push({ type, kind, re, len: m[0].length, info }); };
+  ANIMAL_FACTS.forEach((a) => add('animal', a[0], a[1], a));
+  APPLIANCES.forEach((a) => { if (!(a.not && a.not.test(q))) add('appliance', a.kind, a.is, a); });
+  FOOD_FACTS.forEach((a) => add('food', a[0], a[1], a));
+  VEHICLES.forEach((v) => { if (!(v.not && v.not.test(q))) add('vehicle', v.kind, v.is, v); });
+  KIT_ALIAS.forEach((a) => add(a.type, a.kind, a.is, a.type === 'animal' ? ANIMAL_FACTS.find((f) => f[0] === a.kind) : VEHICLES.find((v) => v.kind === a.kind)));
+  return all.filter((h) => h.info).sort((a, b) => b.len - a.len); // (the most exact first: a polar bear before a bear)
+}
+const APPL_H2 = { fridge: 200, vacuum: 200, fan: 200, aircon: 180, washer: 170, microwave: 90 };
+// the drawing (or the 3D model) of one thing the kit knows, from kitFind
+export function kitSpec(hit, want3d = false) {
+  if (!hit || !hit.info) return null;
+  const { type, kind, info } = hit, d3 = !!want3d;
+  const base = (title, intro, summary, photo, next, part) => ({ title, mode: d3 ? '3d' : '2d', ...(d3 ? { axis: 'y' } : { layout: `one ${title.toLowerCase()} in the middle, standing on the ground` }), intro, summary, photo, next, parts: [{ ...part, color: '#888888', ...(d3 ? { size: 1, inside: null } : {}) }] });
+  if (type === 'animal') {
+    const [, , cls, home, food, moves, fact] = info, name = AN_NAMES[kind] || kind, A = ANIMALS[kind] || ANIMALS.lion;
+    const w2 = Math.round(Math.min(260, 170 / animalTall(A))), mid = A.b === 'fish' || A.b === 'jelly' || A.b === 'octopus' || A.b === 'bat';
+    return base(kitCap(name), `${fact}.`, `Class: ${cls}. Home: ${home}. Food: ${food}. How it moves: ${moves}.`, `a real ${name} in its natural home`, [`Where does the ${name} live?`, `What does the ${name} eat?`],
+      { id: kind, label: kitCap(name), say: `The ${name} is a ${cls}. It lives in ${home} and eats ${food}. ${fact}.`, shapes: [d3 ? { t: 'animal', kind, pos: [0, mid ? 1 : 0, 0], w: 4.5 } : { t: 'animal', kind, x: 200, y: mid ? 140 : 236, w: w2 }] });
+  }
+  if (type === 'appliance') {
+    const A = info, name = A.what.replace(/^an? /, ''), open = !!APPL_OPEN[kind];
+    return base(`How ${A.what} works`, `${kitCap(A.what)}: ${A.views.split(';')[0].replace(/^front: /, '')}.`, A.works, `a real ${name} in a home`, [`What are the main parts of ${A.what}?`, `How does ${A.what} use electricity?`],
+      { id: kind, label: kitCap(name), say: `Its main parts: ${A.parts.join(', ')}.`, shapes: [d3 ? { t: 'appliance', kind, pos: [0, 0, 0], h: +(APPL[kind] ? 4.5 * APPL[kind].H / Math.max(APPL[kind].W, APPL[kind].H, APPL[kind].D) : 4.5).toFixed(2), ...(open ? { pose: 'open' } : {}) } : { t: 'appliance', kind, x: 200, y: 236, h: APPL_H2[kind] || 140, view: open ? 'open' : 'front' }] });
+  }
+  if (type === 'food') {
+    const [, , grp, nut, src, fact] = info, name = FOOD_NAMES[kind] || kind, A = FOOD[kind] || FOOD.apple, view = A.cut ? 'both' : 'whole';
+    const w2 = Math.round(Math.min(220, 150 / Math.max(0.3, A.asp || 1)));
+    return base(kitCap(name), `${fact}.`, `Group: ${grp}. It gives ${nut}. ${kitCap(src)}.`, `a real ${name} on a table`, [`Why is ${name} good for you?`, `Where does ${name} come from?`],
+      { id: kind, label: kitCap(name), say: `${kitCap(name)}: ${grp}. It gives ${nut}.${A.cut ? ' Beside it, one cut open to show inside.' : ''}`, shapes: [d3 ? { t: 'food', kind, pos: [0, 0, 0], w: A.cut ? 2.4 : 4, ...(A.cut ? { view } : {}) } : { t: 'food', kind, x: 200, y: 200, w: w2, ...(A.cut ? { view } : {}) }] });
+  }
+  if (type === 'vehicle') {
+    const V = info, name = V.what.replace(/^an? /, '');
+    return base(`How ${V.what} works`, `${kitCap(V.what)}: ${V.views.split(';')[0].replace(/^side: /, '')}.`, V.works, `a real ${name} on a road`, [`What are the main parts of ${V.what}?`, `How does ${V.what} stop?`],
+      { id: kind, label: kitCap(name), say: `Its main parts: ${V.parts.join(', ')}.`, shapes: [d3 ? { t: 'vehicle', kind, pos: [0, 0, 0], w: 4 } : { t: 'vehicle', kind, x: 200, y: 220, w: 300, view: 'side' }] });
+  }
+  return null;
 }
 // ---------- a picture of a finished drawing (for Cassie to check her own work) ----------
 export async function snapshot(rawSpec) {

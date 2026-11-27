@@ -1052,6 +1052,30 @@ test('v320 Blender models and real materials: the book’s airplane and bicycle 
   } finally { await ctx.close(); }
 });
 
+test('v330 one thing asked for by name is built from the kits, never left to the AI: a toaster, a lion, a sandwich, a bird, a vehicle, flat and in 3D; a rainbow and the land animals with their habitats are in the book; every extra word the book allows counts, not just the first', async (b) => {
+  let asked = 0;
+  const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, book: true, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: async () => { asked++; return { text: 'Words answer.' }; } });
+  const r = await page.evaluate(async () => {
+    const m = await liveDrawLoad(), out = [];
+    const qs = [['show me how the toaster works', 'kit:toaster'], ['show me what the lion looks like', 'kit:lion'], ['draw me a sandwich', 'kit:sandwich'], ['how about a bird', 'kit:parrot'], ['show me a vehicle', 'kit:sedan'], ['draw a polar bear', 'kit:polarbear'], ['how does a blender work', 'kit:blender'], ['an apple', 'kit:apple'],
+      ['can you show me a rainbow', 'rainbow'], ['how is a rainbow formed', 'rainbow'], ['show me the land animals with their habitats', 'habitats']];
+    for (const [q, want] of qs) for (const d3 of [false, true]) {
+      const x = await liveDrawBook(q, d3), sp = x && x.spec;
+      out.push({ q: q + (d3 ? ' (3D)' : ''), want, got: sp && sp.book, mode: sp && sp.mode, d3, issues: sp ? (sp.mode === '3d' ? m.check3d(sp) : m.check(sp, q)) : ['none'] });
+    }
+    // asking for more than the thing itself is the AI's: how lions hunt, a lion and a tiger, a toaster's wires
+    const ai = await Promise.all(['how do lions hunt', 'a lion and a tiger', 'why do toasters have nichrome wires'].map((q) => liveDrawBook(q, false)));
+    return { out, ai: ai.map((x) => x && x.spec.book) };
+  });
+  for (const x of r.out) expect(x.got === x.want && x.mode === (x.d3 ? '3d' : '2d') && !x.issues.length, `${x.q}: ${x.want}, with no problems: ` + JSON.stringify(x));
+  expect(r.ai.every((x) => !x), 'a narrow question or two things still go to the AI: ' + JSON.stringify(r.ai));
+  // the real way in: asked in 3D, the toaster is built at once and the AI is never asked
+  await page.evaluate(() => liveDrawReply('show me how the toaster works', true));
+  await page.waitForSelector('#chat-log .ld .ld-stage canvas', { timeout: 20000 });
+  expect(asked === 0 && /toaster/i.test(await page.textContent('#chat-log .ld')), 'the toaster came from the kit with no AI: ' + asked + ' AI calls');
+  expect(!errors.length, 'page errors: ' + errors.join(' | '));
+  await ctx.close();
+});
 test('v329 the food kit: fruits, vegetables and dishes drawn whole and lifelike, or cut open to show inside (a core and seeds, segments, a pit), flat and in 3D, hot food steaming; Cassie\'s food guide tells her each one\'s group (go, grow or glow), what it gives the body and where it comes from; the book draws go, grow and glow foods, the parts of a fruit, fruits and vegetables', async (b) => {
   const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 860 }, server: false, book: true, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, scale: process.env.SHOTS ? 2 : 1 });
   const r = await page.evaluate(async () => {

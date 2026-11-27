@@ -1555,7 +1555,9 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
     const numbered = !page.pictureOnly, draw = wants(q);
     // (v310) her drawing book: a checked drawing of a common subject shows at once, with no AI (follow-ups still ask it)
     if (draw) {
-      const bk = await import(chrome.runtime.getURL('drawbook.js')).catch(() => null), book = bk && bk.fromBook(q, wants3d(q));
+      const bk = await import(chrome.runtime.getURL('drawbook.js')).catch(() => null);
+      let book = bk && bk.fromBook(q, wants3d(q));
+      if (!book && bk && bk.fromKit) book = bk.fromKit(q, wants3d(q), await import(chrome.runtime.getURL('livedraw.js')).catch(() => null)); // (v330: one animal, appliance, food or vehicle, from the kits)
       const fromBook = book ? parse(JSON.stringify(book)) : null;
       if (fromBook && fromBook.kind === 'card') {
         const near = T.follow.at();
