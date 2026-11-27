@@ -112,3 +112,7 @@ cd scripts/tests && npm ci && npm test
 ```
 
 A single test runs with `node smoke.cjs "<part of its name>"`.
+
+## Team
+
+Cassie is made by **haze!** ([@usernamehaze](https://github.com/usernamehaze)) and **Aecoryn**.
