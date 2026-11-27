@@ -1052,6 +1052,35 @@ test('v320 Blender models and real materials: the book’s airplane and bicycle 
   } finally { await ctx.close(); }
 });
 
+test('v331 the kit before any AI: a part of the AI’s drawing that is one thing the kit knows (a lion, a camel, a toaster) is drawn with the kit in its place, flat and in 3D; and after the kit, Claude, then Gemini, then the rest', async (b) => {
+  let groq = 0;
+  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 860 }, server: false, book: true, lite: 'off', state: { groqKey: 'gsk_test', geminiKey: 'AIza_test', theme: 'dark' }, fakeGroq: async () => { groq++; return { text: 'GROQ' }; } });
+  let gemini = 0;
+  await ctx.route(/generativelanguage\.googleapis\.com/, (route) => { if (!/:generateContent/.test(route.request().url())) return route.fulfill({ json: { models: [] } }); gemini++; return route.fulfill({ json: { candidates: [{ content: { parts: [{ text: 'GEMINI' }] } }] } }); });
+  const r = await page.evaluate(async () => {
+    const m = await liveDrawLoad();
+    // an AI’s savanna, its animals made of balls and boxes
+    const raw2 = { title: 'Savanna', mode: '2d', parts: [
+      { id: 'ground', label: 'Ground', say: 'Dry grass.', shapes: [{ t: 'rect', x: 0, y: 200, w2: 400, h: 40 }] },
+      { id: 'lion', label: 'Lion', say: 'A big cat.', shapes: [{ t: 'ellipse', cx: 110, cy: 170, rx: 50, ry: 22 }, { t: 'circle', cx: 160, cy: 150, r: 18 }] },
+      { id: 'camel', label: 'The camel', say: 'It stores fat in its hump.', shapes: [{ t: 'rect', x: 240, y: 120, w2: 90, h: 80 }] },
+      { id: 'mane', label: 'Lion mane', say: 'Only males.', shapes: [{ t: 'circle', cx: 160, cy: 150, r: 24 }] } ] };
+    const was = m.check(m.clean(raw2), 'draw a savanna'), flat = m.kitSwap(m.clean(raw2));
+    const model = m.kitSwap(m.clean({ title: 'A kitchen', mode: '3d', parts: [
+      { id: 'toaster', label: 'Toaster body', say: 'Steel.', size: 0.4, shapes: [{ t: 'box', size: [1.2, 0.8, 0.7], pos: [0, 0.4, 0] }] },
+      { id: 'table', label: 'Table', say: 'Wood.', size: 1, shapes: [{ t: 'box', size: [5, 0.1, 3], pos: [0, 0, 0] }] } ] }));
+    const t = (sp, id) => sp.parts.find((p) => p.id === id).shapes.map((x) => x.t + (x.kind ? ':' + x.kind : '')).join(',');
+    const before = window.serverSource;
+    const call = await liveDrawCall([{ role: 'system', content: 'Draw.' }, { role: 'user', content: 'draw the savanna' }], true, null);
+    return { flat: ['ground', 'lion', 'camel', 'mane'].map((id) => t(flat, id)).join(' '), was, flatIssues: m.check(flat, 'draw a savanna'), model: t(model, 'toaster') + ' ' + t(model, 'table'), modelIssues: m.check3d(model), call };
+  });
+  expect(r.flat === 'rect animal:lion animal:camel circle', 'the AI’s lion and camel are the kit’s, the ground and "Lion mane" stay as drawn: ' + r.flat);
+  expect(r.flatIssues.every((x) => r.was.includes(x)) && !r.flatIssues.some((x) => /lion"|camel/i.test(x)) && r.was.some((x) => /camel/i.test(x)) && !r.modelIssues.length, 'the kit adds no problems and clears the camel\'s (only the plain ground and mane are left): ' + JSON.stringify([r.was, r.flatIssues, r.modelIssues]));
+  expect(r.model === 'appliance:toaster box', 'in 3D the AI’s toaster is the kit’s: ' + r.model);
+  expect(r.call.text === 'GEMINI' && r.call.simple === false && gemini === 1 && groq === 0, 'with no Claude, Gemini draws before Groq: ' + JSON.stringify(r.call) + ` gemini ${gemini} groq ${groq}`);
+  expect(!errors.length, 'page errors: ' + errors.join(' | '));
+  await ctx.close();
+});
 test('v330 one thing asked for by name is built from the kits, never left to the AI: a toaster, a lion, a sandwich, a bird, a vehicle, flat and in 3D; a rainbow and the land animals with their habitats are in the book; every extra word the book allows counts, not just the first', async (b) => {
   let asked = 0;
   const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, book: true, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: async () => { asked++; return { text: 'Words answer.' }; } });

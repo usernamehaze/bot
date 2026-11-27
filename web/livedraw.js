@@ -632,7 +632,7 @@ export async function render(host, rawSpec, opts = {}) {
   let mv = null; const mvHost = spec.mode === '3d' ? el('div', 'ld-mv') : null;
   const machineOn = async () => {
     if (mv) return mv;
-    let m = null; try { m = await import('./isoview.js?v=330'); } catch (e) { return null; }
+    let m = null; try { m = await import('./isoview.js?v=331'); } catch (e) { return null; }
     mv = m.machine(mvHost, spec, { dark: !lightPage() });
     if (mv) {
       const row = el('div', 'ld-mv-acts');
@@ -2974,6 +2974,53 @@ export function kitSpec(hit, want3d = false) {
       { id: kind, label: kitCap(name), say: `Its main parts: ${V.parts.join(', ')}.`, shapes: [d3 ? { t: 'vehicle', kind, pos: [0, 0, 0], w: 4 } : { t: 'vehicle', kind, x: 200, y: 220, w: 300, view: 'side' }] });
   }
   return null;
+}
+// (v331) the kit before any AI's own shapes: a part of an AI's drawing that is one thing the kit knows (its name is
+// "Lion", "Toaster", "Camel", "Sandwich", "Car") is drawn with the kit, in that part's place and at its size, instead
+// of the blocks and balls the AI built it from. Its name, words and the rest of the drawing stay as the AI made them.
+const KIT_FILL = /\b(the|an?|whole|body|model|adult|baby|young|male|female|big|small|little|one|its|real|cute|wild)\b/gi;
+function kitOfLabel(label) {
+  const l = String(label || '');
+  for (const h of kitFind(l)) if (!/[a-z]{3,}/i.test(l.replace(new RegExp(h.re.source, 'gi'), ' ').replace(KIT_FILL, ' '))) return h;
+  return null;
+}
+const KIT_T = ['animal', 'appliance', 'food', 'vehicle'];
+export function kitSwap(spec) {
+  if (!spec || !Array.isArray(spec.parts)) return spec;
+  for (const p of spec.parts) {
+    if (!p || !Array.isArray(p.shapes) || p.shapes.some((x) => KIT_T.includes(String(x.t || '').toLowerCase()))) continue;
+    const h = kitOfLabel(p.label);
+    if (!h) continue;
+    const { type, kind } = h;
+    if (spec.mode === '3d') {
+      const b = p.shapes.map(box3).filter(Boolean);
+      if (!b.length) continue;
+      const [x0, y0, z0, x1, y1, z1] = join3(b), cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, big = Math.max(x1 - x0, y1 - y0, z1 - z0, 0.4);
+      const A = type === 'appliance' && APPL[kind], F = type === 'food' && FOOD[kind];
+      p.shapes = [type === 'appliance' ? { t: 'appliance', kind, pos: [cx, y0, cz], h: +(A ? big * A.H / Math.max(A.W, A.H, A.D) : big).toFixed(3) }
+        : { t: type, kind, pos: [cx, y0, cz], w: +big.toFixed(3), ...(F && F.cut ? { view: 'both' } : {}) }];
+    } else {
+      const pts = p.shapes.filter((x) => String(x.t || '').toLowerCase() !== 'text').flatMap(shapePoints).filter((q) => Number.isFinite(q[0]) && Number.isFinite(q[1]));
+      if (pts.length < 2) continue;
+      const xs = pts.map((q) => q[0]), ys = pts.map((q) => q[1]), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+      const bw = Math.max(24, x1 - x0), bh = Math.max(20, y1 - y0), cx = (x0 + x1) / 2;
+      if (type === 'animal') {
+        const A = ANIMALS[kind] || ANIMALS.lion, mid = A.b === 'fish' || A.b === 'jelly' || A.b === 'octopus' || A.b === 'bat', w = Math.round(Math.min(bw, bh / animalTall(A)));
+        p.shapes = [{ t: 'animal', kind, x: Math.round(cx), y: Math.round(mid ? (y0 + y1) / 2 : y1), w: Math.max(30, w) }];
+      } else if (type === 'appliance') {
+        const A = APPL[kind] || APPL.fridge;
+        p.shapes = [{ t: 'appliance', kind, x: Math.round(cx), y: Math.round(y1), h: Math.max(30, Math.round(Math.min(bh, bw * A.H / A.W))), view: 'front' }];
+      } else if (type === 'food') {
+        const A = FOOD[kind] || FOOD.apple;
+        p.shapes = [{ t: 'food', kind, x: Math.round(cx), y: Math.round(y1), w: Math.max(24, Math.round(Math.min(bw, bh / Math.max(0.3, A.asp || 1)))) }];
+      } else {
+        p.shapes = [{ t: 'vehicle', kind, x: Math.round(cx), y: Math.round(y1), w: Math.max(40, Math.round(Math.min(bw, bh / 0.45))), view: 'side' }];
+      }
+      p.box = null; p.anchor = null; // (its label finds the kit drawing)
+    }
+    p.kit = true;
+  }
+  return spec;
 }
 // ---------- a picture of a finished drawing (for Cassie to check her own work) ----------
 export async function snapshot(rawSpec) {

@@ -2841,7 +2841,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=330'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=331'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2863,7 +2863,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=330'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=331'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -3139,7 +3139,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=330').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=331').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -7629,7 +7629,12 @@ async function liveDrawCall(messages, q, image) {
     return { text: await askCassie([{ role: 'user', content: messages.map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n\n') }], image, {}), simple: true };
   }
   // (v280) her server answers with a backup brain once the day's share of her best one is used: that drawing is marked simpler
-  if (SERVER && serverClaude) { try { const t = await serverChat(messages, { brain: 'claude', maxTokens: 8000, q, draw: q ? 1 : 2, wait: q ? 50000 : 35000 }); if (t) return { text: t, simple: liveSimple() }; } catch (e) { /* the usual brain below */ } }
+  // (v331) the order, after her kits: Claude, then Gemini, then the rest. Her server asks Claude, then Gemini; when it had to
+  // answer with another AI, the student's own Gemini key (when there is one) is asked before that answer is used
+  let backup = null;
+  if (SERVER && serverClaude) { try { const t = await serverChat(messages, { brain: 'claude', maxTokens: 8000, q, draw: q ? 1 : 2, wait: q ? 50000 : 35000 }); if (t) { if (!liveSimple() || !state.geminiKey) return { text: t, simple: liveSimple() }; backup = t; } } catch (e) { /* Gemini below */ } }
+  if (state.geminiKey) { try { const t = await geminiFromChat(messages, { maxTokens: 8000 }); if (t) return { text: t, simple: false }; } catch (e) { /* the rest below */ } }
+  if (backup) return { text: backup, simple: true };
   if (state.groqKey || SERVER) { try { const t = await groqChat(messages, { model: state.groqModel, maxTokens: 8000, rotate: true, q }); if (t) return { text: t, simple: true }; } catch (e) { if (!state.geminiKey) throw e; } }
   return { text: await askCassie([{ role: 'user', content: messages.map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n\n') }], null, {}), simple: true };
 }
@@ -7678,14 +7683,14 @@ async function liveDrawFirst(question, want3d, image = null, opts = {}) {
   const messages = [{ role: 'system', content: liveDrawPrompt(want3d, { picture: !!image, reference: !!ref, flatNote: soft, process: [proc && !want3d ? m.PROCESS_NOTE : '', m.vehicleGuide ? m.vehicleGuide(question) : '', m.animalGuide ? m.animalGuide(question) : '', m.applianceGuide ? m.applianceGuide(question) : '', m.foodGuide ? m.foodGuide(question) : ''].filter(Boolean).join('\n') }) }, { role: 'user', content: question }];
   const t0 = Date.now();
   let { text, simple } = await liveDrawCall(messages, !opts.free, image); // (the drawing is the one question it counts as; the other view of it is not another question)
-  let spec = m.clean(text);
+  let spec = m.kitSwap ? m.kitSwap(m.clean(text)) : m.clean(text); // (v331: a part that is one thing the kit knows is drawn with the kit)
   const issues = (sp) => (!sp ? ['the reply was not one valid JSON object in the schema'] : [...(!want3d && sp.mode === '3d' ? ['it must be a flat 2d pen drawing, mode "2d"'] : []), ...m.check(sp, question)]);
   let wrong = issues(spec);
   // (v312) her redo only when the first answer came fast: a drawing she has is shown, never held for minutes
   if (wrong.length && (!spec || Date.now() - t0 < 30000)) {
     const smaller = !spec && want3d ? '\nKeep it smaller so all of it fits in one reply: at most 6 parts and 5 shapes each, short "say" sentences, and nothing outside the JSON object.' : '';
     const again = await liveDrawCall([...messages, { role: 'assistant', content: String(text).slice(0, 12000) }, { role: 'user', content: `Your drawing has these problems:\n- ${wrong.join('\n- ')}\nSend the whole corrected JSON object again.${smaller}` }], false, image);
-    const s2 = m.clean(again.text);
+    const s2 = m.kitSwap ? m.kitSwap(m.clean(again.text)) : m.clean(again.text);
     if (s2 && issues(s2).length <= wrong.length) { spec = s2; text = again.text; simple = simple || again.simple; }
   }
   if (spec && !want3d && spec.mode === '3d') spec.mode = '2d';
@@ -7700,18 +7705,18 @@ async function liveDrawVerify(question, first) {
   const fixes = liveDrawFixes(ldJson(await liveDrawLook(liveDrawLookAsk(question, first.spec), png)), first.spec);
   if (!fixes.length) return null;
   const fix = await liveDrawCall([...first.messages, { role: 'assistant', content: JSON.stringify(first.spec) }, { role: 'user', content: `I looked at a picture of your drawing. What is wrong:\n- ${fixes.join('\n- ')}\nRedraw it: send the whole corrected JSON object.` }], false, first.image).catch(() => null);
-  const s3 = fix && m.clean(fix.text);
+  const s3 = fix && (m.kitSwap ? m.kitSwap(m.clean(fix.text)) : m.clean(fix.text));
   if (!s3 || first.issues(s3).length) return null;
   if (s3.mode === '3d' && first.spec.mode === '2d') s3.mode = '2d';
   s3.simple = first.spec.simple || fix.simple; s3.q = first.spec.q; if (first.spec.ref) s3.ref = first.spec.ref;
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=330')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=331')));
 // (v310) Cassie's drawing book: a checked drawing of a common subject (a bicycle, the heart, the solar system...) shows
 // at once, right every time, with no AI and no question used (offline too). Anything else is drawn by the AI.
 let liveBookLib = null;
-const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=330').catch(() => null)));
+const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=331').catch(() => null)));
 // (v316) the drawing book, grown by the team: AI drawings that passed every check go to Cassie's server with
 // only their subject's few words; the owner approves the good ones on the dashboard, and the app keeps a copy of
 // every approved drawing, so they show at once (offline too) like the hand-checked ones
@@ -9264,7 +9269,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=330');
+      exploreMod = await import('./explore/cell3d.js?v=331');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -9314,7 +9319,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=330');
+      labsMod = await import('./labs/labs.js?v=331');
       islandRest();
     }
     labsMod.open({
@@ -11279,10 +11284,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=330').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=331').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=330', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=331', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
