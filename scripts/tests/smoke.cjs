@@ -1055,14 +1055,17 @@ test('v320 Blender models and real materials: the book’s airplane and bicycle 
   } finally { await ctx.close(); }
 });
 
-test('v340 a picture of a person or a character is real pictures from the web (never made up): Albert Einstein from the encyclopedia, a game character from the picture libraries, each saying where it is from; a picture she makes is kept on this device, so it is still there after leaving the chat and coming back', async (b) => {
+test('v340 (v341: one picture, the right one) a picture of a person or a character is a real picture from the web (never made up): Albert Einstein from the encyclopedia, a game character from the picture libraries, each saying where it is from; a picture she makes is kept on this device, so it is still there after leaving the chat and coming back', async (b) => {
   const { ctx, page, errors } = await open(b, { device: 'iPhone 13', server: false, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: async () => ({ text: 'Words.' }) });
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
   const asked = [];
   await ctx.route(/wikipedia\.org\/w\/api\.php/, (r) => { const u = decodeURIComponent(r.request().url()); asked.push('wiki'); const einstein = /einstein/i.test(u);
     return r.fulfill({ json: { query: { pages: einstein ? { 1: { index: 1, title: 'Albert Einstein', description: 'German-born physicist (1879–1955)', thumbnail: { source: 'https://upload.wikimedia.org/einstein.jpg' }, fullurl: 'https://en.wikipedia.org/wiki/Albert_Einstein' } }
       : /furina/i.test(u) ? { 1: { index: 1, title: 'Genshin Impact', description: '2020 video game', fullurl: 'https://en.wikipedia.org/wiki/Genshin_Impact' } } : { 1: { index: 1, title: 'Volcano', description: 'Rupture in the crust of a planet' } } } } }); });
-  await ctx.route(/commons\.wikimedia\.org\/w\/api\.php/, (r) => { asked.push('commons'); return r.fulfill({ json: { query: { pages: { 7: { index: 1, title: 'File:Furina cosplay.jpg', imageinfo: [{ thumburl: 'https://upload.wikimedia.org/furina.jpg', descriptionurl: 'https://commons.wikimedia.org/wiki/File:Furina_cosplay.jpg' }] } } } } }); });
+  await ctx.route(/commons\.wikimedia\.org\/w\/api\.php/, (r) => { asked.push('commons:' + decodeURIComponent(r.request().url()).match(/gsrsearch=([^&]*)/)[1]); return r.fulfill({ json: { query: { pages: { // (v341: a snake genus of the same name comes first)
+    6: { index: 1, title: 'File:Furina ornata snake.jpg', imageinfo: [{ thumburl: 'https://upload.wikimedia.org/snake.jpg', descriptionurl: 'https://commons.wikimedia.org/wiki/File:Furina_ornata.jpg' }] },
+    7: { index: 2, title: 'File:Furina cosplay Genshin Impact.jpg', imageinfo: [{ thumburl: 'https://upload.wikimedia.org/furina.jpg', descriptionurl: 'https://commons.wikimedia.org/wiki/File:Furina_cosplay.jpg' }] },
+    8: { index: 3, title: 'File:Furina cosplay 2.jpg', imageinfo: [{ thumburl: 'https://upload.wikimedia.org/furina2.jpg', descriptionurl: 'https://commons.wikimedia.org/wiki/File:Furina_2.jpg' }] } } } } }); });
   await ctx.route(/api\.openverse\.org/, (r) => { asked.push('openverse'); return r.fulfill({ json: { results: [] } }); });
   await ctx.route(/upload\.wikimedia\.org/, (r) => r.fulfill({ contentType: 'image/png', body: png }));
   let made = 0;
@@ -1070,10 +1073,10 @@ test('v340 a picture of a person or a character is real pictures from the web (n
   const ask = async (q) => { const n = await page.evaluate(() => state.messages.filter((m) => m.role === 'assistant').length); await page.fill('#prompt-input', q); await page.click('#send-btn'); await page.waitForFunction((n) => state.messages.filter((m) => m.role === 'assistant').length > n, n, { timeout: 30000 }); await page.waitForTimeout(600); };
   await ask('can you make me an image of albert einstein');
   const ein = await page.evaluate(() => { const m = state.messages[state.messages.length - 1], b = [...document.querySelectorAll('#chat-log .bubble')].pop(); return { say: m.display, pics: (m.webPics || []).map((p) => p.src + '|' + p.from), shown: b.querySelectorAll('.web-pic img').length, credit: (b.querySelector('.web-pic figcaption a') || {}).href || '' }; });
-  expect(/pictures? of Albert Einstein from the web/.test(ein.say) && ein.pics[0] === 'https://upload.wikimedia.org/einstein.jpg|the encyclopedia' && ein.shown >= 1 && /wikipedia\.org\/wiki\/Albert_Einstein/.test(ein.credit), 'Albert Einstein: the encyclopedia’s picture, saying where it is from: ' + JSON.stringify(ein));
+  expect(/a picture of Albert Einstein from the web/.test(ein.say) && ein.pics.length === 1 && ein.pics[0] === 'https://upload.wikimedia.org/einstein.jpg|the encyclopedia' && ein.shown === 1 && /wikipedia\.org\/wiki\/Albert_Einstein/.test(ein.credit), 'Albert Einstein: the encyclopedia’s picture, saying where it is from: ' + JSON.stringify(ein));
   await ask('can you find me a picture of furina');
-  const fur = await page.evaluate(() => { const m = state.messages[state.messages.length - 1]; return { say: m.display, pics: (m.webPics || []).map((p) => p.from) }; });
-  expect(/furina from the web/i.test(fur.say) && fur.pics[0] === 'a free picture library', 'a game character: real pictures from a picture library: ' + JSON.stringify(fur));
+  const fur = await page.evaluate(() => { const m = state.messages[state.messages.length - 1]; return { say: m.display, pics: (m.webPics || []).map((p) => p.src + '|' + p.from) }; });
+  expect(/a picture of furina from the web/i.test(fur.say) && fur.pics.length === 1 && fur.pics[0] === 'https://upload.wikimedia.org/furina.jpg|a free picture library' && asked.some((x) => /commons:furina genshin impact/i.test(x)), 'a game character: one picture, of the character (searched with its game), never the snake of the same name: ' + JSON.stringify([fur, asked]));
   expect(!(await page.evaluate(() => window.__made || 0)), 'neither was made up by her picture maker');
   // not a person: her picture maker, and the picture stays after leaving the chat and coming back
   await ask('make me an image of a volcano');
@@ -1081,7 +1084,7 @@ test('v340 a picture of a person or a character is real pictures from the web (n
   expect(/^p/.test(id) && (await page.evaluate(() => window.__made)) === 1, 'a volcano is made by her picture maker and kept on this device: ' + id);
   await page.evaluate(() => { const c = state.currentId; createNewChat(); selectChat(c); });
   await page.waitForFunction(() => { const i = [...document.querySelectorAll('#chat-log .bubble img')].pop(); return i && /^(blob|data):/.test(i.src) && i.naturalWidth > 0; }, null, { timeout: 10000 });
-  expect(await page.evaluate(() => document.querySelectorAll('#chat-log .web-pic img').length >= 2), 'and the web pictures come back with the chat too');
+  expect(await page.evaluate(() => document.querySelectorAll('#chat-log .web-pic img').length === 2), 'and the web pictures come back with the chat too, one each');
   expect(!errors.length, 'page errors: ' + errors.join(' | '));
   await ctx.close();
 });

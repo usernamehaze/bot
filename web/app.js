@@ -2841,7 +2841,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=340'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=341'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2863,7 +2863,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=340'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=341'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -3139,7 +3139,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=340').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=341').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -7715,11 +7715,11 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=340')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=341')));
 // (v310) Cassie's drawing book: a checked drawing of a common subject (a bicycle, the heart, the solar system...) shows
 // at once, right every time, with no AI and no question used (offline too). Anything else is drawn by the AI.
 let liveBookLib = null;
-const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=340').then((bk) => { liveBookNow = bk; return bk; }).catch(() => null)));
+const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=341').then((bk) => { liveBookNow = bk; return bk; }).catch(() => null)));
 // (v332) a typo never hides a drawing: "shoe me how the heart works", "drw the water cycle" are read as meant (drawbook.js
 // fixTypos, which knows the asking words, the book's subjects and the kits' names); loaded once she is idle
 let liveBookNow = null;
@@ -8180,7 +8180,7 @@ async function commonsLook(subject, n = 3) {
 }
 async function openverseLook(subject, n = 3) {
   const d = await webJson(`${OPENVERSE}?q=${encodeURIComponent(subject)}&page_size=${n + 2}&mature=false`);
-  return (d.results || []).map((r) => ({ title: r.title || subject, src: r.thumbnail || r.url, page: r.foreign_landing_url || r.url })).filter((x) => x.src).slice(0, n);
+  return (d.results || []).map((r) => ({ title: r.title || subject, tags: (r.tags || []).map((t) => t.name).join(' '), src: r.thumbnail || r.url, page: r.foreign_landing_url || r.url })).filter((x) => x.src).slice(0, n);
 }
 // is it about a person or a character, and if so, the pictures
 async function webPicturesOf(subject) {
@@ -8188,14 +8188,21 @@ async function webPicturesOf(subject) {
   if (!s) return null;
   let hits = []; try { hits = await wikiLook(s); } catch (e) { hits = []; }
   const want = wordsOf(s).filter((w) => w.length > 1);
-  const named = hits.find((h) => { const t = wordsOf(h.title); return want.length && want.every((w) => t.includes(w)) || t.length && t.every((w) => want.includes(w)); });
-  const human = HUMAN_WORDS.test(s), person = named && PERSON_DESC.test(named.desc), character = !named && hits.slice(0, 3).some((h) => /\b(video game|anime|manga|comic|cartoon|film|series|novel|franchise|characters)\b/i.test(h.desc + ' ' + h.title));
+  const named = hits.find((h) => { const t = wordsOf(h.title.replace(/\([^)]*\)/g, ' ')); return want.length && want.every((w) => t.includes(w)) || t.length && t.every((w) => want.includes(w)); });
+  const franchise = hits.slice(0, 3).find((h) => /\b(video game|anime|manga|comic|cartoon|film|series|novel|franchise|characters)\b/i.test(h.desc + ' ' + h.title));
+  const human = HUMAN_WORDS.test(s), person = named && PERSON_DESC.test(named.desc), character = !named && !!franchise;
   if (!human && !person && !character) return null; // (not a person: her picture maker, as before)
-  const pics = [];
-  if (named && named.src && person) pics.push({ title: named.title, src: named.src, page: named.page, from: 'the encyclopedia' });
-  if (pics.length < 3) { try { (await commonsLook(s, 3 - pics.length)).forEach((p) => pics.push({ ...p, from: 'a free picture library' })); } catch (e) { /* the next one */ } }
-  if (pics.length < 2) { try { (await openverseLook(s, 3 - pics.length)).forEach((p) => pics.push({ ...p, from: 'a free picture library' })); } catch (e) { /* none */ } }
-  return { name: named && person ? named.title : s, pics: pics.slice(0, 3), page: named && person ? named.page : null };
+  const name = named && person ? named.title : s;
+  // (v341) one picture, the right one. A picture library is searched for the name with what it belongs to ("Furina" with
+  // "Genshin Impact"), and a picture counts only when its own title or tags say so: a same-named snake genus never does.
+  const ctx = [...new Set([...wordsOf((name.match(/\(([^)]*)\)/) || [])[1] || ''), ...(character ? wordsOf(franchise.title) : [])])].filter((w) => w.length > 2 && !want.includes(w));
+  const fits = (text) => { const t = wordsOf(text); return want.filter((w) => w.length > 2).every((w) => t.includes(w)) && (!ctx.length || ctx.some((w) => t.includes(w)) || /\b(cosplay|cosplayer|character|anime|manga|game|fan ?art|figure|figurine)\b/i.test(text)) && !/\b(genus|species|snake|lizard|frog|beetle|moth|spider|fish|plant|flower|fungus|orchid|map|logo|flag|coat of arms)\b/i.test(text); };
+  const q = [s, ...ctx].join(' ');
+  let pic = null;
+  if (named && named.src && person) pic = { title: named.title, src: named.src, page: named.page, from: 'the encyclopedia' };
+  if (!pic) { try { pic = (await commonsLook(q, 6)).find((p) => fits(p.title)); if (pic) pic = { ...pic, from: 'a free picture library' }; } catch (e) { pic = null; } }
+  if (!pic) { try { pic = (await openverseLook(q, 8)).find((p) => fits(p.title + ' ' + (p.tags || ''))); if (pic) pic = { ...pic, from: 'a free picture library' }; } catch (e) { pic = null; } }
+  return { name, pics: pic ? [pic] : [], page: named && person ? named.page : null };
 }
 function addWebPictures(bubble, list) {
   const row = document.createElement('div'); row.className = 'web-pics';
@@ -8214,8 +8221,8 @@ async function webPictureReply(subject, typingBubble) {
   let got = null; try { got = await webPicturesOf(subject); } catch (e) { got = null; }
   if (!got) return false;
   typingBubble.remove();
-  const say = got.pics.length ? `Here ${got.pics.length > 1 ? 'are pictures' : 'is a picture'} of ${got.name} from the web.` : `I couldn’t find a picture of ${got.name} on the web just now. People and characters I only show from real pictures, never ones I make up, so try again in a moment or with the full name.`;
-  const webPics = got.pics.map(({ title, src, page, from }) => ({ title, src, page, from }));
+  const say = got.pics.length ? `Here is a picture of ${got.name.replace(/\s*\([^)]*\)/, '')} from the web.` : `I couldn’t find a picture of ${got.name} on the web just now. People and characters I only show from real pictures, never ones I make up, so try again in a moment or with the full name.`;
+  const webPics = got.pics.slice(0, 1).map(({ title, src, page, from }) => ({ title, src, page, from })); // (v341: one picture a request)
   state.messages.push({ role: 'assistant', content: `[I showed pictures of ${got.name} from the web]`, display: say, ...(webPics.length ? { webPics } : {}) });
   save();
   const bubble = renderMessage('assistant', say);
@@ -9380,7 +9387,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=340');
+      exploreMod = await import('./explore/cell3d.js?v=341');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -9430,7 +9437,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=340');
+      labsMod = await import('./labs/labs.js?v=341');
       islandRest();
     }
     labsMod.open({
@@ -11400,10 +11407,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=340').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=341').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=340', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=341', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
