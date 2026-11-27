@@ -1054,6 +1054,37 @@ test('v320 Blender models and real materials: the book’s airplane and bicycle 
   } finally { await ctx.close(); }
 });
 
+test('v337 a drawing from the kit shows nothing until she draws it (flat and 3D: never whole first, then redrawn); a pinch on a 3D model zooms the model, never the page or the app (a phone pinch, a trackpad pinch); close up nothing is sliced off, and no piece blinks out as it turns', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'iPhone 13', server: false, book: true, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: async () => ({ text: 'Words.' }) });
+  // flat: the moment the drawing is on screen, every part of it is still hidden
+  await page.evaluate(() => { window.CASSIE_READ_SPEED = 1; liveDrawReply('show me a banana', false); });
+  await page.waitForSelector('#chat-log .ld .ld-svg', { state: 'attached', timeout: 30000 });
+  const flat = await page.evaluate(() => { const parts = [...document.querySelectorAll('#chat-log .ld .ld-svg .ld-part > *')]; return { n: parts.length, shown: parts.filter((x) => x.style.visibility !== 'hidden').length }; });
+  expect(flat.n > 0 && flat.shown === 0, 'a flat kit drawing shows nothing before she draws it: ' + JSON.stringify(flat));
+  await page.waitForFunction(() => document.querySelector('#chat-log .ld .ld-live.off'), null, { timeout: 60000 });
+  // 3D: when the model's canvas is there, nothing of it is drawn yet: its first name comes only once its part is built
+  const t3 = await page.evaluate(() => new Promise((ok) => {
+    chatLog.innerHTML = ''; let canvasAt = 0; const t0 = performance.now();
+    const look = () => { const l = document.querySelector('#chat-log .ld'); const cv = l && l.querySelector('.ld-stage canvas'); if (cv && !canvasAt) canvasAt = performance.now(); const tag = l && [...l.querySelectorAll('.ld-tag')].some((x) => !x.hidden); if (tag) return ok({ canvasAt: canvasAt - t0, tagAt: performance.now() - t0 }); if (performance.now() - t0 > 60000) return ok({ canvasAt, tagAt: -1 }); requestAnimationFrame(look); };
+    liveDrawReply('show me a banana', true); requestAnimationFrame(look);
+  }));
+  expect(t3.canvasAt > 0 && t3.tagAt - t3.canvasAt >= 600, 'a 3D kit model shows nothing before she builds it (its canvas is there first, its part comes later): ' + JSON.stringify(t3));
+  await page.waitForFunction(() => document.querySelector('#chat-log .ld .ld-live.off'), null, { timeout: 60000 });
+  const stage = await page.$('#chat-log .ld .ld-stage');
+  // a pinch or a trackpad pinch on the model never zooms the page
+  const held = await page.evaluate(() => {
+    const st = document.querySelector('#chat-log .ld .ld-stage'), r = st.getBoundingClientRect(), mk = (id, dx) => new Touch({ identifier: id, target: st, clientX: r.left + r.width / 2 + dx, clientY: r.top + r.height / 2 });
+    const tm = new TouchEvent('touchmove', { touches: [mk(1, -30), mk(2, 30)], targetTouches: [mk(1, -30), mk(2, 30)], bubbles: true, cancelable: true }); st.dispatchEvent(tm);
+    const one = new TouchEvent('touchmove', { touches: [mk(1, 0)], bubbles: true, cancelable: true }); st.dispatchEvent(one);
+    const wh = new WheelEvent('wheel', { deltaY: -40, ctrlKey: true, bubbles: true, cancelable: true, clientX: r.left + 10, clientY: r.top + 10 }); st.dispatchEvent(wh);
+    return { pinch: tm.defaultPrevented, oneFinger: one.defaultPrevented, trackpad: wh.defaultPrevented };
+  });
+  expect(held.pinch && held.trackpad, 'a two-finger pinch and a trackpad pinch on the model are kept from the page: ' + JSON.stringify(held));
+  const src = fs.readFileSync(fileAt('livedraw.js'), 'utf8');
+  expect(/cam\.near = Math\.max\(\.002, R \* \.0015\)/.test(src) && /frustumCulled = false/.test(src) && /if \(!zoom\) stage\.addEventListener\('wheel', \(e\) => \{ if \(!e\.ctrlKey\) e\.stopPropagation\(\); \}/.test(src), 'close up nothing is sliced off and no piece blinks out; over a page the wheel scrolls it and a pinch zooms the model');
+  expect(!errors.length, 'page errors: ' + errors.join(' | '));
+  await ctx.close();
+});
 test('v336 zooming is the Labs anatomy way (zoom where the fingers are, right up close, two fingers move it, a double tap flies in, a resize keeps your view); "only ..." is the object itself, whole: a closed refrigerator, a whole apple, the heart with nothing running round it', async (b) => {
   const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 900 }, server: false, book: true, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: async () => ({ text: 'Words.' }) });
   const r = await page.evaluate(async () => {

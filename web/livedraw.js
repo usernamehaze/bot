@@ -647,7 +647,7 @@ export async function render(host, rawSpec, opts = {}) {
   let mv = null; const mvHost = spec.mode === '3d' ? el('div', 'ld-mv') : null;
   const machineOn = async () => {
     if (mv) return mv;
-    let m = null; try { m = await import('./isoview.js?v=336'); } catch (e) { return null; }
+    let m = null; try { m = await import('./isoview.js?v=337'); } catch (e) { return null; }
     mv = m.machine(mvHost, spec, { dark: !lightPage() });
     if (mv) {
       const row = el('div', 'ld-mv-acts');
@@ -895,6 +895,8 @@ function draw2d(stage, spec, { animate, setSay, hint }) {
     flowEls.forEach((x) => { if (x.L > 4) x.dots.forEach((d) => { d.at = (d.at + dt * 0.05 * x.f.speed * push) % x.L; put(x, d); }); });
     if (moving && onScreen) raf2 = requestAnimationFrame(frame);
   }
+  // (v337) a drawing about to be drawn shows nothing first: no kit drawing appears whole and is then redrawn
+  if (animate) groups.forEach((g) => [...g.children].forEach((n) => { n.style.visibility = 'hidden'; }));
   const view = {
     hintText,
     // (v314) moving parts: move() starts them once the drawing is there (move(true) even with Reduce Motion); pause() stops them
@@ -2989,7 +2991,7 @@ export function kitSpec(hit, want3d = false, opts = {}) {
     const [, , grp, nut, src, fact] = info, name = FOOD_NAMES[kind] || kind, A = FOOD[kind] || FOOD.apple, view = A.cut && !opts.only ? 'both' : 'whole'; // (v336: "only an apple": the whole apple)
     const w2 = Math.round(Math.min(220, 150 / Math.max(0.3, A.asp || 1)));
     return base(kitCap(name), `${fact}.`, `Group: ${grp}. It gives ${nut}. ${kitCap(src)}.`, `a real ${name} on a table`, [`Why is ${name} good for you?`, `Where does ${name} come from?`],
-      { id: kind, label: kitCap(name), say: `${kitCap(name)}: ${grp}. It gives ${nut}.${A.cut ? ' Beside it, one cut open to show inside.' : ''}`, shapes: [d3 ? { t: 'food', kind, pos: [0, 0, 0], w: A.cut ? 2.4 : 4, ...(A.cut ? { view } : {}) } : { t: 'food', kind, x: 200, y: 200, w: w2, ...(A.cut && view !== 'whole' ? { view } : {}) }] });
+      { id: kind, label: kitCap(name), say: `${kitCap(grp)}. It gives ${nut}.${A.cut && view !== 'whole' ? ' Beside it, one cut open to show inside.' : ''}` /* (v337: its name is on the step already, not twice) */, shapes: [d3 ? { t: 'food', kind, pos: [0, 0, 0], w: A.cut ? 2.4 : 4, ...(A.cut ? { view } : {}) } : { t: 'food', kind, x: 200, y: 200, w: w2, ...(A.cut && view !== 'whole' ? { view } : {}) }] });
   }
   if (type === 'vehicle') {
     const V = info, name = V.what.replace(/^an? /, '');
@@ -3269,12 +3271,18 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
   if (matte) scene.add(new T.AmbientLight(0xffffff, .7)); // (matte: plain, bright colours for a model that floats over any page, with no shine to go dark)
   const controls = new OrbitControls(cam, canvas); controls.enableDamping = true; controls.enablePan = false; controls.minDistance = 2; controls.maxDistance = 40;
   controls.zoomToCursor = true; // (v335) a pinch or the wheel zooms in on the part under your fingers, as in the Labs' anatomy
+  // (v337) a pinch on the model zooms the model, never the whole page or app: Safari on a phone zooms the page with two
+  // fingers unless the touch is held back, and a computer's trackpad pinch arrives as a wheel with Ctrl
+  const pinchOnly = (e) => { if (e.touches && e.touches.length > 1 && e.cancelable) e.preventDefault(); };
+  stage.addEventListener('touchstart', pinchOnly, { passive: false }); stage.addEventListener('touchmove', pinchOnly, { passive: false });
+  ['gesturestart', 'gesturechange', 'gestureend'].forEach((t) => stage.addEventListener(t, (e) => e.preventDefault(), { passive: false }));
+  stage.addEventListener('wheel', (e) => { if (e.ctrlKey && e.cancelable) e.preventDefault(); }, { passive: false });
   // (v336) and, as there, two fingers (or a right drag) move it, so you can go to the part you zoomed into; your own touch
   // always wins over a glide of hers, and the view stays where you left it
   controls.enablePan = true; controls.screenSpacePanning = true;
   let userMoved = false;
   controls.addEventListener('start', () => { userMoved = true; camTo = null; aimTo = null; });
-  if (!zoom) controls.enableZoom = false; // (a model that floats over a page: the wheel still scrolls the page)
+  if (!zoom) stage.addEventListener('wheel', (e) => { if (!e.ctrlKey) e.stopPropagation(); }, { capture: true }); // (a model that floats over a page: the wheel still scrolls the page; v337: a pinch, on a phone or a trackpad, zooms the model, as in the Labs' anatomy)
   // (turn: the model turns slowly by itself until the student takes hold of it)
   // turn: true goes all the way round; 'sway' rocks gently about the best side, so a long model is never seen end on
   let sway = turn === 'sway' && !still();
@@ -3340,11 +3348,17 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
     return g;
   }).filter((g) => g.children.length);
   if (!groups.length) { renderer.dispose(); canvas.remove(); return null; }
+  if (animate) groups.forEach((g) => { g.visible = false; }); // (v337: a model about to be built shows nothing first: no kit model appears whole and is then rebuilt)
   // fit the camera to the whole model
   const box = new T.Box3().setFromObject(model), size = box.getSize(new T.Vector3()), mid = box.getCenter(new T.Vector3());
   model.position.sub(mid); model.updateMatrixWorld(true);
   const R = Math.max(size.x, size.y, size.z, 1);
   controls.minDistance = Math.max(.03, R * .03); // (v336: right up close to a small part, as in the Labs' anatomy)
+  // (v337) close up, nothing is sliced off by the camera, and no piece blinks out as it turns: the near plane follows the
+  // model's size, and every piece is always drawn (a kit piece moved after it was made, a banana's halves, kept a stale
+  // idea of where it is, so it vanished at some angles and came back at others)
+  cam.near = Math.max(.002, R * .0015); cam.far = Math.max(200, R * 80); cam.updateProjectionMatrix();
+  model.traverse((o) => { if (o.isMesh || o.isLine || o.isPoints) o.frustumCulled = false; });
   // (v310) a flat model (the solar system, an atom's shells) is seen from higher up, so it fills the frame instead of a thin line
   const VIEW = (size.y < Math.max(size.x, size.z) * .3 ? new T.Vector3(.35, .95, .75) : new T.Vector3(.55, .38, 1.02)).normalize();
   const narrowFit = callout && W() < 520 && spec.parts.filter((p) => p.label).length > 6; // (v310: numbers, not name columns)
