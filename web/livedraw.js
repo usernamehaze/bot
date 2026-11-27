@@ -648,7 +648,7 @@ export async function render(host, rawSpec, opts = {}) {
   let mv = null; const mvHost = spec.mode === '3d' ? el('div', 'ld-mv') : null;
   const machineOn = async () => {
     if (mv) return mv;
-    let m = null; try { m = await import('./isoview.js?v=338'); } catch (e) { return null; }
+    let m = null; try { m = await import('./isoview.js?v=339'); } catch (e) { return null; }
     mv = m.machine(mvHost, spec, { dark: !lightPage() });
     if (mv) {
       const row = el('div', 'ld-mv-acts');
@@ -3349,7 +3349,7 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
     return g;
   }).filter((g) => g.children.length);
   if (!groups.length) { renderer.dispose(); canvas.remove(); return null; }
-  if (animate) groups.forEach((g) => { g.visible = false; }); // (v337: a model about to be built shows nothing first: no kit model appears whole and is then rebuilt)
+  if (animate) { groups.forEach((g) => { g.visible = false; }); model.visible = false; } // (v337: a model about to be built shows nothing first; v339: the whole model is held back too, until its first piece is placed, so not one frame of it shows whole)
   // fit the camera to the whole model
   const box = new T.Box3().setFromObject(model), size = box.getSize(new T.Vector3()), mid = box.getCenter(new T.Vector3());
   model.position.sub(mid); model.updateMatrixWorld(true);
@@ -3498,7 +3498,7 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
       const shown = [];
       groups.forEach((g, i) => {
         const t = tagEls[i]; if (!t) return;
-        if (!g.visible || (g.userData.part.shell && (opened || exploded))) { t.hidden = true; return; }
+        if (!g.visible || !model.visible || (g.userData.part.shell && (opened || exploded))) { t.hidden = true; return; } /* (v339: no name before its part shows) */
         if (focused && picked && g !== picked && !(spec.fresh && spec.fresh.includes(g.userData.part.id))) { t.hidden = true; return; } // (moved in on a part: its name, and what the answer added)
         t.hidden = false; tmp.copy(g.userData.center).add(g.position).sub(g.userData.home); tmp.project(cam);
         shown.push({ t, px: (tmp.x + 1) / 2 * w, py: (1 - tmp.y) / 2 * h, tw: t.offsetWidth || 80, th: t.offsetHeight || 24 });
@@ -3525,7 +3525,7 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
       }
     } else groups.forEach((g, i) => {
       const t = tagEls[i]; if (!t) return;
-      if (!g.visible || (g.userData.part.shell && (opened || exploded))) { t.hidden = true; return; }
+      if (!g.visible || !model.visible || (g.userData.part.shell && (opened || exploded))) { t.hidden = true; return; } /* (v339: no name before its part shows) */
       t.hidden = false; tmp.copy(g.userData.center).add(g.position).sub(g.userData.home); tmp.project(cam);
       const px = (tmp.x + 1) / 2 * w, py = (1 - tmp.y) / 2 * h, tw = t.offsetWidth || 80, th = t.offsetHeight || 24;
       const free = (x, y) => x - tw / 2 >= 4 && x + tw / 2 <= w - 4 && y - th / 2 >= 4 && y + th / 2 <= h - 4 && !spots.some((q) => Math.abs(q.x - x) < (q.w + tw) / 2 + 6 && Math.abs(q.y - y) < (q.h + th) / 2 + 4);
@@ -3582,15 +3582,35 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
       if (!animate && !again) return;
       // (v306) a follow-up: what was there already is there at once; only the parts it adds are built
       const old = (g) => !again && spec.fresh && !spec.fresh.includes(g.userData.part.id);
-      groups.forEach((g) => { g.visible = old(g); g.scale.setScalar(old(g) ? 1 : .6); });
+      groups.forEach((g) => { g.visible = old(g); g.scale.setScalar(1); g.userData.built = old(g); });
+      if (groups.some(old)) model.visible = true; // (v339: a follow-up: what was there already shows at once)
       moving3 = false; flowGroup.visible = false;
       if (spec.intro) await setSay(spec.intro, true);
       for (const g of groups) {
         if (old(g)) continue;
         const sh = g.userData.part.shell;
-        g.visible = true;
-        const t0 = performance.now();
-        await new Promise((res) => { const step = () => { const k = Math.min(1, (performance.now() - t0) / 550); const e = 1 - Math.pow(1 - k, 3); g.scale.setScalar(.6 + .4 * e); fade(g, sh ? Math.min(e, .14) : e); if (k < 1) requestAnimationFrame(step); else res(); }; requestAnimationFrame(step); });
+        // (v339) built piece by piece, from the ground up: each piece grows in its own place, one after another, so the
+        // whole thing never shows (not even small) before it is made; a piece meant to stay hidden stays hidden
+        g.visible = true; g.scale.setScalar(1); fade(g, sh ? .14 : 1); g.updateMatrixWorld(true);
+        const pieces = [], wp = new T.Vector3();
+        g.traverse((o) => { if (o !== g && (o.isMesh || o.isLine || o.isPoints) && o.visible) { o.getWorldPosition(wp); o.userData.buildY = wp.y; o.userData.s0 = o.scale.clone(); o.visible = false; pieces.push(o); } });
+        pieces.sort((a, b) => a.userData.buildY - b.userData.buildY);
+        const span = Math.min(2200, Math.max(500, pieces.length * 90)), each = 380, t0 = performance.now();
+        await new Promise((res) => {
+          const step = () => {
+            const now = performance.now() - t0; let left = 0;
+            pieces.forEach((o, i) => {
+              const k = (now - (pieces.length > 1 ? (span - each) * i / (pieces.length - 1) : 0)) / each;
+              if (k <= 0) { o.visible = false; left++; return; }
+              o.visible = true; const e = k >= 1 ? 1 : 1 - Math.pow(1 - k, 3);
+              o.scale.copy(o.userData.s0).multiplyScalar(Math.max(.001, e));
+              if (k < 1) left++;
+            });
+            if (!model.visible && pieces.some((o) => o.visible)) { groups.forEach((x) => { if (x !== g && !x.userData.built && !old(x)) x.visible = false; }); model.visible = true; } // (v339: the model is shown only on the frame its first piece appears, every part not yet reached hidden again)
+            if (left) requestAnimationFrame(step); else { pieces.forEach((o) => { o.visible = true; o.scale.copy(o.userData.s0); }); g.userData.built = true; if (!model.visible) model.visible = true; res(); }
+          };
+          requestAnimationFrame(step);
+        });
         await setSay(g.userData.part.say || g.userData.part.label, true, g.userData.part.label);
         await sleep(450);
       }

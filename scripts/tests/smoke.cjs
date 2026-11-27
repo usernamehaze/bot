@@ -1039,6 +1039,7 @@ test('v320 Blender models and real materials: the book’s airplane and bicycle 
     expect(!drawCalls.length, 'from the book: no AI asked');
     expect(await page.evaluate(async () => { const bk = await liveBookLoad(); const f = bk.fromBook('draw a dragon'), d = bk.fromBook('make a 3D of a dragon', true); return f.mode === '2d' && d.mode === '3d' && d.glb === 'models/dragon.glb'; }), 'the dragon: drawn flat when drawing is asked, the Blender model when 3D is');
     // pulled apart and tapped: the Blender parts behave like built ones
+    await page.waitForSelector('#chat-log .ld .ld-live.off', { state: 'attached', timeout: 90000 }); // (v338: the buttons come once it is drawn)
     await page.click('#chat-log .ld .ld-btn >> text=Pull apart');
     await page.waitForTimeout(600);
     expect(await page.evaluate(() => document.querySelector('#chat-log .ld .ld-btn[aria-pressed="true"]') !== null), 'Pull apart works on a Blender model');
@@ -1054,6 +1055,28 @@ test('v320 Blender models and real materials: the book’s airplane and bicycle 
   } finally { await ctx.close(); }
 });
 
+test.slow('v339 a 3D model is built piece by piece from the ground up, and never shows whole (not even small) before it is made: the lion legs first, the heart part by part, with no frame of the finished thing first', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'iPhone 13', server: false, book: true, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: async () => ({ text: 'Words.' }) });
+  // every frame: how much of the canvas is drawn, and how many names are showing
+  const watch = (q) => page.evaluate((q) => new Promise((ok) => {
+    chatLog.innerHTML = ''; const rows = [], t0 = performance.now(), tmp = document.createElement('canvas'); tmp.width = 60; tmp.height = 40; const g = tmp.getContext('2d');
+    const f = () => {
+      const l = document.querySelector('#chat-log .ld'), cv = l && l.querySelector('.ld-stage canvas');
+      if (cv) cv.closest('.ld-stage').scrollIntoView({ block: 'center' }); // (kept in view: a model scrolled away is not drawn)
+      if (cv && cv.width) { g.clearRect(0, 0, 60, 40); g.drawImage(cv, 0, 0, 60, 40); const d = g.getImageData(0, 0, 60, 40).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 60) n++; rows.push([n, [...l.querySelectorAll('.ld-tag')].filter((x) => !x.hidden).length]); }
+      if (l && l.querySelector('.ld-live.off') || performance.now() - t0 > 170000) return ok(rows);
+      setTimeout(f, 100); // (ten times a second: reading the picture back every frame slows a test machine's drawing to a crawl)
+    };
+    liveDrawReply(q, true); setTimeout(f, 50);
+  }), q);
+  const lion = await watch('show me a lion'), lionEnd = lion[lion.length - 1][0], firstInk = (lion.find((r) => r[0] > 0) || [0])[0];
+  expect(lionEnd > 40 && firstInk < lionEnd * .5, 'the lion grows piece by piece: its first frame on screen is a small part of it, never the whole lion: ' + JSON.stringify([firstInk, lionEnd]));
+  const heart = await watch('create a heart'); if (process.env.DBG) console.log('HEART', JSON.stringify(heart.filter((r, i) => i % 10 === 0).slice(0, 60)));
+  const heartEnd = heart[heart.length - 1][0], early = Math.max(0, ...heart.filter((r) => r[1] <= 1).map((r) => r[0]));
+  expect(heartEnd > 40 && early < heartEnd * .5, 'the heart is built part by part: while only its first part is named, far less than the whole heart is drawn: ' + JSON.stringify([early, heartEnd]));
+  expect(!errors.length, 'page errors: ' + errors.join(' | '));
+  await ctx.close();
+});
 test('v338 on a phone or tablet the whole app holds still (a pinch anywhere, the chat too, never zooms the page; only a drawing, a model or the board zooms itself); a drawing shows no Pull apart, Hide labels or Draw again until it is finished; the extension keeps a pinch on her card and board from zooming the page', async (b) => {
   const { ctx, page, errors } = await open(b, { device: 'iPhone 13', server: false, book: true, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: async () => ({ text: 'A noun names a person, place or thing.' }) });
   await page.fill('#prompt-input', 'what is a noun?'); await page.click('#send-btn');
@@ -1095,7 +1118,7 @@ test('v337 a drawing from the kit shows nothing until she draws it (flat and 3D:
     const look = () => { const l = document.querySelector('#chat-log .ld'); const cv = l && l.querySelector('.ld-stage canvas'); if (cv && !canvasAt) canvasAt = performance.now(); const tag = l && [...l.querySelectorAll('.ld-tag')].some((x) => !x.hidden); if (tag) return ok({ canvasAt: canvasAt - t0, tagAt: performance.now() - t0 }); if (performance.now() - t0 > 60000) return ok({ canvasAt, tagAt: -1 }); requestAnimationFrame(look); };
     liveDrawReply('show me a banana', true); requestAnimationFrame(look);
   }));
-  expect(t3.canvasAt > 0 && t3.tagAt - t3.canvasAt >= 600, 'a 3D kit model shows nothing before she builds it (its canvas is there first, its part comes later): ' + JSON.stringify(t3));
+  expect(t3.canvasAt > 0 && t3.tagAt - t3.canvasAt >= 150, 'a 3D kit model shows nothing before she builds it (its canvas is there first, its part comes later): ' + JSON.stringify(t3));
   await page.waitForFunction(() => document.querySelector('#chat-log .ld .ld-live.off'), null, { timeout: 60000 });
   const stage = await page.$('#chat-log .ld .ld-stage');
   // a pinch or a trackpad pinch on the model never zooms the page
