@@ -919,6 +919,13 @@ ${EXAMPLES_PART}  Use the student's language (English, Filipino or Taglish). No 
         });
       };
       drag(floatEl.querySelector('.lv-grip'), false); floatEl.querySelectorAll('.lv-fsize').forEach((h) => drag(h, h.dataset.corner));
+      // (v338) a pinch on her drawing or her card zooms the drawing, never the page under them (a phone's two fingers,
+      // Safari's gesture events, a trackpad's Ctrl and wheel)
+      [floatEl, floatEl.closest('.lv') || floatEl.parentNode].filter(Boolean).forEach((zone) => {
+        zone.addEventListener('touchmove', (e) => { if (e.touches && e.touches.length > 1 && e.cancelable) e.preventDefault(); }, { passive: false });
+        ['gesturestart', 'gesturechange'].forEach((t) => zone.addEventListener(t, (e) => e.preventDefault(), { passive: false }));
+        zone.addEventListener('wheel', (e) => { if (e.ctrlKey && e.cancelable) e.preventDefault(); }, { passive: false });
+      });
       addEventListener('resize', () => { if (floatEl.dataset.own && !floatEl.hidden) put(now()); });
     }
     let model = null, floating = false, picked = -1, built = 0, lastPic = '', focusLater = -1; // (focusLater: the part a follow-up is about, picked out once it is all drawn)

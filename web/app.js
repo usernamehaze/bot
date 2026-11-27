@@ -2841,7 +2841,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=337'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=338'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2863,7 +2863,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=337'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=338'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -3139,7 +3139,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=337').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=338').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -7713,11 +7713,11 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=337')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=338')));
 // (v310) Cassie's drawing book: a checked drawing of a common subject (a bicycle, the heart, the solar system...) shows
 // at once, right every time, with no AI and no question used (offline too). Anything else is drawn by the AI.
 let liveBookLib = null;
-const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=337').then((bk) => { liveBookNow = bk; return bk; }).catch(() => null)));
+const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=338').then((bk) => { liveBookNow = bk; return bk; }).catch(() => null)));
 // (v332) a typo never hides a drawing: "shoe me how the heart works", "drw the water cycle" are read as meant (drawbook.js
 // fixTypos, which knows the asking words, the book's subjects and the kits' names); loaded once she is idle
 let liveBookNow = null;
@@ -9293,7 +9293,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=337');
+      exploreMod = await import('./explore/cell3d.js?v=338');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -9343,7 +9343,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=337');
+      labsMod = await import('./labs/labs.js?v=338');
       islandRest();
     }
     labsMod.open({
@@ -10701,24 +10701,29 @@ function hearingHint() {
    and stays zoomed after you leave. In the chat, pinch-to-zoom stays on for reading. */
 const inFullView = () => document.documentElement.matches('.labs-open, .x3d-open') || !!document.querySelector('.csk-wrap');
 const pageZoomed = () => !!window.visualViewport && visualViewport.scale > 1.01;
+// (v338) on a phone or tablet the whole app holds still: a pinch anywhere (the chat too) never zooms the page; only a
+// drawing, a model or the board zooms itself, under the fingers (they use the touches themselves)
+const touchScreen = window.matchMedia ? matchMedia('(pointer: coarse)') : { matches: false };
+const holdZoom = () => touchScreen.matches || inFullView();
 // (a page that is zoomed anyway can always be pinched back out: blocking that left students stuck)
-['gesturestart', 'gesturechange'].forEach((t) => document.addEventListener(t, (e) => { if (inFullView() && !pageZoomed()) e.preventDefault(); }, { passive: false }));
+['gesturestart', 'gesturechange'].forEach((t) => document.addEventListener(t, (e) => { if (holdZoom() && !pageZoomed()) e.preventDefault(); }, { passive: false }));
 // two fingers on a view's buttons and panels must not zoom the page either (the 3D canvas uses them itself)
-document.addEventListener('touchmove', (e) => { if (e.touches && e.touches.length > 1 && inFullView() && !pageZoomed() && !(e.target.closest && e.target.closest('canvas'))) e.preventDefault(); }, { passive: false });
+document.addEventListener('touchmove', (e) => { if (e.touches && e.touches.length > 1 && holdZoom() && !pageZoomed() && e.cancelable) e.preventDefault(); }, { passive: false }); // (v338: on a canvas too: the 3D view and the board take their pinch from pointer events, which this does not stop)
 // While a full view is open the page is held at its normal size (maximum-scale=1, for as long as the view
 // is open): this also stops an iPhone zooming into a box you type in, and puts back a page that got zoomed.
 const viewportMeta = document.querySelector('meta[name=viewport]'), viewportBase = viewportMeta && viewportMeta.content;
 const viewportHeld = viewportBase + ', maximum-scale=1';
 function holdPageSize() {
   if (!viewportMeta) return;
-  const want = inFullView() ? viewportHeld : viewportBase;
+  const want = holdZoom() ? viewportHeld : viewportBase;
   if (viewportMeta.content !== want) viewportMeta.content = want;
   else if (want === viewportHeld && pageZoomed()) { viewportMeta.content = viewportBase + ', maximum-scale=1, minimum-scale=1'; requestAnimationFrame(() => { viewportMeta.content = viewportHeld; }); }
 }
 new MutationObserver(holdPageSize).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 new MutationObserver(holdPageSize).observe(document.body, { childList: true }); // (the board opens without a class on the page)
 document.addEventListener('focusin', holdPageSize, true);
-if (window.visualViewport) visualViewport.addEventListener('resize', () => { if (inFullView()) setTimeout(holdPageSize, 150); });
+if (window.visualViewport) visualViewport.addEventListener('resize', () => { if (holdZoom()) setTimeout(holdPageSize, 150); }); // (v338: a page that got zoomed anyway is put back)
+holdPageSize(); // (v338: held from the start on a touch screen)
 
 // One thing said out loud (the lab tutor's mic): the browser's own listening where there is one, else a
 // short recording written down by Whisper. { done: Promise<text>, stop() } — stop() ends it early.
@@ -11308,10 +11313,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=337').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=338').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=337', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=338', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.

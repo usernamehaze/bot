@@ -4309,6 +4309,7 @@ html.lg-refract.native .tabbar { background: linear-gradient(var(--lg-tint), var
 @keyframes ldStepIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .ld-stepi { animation: none; } }
 .ld-acts { display: flex; flex-wrap: wrap; gap: var(--sp-2, 8px); }
+.ld-acts[hidden] { display: none; } /* (v338: hidden while she draws) */
 .ld-btn { min-height: 40px; padding: 0 var(--sp-4, 16px); border-radius: 999px; border: 1px solid var(--border); background: transparent; color: var(--text); font: inherit; font-size: .9rem; font-weight: 600; cursor: pointer; }
 .ld-btn[aria-pressed="true"] { background: var(--text); color: var(--bg); border-color: var(--text); }
 @media (pointer: coarse) { .ld-btn { min-height: var(--tap, 48px); } .ld-tag { min-height: 32px; } .ld-tag::before { content: ""; position: absolute; inset: -8px; } } /* (a 32px tag with a 48px tap) */

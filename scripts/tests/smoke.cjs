@@ -1054,6 +1054,33 @@ test('v320 Blender models and real materials: the book’s airplane and bicycle 
   } finally { await ctx.close(); }
 });
 
+test('v338 on a phone or tablet the whole app holds still (a pinch anywhere, the chat too, never zooms the page; only a drawing, a model or the board zooms itself); a drawing shows no Pull apart, Hide labels or Draw again until it is finished; the extension keeps a pinch on her card and board from zooming the page', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'iPhone 13', server: false, book: true, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: async () => ({ text: 'A noun names a person, place or thing.' }) });
+  await page.fill('#prompt-input', 'what is a noun?'); await page.click('#send-btn');
+  await page.waitForFunction(() => /names a person/.test(document.querySelector('#chat-log').textContent), null, { timeout: 30000 });
+  const phone = await page.evaluate(() => {
+    const t = document.querySelector('#chat-log .bubble'), r = t.getBoundingClientRect(), mk = (id, dx) => new Touch({ identifier: id, target: t, clientX: r.left + 40 + dx, clientY: r.top + 10 });
+    const tm = new TouchEvent('touchmove', { touches: [mk(1, 0), mk(2, 60)], bubbles: true, cancelable: true }); t.dispatchEvent(tm);
+    const one = new TouchEvent('touchmove', { touches: [mk(1, 0)], bubbles: true, cancelable: true }); t.dispatchEvent(one);
+    return { pinch: tm.defaultPrevented, scroll: one.defaultPrevented, meta: document.querySelector('meta[name=viewport]').content };
+  });
+  expect(phone.pinch && !phone.scroll && /maximum-scale=1/.test(phone.meta), 'a pinch on the chat never zooms the page, a finger still scrolls it, and the page is held at its size: ' + JSON.stringify(phone));
+  // a drawing: no buttons that say it is finished while she draws; they come when she is done
+  await page.evaluate(() => { window.CASSIE_READ_SPEED = 1; liveDrawReply('show me the heart', true); });
+  await page.waitForSelector('#chat-log .ld .ld-stage canvas', { state: 'attached', timeout: 30000 });
+  const during = await page.evaluate(() => { const a = [...document.querySelectorAll('#chat-log .ld')].pop().querySelector('.ld-acts'); return { hidden: a.hidden, shown: getComputedStyle(a).display }; });
+  await page.waitForFunction(() => [...document.querySelectorAll('#chat-log .ld')].pop().querySelector('.ld-live.off'), null, { timeout: 90000 });
+  const after = await page.evaluate(() => { const a = [...document.querySelectorAll('#chat-log .ld')].pop().querySelector('.ld-acts'); return { hidden: a.hidden, btns: [...a.querySelectorAll('button')].filter((x) => !x.hidden).map((x) => x.textContent.trim()).join('|') }; });
+  expect(during.hidden && during.shown === 'none' && !after.hidden && /Pull apart/.test(after.btns) && /Draw again/.test(after.btns), 'Pull apart, Hide labels and Draw again come only once it is drawn: ' + JSON.stringify([during, after]));
+  expect(!errors.length, 'page errors: ' + errors.join(' | '));
+  await ctx.close();
+  // a computer keeps its own zoom (Ctrl and plus, a trackpad) for the page
+  const d = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 860 }, server: false, lite: 'off', state: { groqKey: 'gsk_test' } });
+  expect(!/maximum-scale/.test(await d.page.evaluate(() => document.querySelector('meta[name=viewport]').content)), 'a computer is left as it was');
+  await d.ctx.close();
+  const ext = fs.readFileSync(fileAt('extension/live.js'), 'utf8');
+  expect(/\(v338\) a pinch on her drawing or her card zooms the drawing, never the page/.test(ext) && /zone\.addEventListener\('touchmove'/.test(ext), 'the extension keeps a pinch on her card and board from zooming the page');
+});
 test('v337 a drawing from the kit shows nothing until she draws it (flat and 3D: never whole first, then redrawn); a pinch on a 3D model zooms the model, never the page or the app (a phone pinch, a trackpad pinch); close up nothing is sliced off, and no piece blinks out as it turns', async (b) => {
   const { ctx, page, errors } = await open(b, { device: 'iPhone 13', server: false, book: true, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: async () => ({ text: 'Words.' }) });
   // flat: the moment the drawing is on screen, every part of it is still hidden
@@ -14649,10 +14676,10 @@ test.slow('Teach me and Ask Cassie in the 3D explorer: Cassie teaches the cell, 
   await ctx.close();
 });
 
-test('a pinch in Labs or the 3D body never zooms the whole page (in the chat it still can, for reading)', async (b) => {
+test('a pinch in Labs or the 3D body never zooms the whole page (v338: on a phone the chat holds still too)', async (b) => {
   const { ctx, page } = await open(b, { server: false, state: { groqKey: 'gsk_test' } });
   const pinch = () => page.evaluate(() => { const e = new Event('gesturestart', { cancelable: true, bubbles: true }); document.body.dispatchEvent(e); return e.defaultPrevented; });
-  expect(await pinch() === false, 'the chat can still be zoomed');
+  expect(await pinch() === true, 'on a phone the chat holds still too (v338)');
   await page.evaluate(() => openLabs('atom'));
   await page.waitForSelector('.lab-view:not([hidden])[data-lab="atom"]', { timeout: 15000 });
   expect(await pinch() === true, 'no page zoom in a lab');
@@ -14754,12 +14781,12 @@ test('iPhone: the Solar System has no Teach me, Ask Cassie or Quiz me, Back alwa
   { const r = await reachable('.lab-back'); expect(r === 'ok', 'after pinching: ' + r); }
   await page.tap('.lab-back');
   await page.waitForSelector('.labs-shelf:not([hidden])', { timeout: 5000 });
-  // the chat can still be zoomed for reading
+  // (v338) on a phone the chat holds still too
   await page.tap('.labs-x');
   await page.waitForFunction(() => !document.documentElement.classList.contains('labs-open'));
   await page.waitForTimeout(500);
-  expect(!(await held()), 'the chat lets go of the page size');
-  expect(await pinch(195, 300) > 1.2, 'the chat can still be pinch-zoomed');
+  expect(await held(), 'the chat keeps the page at its size (v338)');
+  expect(await pinch(195, 300) <= 1.05, 'a pinch on the chat does not zoom the page (v338)');
   expect(errors.length === 0, 'page errors: ' + errors.join('; '));
   await ctx.close();
 });
