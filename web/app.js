@@ -2841,7 +2841,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=339'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=340'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2863,7 +2863,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=339'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=340'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -3139,7 +3139,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=339').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=340').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -5001,6 +5001,8 @@ function renderHistory() {
   state.messages.forEach((m) => {
     const b = m.care && window.CassieCare ? renderCare(m.care.lang, m.care.aiWords) : renderMessage(m.role, m.display || m.content);
     if (m.image && b) addImageToBubble(b, m.image, { download: true });
+    if (m.imageId && b && !m.image) picLoad(m.imageId).then((src) => { if (src && b.isConnected) addImageToBubble(b, src, { download: true }); }).catch(() => {}); // (v340: a picture she made, kept on this device)
+    if (m.webPics && b) addWebPictures(b, m.webPics); // (v340: pictures from the web, with where each is from)
     if (m.papers && b && window.CassieCite) b.appendChild(window.CassieCite.bar(m.papers, { track }));
   });
   renderQueued(); // (v283) questions asked with no internet, still waiting
@@ -7277,7 +7279,7 @@ async function tryGenerateImage(prompt, model) {
    generation on, Gemini paints it; otherwise a free, keyless image service
    (Pollinations) does. Graphs and plots stay on Cassie's board, which draws
    them exactly. */
-const IMAGE_ASK_RE = /(?:^|[\s,.!?])(?:generate|create|make|draw|paint|render|design|produce|show\s+me|give\s+me|send\s+me|i\s+(?:want|need)|gawa(?:n|in)?\s+mo\s+ako\s+ng)\s+(?:me\s+)?(?:an?\s+|some\s+|the\s+|ng\s+)?(?:(?:ai|realistic|cartoon|cute|simple|colorful|colourful|labeled|labelled|detailed|3d|nice|cool|new)\s+)*(?:image|images|picture|pictures|pic|pics|photo|photos|illustration|illustrations|drawing|painting|artwork|art|poster|logo|wallpaper|icon|sticker|infographic|larawan)\b\s*(?:of|showing|about|for|with|that\s+shows|depicting|na|ng)?\s*[:\-]?\s*(.*)$/i;
+const IMAGE_ASK_RE = /(?:^|[\s,.!?])(?:generate|create|make|draw|paint|render|design|produce|show\s+me|give\s+me|send\s+me|find|search\s+(?:for\s+)?|look\s+(?:for|up)|get|pull\s+up|i\s+(?:want|need)|gawa(?:n|in)?\s+mo\s+ako\s+ng)\s+(?:me\s+)?(?:an?\s+|some\s+|the\s+|ng\s+)?(?:(?:ai|realistic|cartoon|cute|simple|colorful|colourful|labeled|labelled|detailed|3d|nice|cool|new)\s+)*(?:image|images|picture|pictures|pic|pics|photo|photos|illustration|illustrations|drawing|painting|artwork|art|poster|logo|wallpaper|icon|sticker|infographic|larawan)\b\s*(?:of|showing|about|for|with|that\s+shows|depicting|na|ng)?\s*[:\-]?\s*(.*)$/i;
 const DRAW_ASK_RE = /(?:^|[\s,.!?])(?:draw|paint|illustrate)\s+(?:me\s+|us\s+)?((?:an?|the|some|my)\s+.+)$/i;
 // also: "a picture of a cat", "image of the solar system please" (no verb at all)
 const NOUN_ASK_RE = /^\s*(?:an?\s+)?(?:(?:ai|realistic|cartoon|cute|simple|labeled|labelled|detailed|3d)\s+)*(?:image|picture|pic|photo|illustration|drawing)\s+(?:of|showing)\s+(.+)$/i;
@@ -7713,11 +7715,11 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=339')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=340')));
 // (v310) Cassie's drawing book: a checked drawing of a common subject (a bicycle, the heart, the solar system...) shows
 // at once, right every time, with no AI and no question used (offline too). Anything else is drawn by the AI.
 let liveBookLib = null;
-const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=339').then((bk) => { liveBookNow = bk; return bk; }).catch(() => null)));
+const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=340').then((bk) => { liveBookNow = bk; return bk; }).catch(() => null)));
 // (v332) a typo never hides a drawing: "shoe me how the heart works", "drw the water cycle" are read as meant (drawbook.js
 // fixTypos, which knows the asking words, the book's subjects and the kits' names); loaded once she is idle
 let liveBookNow = null;
@@ -8156,6 +8158,88 @@ async function handleImageRequest(text, subject) {
   await pictureReply(subject, typingBubble);
 }
 
+/* ---------- (v340) pictures of people and characters, from the web ----------
+   A real person (Albert Einstein), a character (from a game, a show, a book) or anyone at all ("a girl reading") is
+   never drawn or made up: her picture maker gets faces wrong. She looks on the web instead: the encyclopedia's own
+   picture of that person or character first, then free picture libraries; each picture says where it is from. */
+const HUMAN_WORDS = /\b(person|people|man|men|woman|women|boy|boys|girl|girls|child|children|kid|kids|baby|babies|teen(ager)?s?|student|students|teacher|teachers|doctor|nurse|farmer|worker|family|crowd|face|faces|portrait|selfie|human|humans|lady|gentleman|grandma|grandpa|mother|father|mom|dad|character|characters|hero|heroine|villain|cosplay|actor|actress|singer|celebrity|president|king|queen|prince|princess|scientist|inventor|athlete|player)\b/i;
+const PERSON_DESC = /\b(born|died|\(\d{3,4}|physicist|scientist|inventor|engineer|actor|actress|singer|rapper|musician|band|artist|painter|sculptor|writer|author|novelist|poet|politician|president|prime minister|senator|king|queen|emperor|empress|prince|princess|monarch|saint|pope|footballer|basketball|athlete|boxer|player|cyclist|swimmer|gymnast|philosopher|mathematician|chemist|biologist|astronomer|astronaut|activist|revolutionary|national hero|leader|general|soldier|businessm(a|e)n|entrepreneur|director|comedian|dancer|chef|model|youtuber|streamer|personality|character|fictional|anime|manga|video game|comic|superhero|villain|mascot|cartoon|protagonist)\b/i;
+const WIKI = 'https://en.wikipedia.org/w/api.php', COMMONS = 'https://commons.wikimedia.org/w/api.php', OPENVERSE = 'https://api.openverse.org/v1/images/';
+const webJson = async (url, ms = 8000) => { const r = await fetch(url, { signal: waitAtMost(ms) }); if (!r.ok) throw new Error('web ' + r.status); return r.json(); };
+const wordsOf = (t) => String(t || '').toLowerCase().replace(/\([^)]*\)/g, ' ').match(/[a-z0-9]+/g) || [];
+// the encyclopedia's best article for it: its title, what it is, and its picture
+async function wikiLook(subject) {
+  const q = `${WIKI}?action=query&format=json&origin=*&generator=search&gsrsearch=${encodeURIComponent(subject)}&gsrlimit=5&prop=pageimages|description|info&inprop=url&piprop=thumbnail&pithumbsize=900`;
+  const d = await webJson(q);
+  return Object.values((d.query && d.query.pages) || {}).sort((a, b) => (a.index || 0) - (b.index || 0)).map((p) => ({ title: p.title, desc: p.description || '', src: p.thumbnail && p.thumbnail.source, page: p.fullurl }));
+}
+async function commonsLook(subject, n = 3) {
+  const q = `${COMMONS}?action=query&format=json&origin=*&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(subject + ' filetype:bitmap')}&gsrlimit=${n + 3}&prop=imageinfo&iiprop=url&iiurlwidth=900`;
+  const d = await webJson(q);
+  return Object.values((d.query && d.query.pages) || {}).sort((a, b) => (a.index || 0) - (b.index || 0)).map((p) => { const i = (p.imageinfo || [])[0] || {}; return { title: String(p.title || '').replace(/^File:/, '').replace(/\.[a-z]+$/i, ''), src: i.thumburl || i.url, page: i.descriptionurl }; }).filter((x) => x.src).slice(0, n);
+}
+async function openverseLook(subject, n = 3) {
+  const d = await webJson(`${OPENVERSE}?q=${encodeURIComponent(subject)}&page_size=${n + 2}&mature=false`);
+  return (d.results || []).map((r) => ({ title: r.title || subject, src: r.thumbnail || r.url, page: r.foreign_landing_url || r.url })).filter((x) => x.src).slice(0, n);
+}
+// is it about a person or a character, and if so, the pictures
+async function webPicturesOf(subject) {
+  const s = String(subject || '').replace(/^(an?|the)\s+/i, '').replace(/\b(picture|image|photo|pic|drawing)s?\s+of\s+/i, '').trim();
+  if (!s) return null;
+  let hits = []; try { hits = await wikiLook(s); } catch (e) { hits = []; }
+  const want = wordsOf(s).filter((w) => w.length > 1);
+  const named = hits.find((h) => { const t = wordsOf(h.title); return want.length && want.every((w) => t.includes(w)) || t.length && t.every((w) => want.includes(w)); });
+  const human = HUMAN_WORDS.test(s), person = named && PERSON_DESC.test(named.desc), character = !named && hits.slice(0, 3).some((h) => /\b(video game|anime|manga|comic|cartoon|film|series|novel|franchise|characters)\b/i.test(h.desc + ' ' + h.title));
+  if (!human && !person && !character) return null; // (not a person: her picture maker, as before)
+  const pics = [];
+  if (named && named.src && person) pics.push({ title: named.title, src: named.src, page: named.page, from: 'the encyclopedia' });
+  if (pics.length < 3) { try { (await commonsLook(s, 3 - pics.length)).forEach((p) => pics.push({ ...p, from: 'a free picture library' })); } catch (e) { /* the next one */ } }
+  if (pics.length < 2) { try { (await openverseLook(s, 3 - pics.length)).forEach((p) => pics.push({ ...p, from: 'a free picture library' })); } catch (e) { /* none */ } }
+  return { name: named && person ? named.title : s, pics: pics.slice(0, 3), page: named && person ? named.page : null };
+}
+function addWebPictures(bubble, list) {
+  const row = document.createElement('div'); row.className = 'web-pics';
+  list.forEach((p) => {
+    const f = document.createElement('figure'); f.className = 'web-pic';
+    const im = document.createElement('img'); im.src = p.src; im.alt = p.title || ''; im.loading = 'lazy'; im.referrerPolicy = 'no-referrer';
+    im.addEventListener('error', () => f.remove(), { once: true }); // (a picture the web no longer has is left out)
+    const cap = document.createElement('figcaption'); const a = document.createElement('a'); a.href = p.page || p.src; a.target = '_blank'; a.rel = 'noopener'; a.textContent = `From ${p.from || 'the web'}`; cap.appendChild(a);
+    f.append(im, cap); row.appendChild(f);
+  });
+  bubble.appendChild(row);
+}
+async function webPictureReply(subject, typingBubble) {
+  if (window.CASSIE_NO_WEB_PICS) return false;
+  setTypingStatus(typingBubble, 'Looking for real pictures…');
+  let got = null; try { got = await webPicturesOf(subject); } catch (e) { got = null; }
+  if (!got) return false;
+  typingBubble.remove();
+  const say = got.pics.length ? `Here ${got.pics.length > 1 ? 'are pictures' : 'is a picture'} of ${got.name} from the web.` : `I couldn’t find a picture of ${got.name} on the web just now. People and characters I only show from real pictures, never ones I make up, so try again in a moment or with the full name.`;
+  const webPics = got.pics.map(({ title, src, page, from }) => ({ title, src, page, from }));
+  state.messages.push({ role: 'assistant', content: `[I showed pictures of ${got.name} from the web]`, display: say, ...(webPics.length ? { webPics } : {}) });
+  save();
+  const bubble = renderMessage('assistant', say);
+  if (bubble && webPics.length) addWebPictures(bubble, webPics);
+  setCursorMode('idle'); if (webPics.length) mascotCelebrate();
+  track('feature', 'web-picture');
+  return true;
+}
+// (v340) a picture she made is kept on this device (it is too big to keep with the chat), so it is still there when you come back
+const PIC_DB = 'cassie-pictures';
+const picDb = () => new Promise((ok, no) => { const r = indexedDB.open(PIC_DB, 1); r.onupgradeneeded = () => r.result.createObjectStore('pics'); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); });
+async function picSave(src) {
+  if (!src || !/^(data|blob):/.test(src)) return undefined;
+  const data = /^blob:/.test(src) ? await fetch(src).then((r) => r.blob()) : src;
+  const id = 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), db = await picDb();
+  await new Promise((ok, no) => { const t = db.transaction('pics', 'readwrite'); t.objectStore('pics').put(data, id); t.oncomplete = ok; t.onerror = () => no(t.error); });
+  return id;
+}
+async function picLoad(id) {
+  const db = await picDb();
+  const v = await new Promise((ok, no) => { const r = db.transaction('pics').objectStore('pics').get(id); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); });
+  return v instanceof Blob ? URL.createObjectURL(v) : v || null;
+}
+
 // Make the picture and post it as Cassie's reply (also used when the chat model
 // answers a picture request with [[IMAGE: …]] instead of drawing ASCII art).
 async function pictureReply(subject, typingBubble) {
@@ -8163,6 +8247,8 @@ async function pictureReply(subject, typingBubble) {
   // never send "the answer" or "it" to the picture maker as words: it would invent something
   const bare = String(subject || '').trim();
   if (ANSWER_SUBJECT_RE.test(bare) || PRONOUN_SUBJECT_RE.test(bare)) subject = imageSubjectFromChat() || bare;
+  // (v340) a person, a character, or anyone at all: real pictures from the web, never one she makes up (every way in: asked for, or her own answer's picture)
+  if (await webPictureReply(subject, typingBubble)) return;
   setTypingStatus(typingBubble, 'Making your picture…');
   sendBtn.disabled = true;
   const home = replyHome(typingBubble);
@@ -8170,12 +8256,13 @@ async function pictureReply(subject, typingBubble) {
     const { src, keep, gemini } = await generateImage(subject);
     const gone = !home.here();
     typingBubble.remove();
-    if (gone) { setCursorMode('idle'); home.away({ role: 'assistant', content: `[I made a picture of: ${subject}]`, display: `Here’s your picture of ${subject}.`, image: keep ? src : undefined }); return; } // (v318)
+    if (gone) { setCursorMode('idle'); const imageId = keep ? undefined : await picSave(src).catch(() => undefined); home.away({ role: 'assistant', content: `[I made a picture of: ${subject}]`, display: `Here’s your picture of ${subject}.`, image: keep ? src : undefined, imageId }); return; } // (v318; v340: kept on this device)
     const caption = `Here’s your picture of ${subject}.` + (gemini && geminiPicNote ? ' ' + geminiPicNote : '');
     const bubble = renderMessage('assistant', caption);
     addImageToBubble(bubble, src, { download: true, name: imageFileName(subject) });
     // free-service links are stable, so the picture comes back when the chat reopens
-    state.messages.push({ role: 'assistant', content: `[I made a picture of: ${subject}]`, display: caption, image: keep ? src : undefined });
+    const imageId = keep ? undefined : await picSave(src).catch(() => undefined); // (v340: kept on this device, so it is still there after you leave and come back)
+    state.messages.push({ role: 'assistant', content: `[I made a picture of: ${subject}]`, display: caption, image: keep ? src : undefined, imageId });
     save();
     setCursorMode('idle');
     mascotCelebrate();
@@ -9293,7 +9380,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=339');
+      exploreMod = await import('./explore/cell3d.js?v=340');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -9343,7 +9430,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=339');
+      labsMod = await import('./labs/labs.js?v=340');
       islandRest();
     }
     labsMod.open({
@@ -11313,10 +11400,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=339').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=340').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=339', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=340', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.

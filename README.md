@@ -1,137 +1,114 @@
 # Cassie
 
-An animated AI cursor that tutors you through whatever you're studying — by
-text or voice. Installable on your phone and your computer straight from
-the browser (a Progressive Web App), no app store, no account, no backend
-server to run.
+Cassie is a study companion: a friendly animated cursor that teaches you whatever you are studying, by text
+or by voice, and shows it to you: drawings that draw themselves, 3D models you can turn and pull apart,
+simulations, games and a board to work on. It runs in the browser and installs on a phone, a tablet or a
+computer straight from the website. There is also a browser extension that brings Cassie to any page you read.
 
-## How it works
+## What Cassie does
 
-- Cassie is a little animated cursor character that lives on screen, idles
-  near the input box, and "clicks" toward its own answers and toward
-  Settings when it needs your attention (e.g. to ask for an API key).
-- Ask it anything — any subject, any level — by typing or (on supported
-  browsers) tapping the mic button and talking.
-- It answers using Google's Gemini models (free tier), teaching step by
-  step rather than just handing over answers.
-- Optionally, it can read its answers aloud.
+**Teaching**
+- Ask anything, at any level, by typing or by talking. Cassie teaches step by step instead of only handing over
+  answers, and can read her answers aloud.
+- Study tools: quizzes, flashcards, reviewers and notes from your own files and photos, a study plan, lessons by
+  level, a calendar and progress tracking, a focus timer, and research with real, cited sources.
+- Cassie remembers what you tell her about yourself (your level, your goals) so her answers fit you; you can see
+  and change what she remembers at any time.
 
-## Bring your own (free) API keys
+**Drawings and 3D, in the chat**
+- Ask Cassie to draw, show, build or make something and she asks how to show it: drawn line by line, as a 3D model,
+  as a real photo, or just explained. Asking "in 3D" goes straight to a model. Drawings are made in the chat you are
+  in.
+- **Her own kits come first, before any AI.** Cassie knows hundreds of things by name and builds them herself, flat
+  or in 3D, at once and even offline: animals (dinosaurs included), foods, fruits and vegetables, home appliances,
+  vehicles, trees, plants and the sky (the sun, the moon, clouds, rain, snow, storms, rainbows). She knows groups
+  too: "land animals", "sea animals", "farm animals", "dinosaurs", "insects", "pets", "foods", "vehicles" are scenes
+  on an island of their own ground. A drawing book holds checked drawings and models of common school topics (the
+  heart, the lungs, the eye, the brain, the skin, the water cycle, photosynthesis, a volcano, a bicycle, a jet
+  engine, a refrigerator, habitats and more).
+- When she needs an AI for a drawing, any part of its answer that her kits know (a lion in a savanna, a toaster in
+  a kitchen) is still drawn with her kit, in its place.
+- **Typos never hide a drawing:** "shoe me how the heart works" or "a toastr" is read as meant, while real words
+  stay as written.
+- **Only means only:** "only show me the heart" is the heart alone, with nothing running round it; "only the
+  refrigerator" is the whole, closed refrigerator.
+- **Drawn as you watch:** nothing shows before it is drawn. Each part appears in turn (a 3D model grows piece by
+  piece from the ground up), and its name and a sentence about it are added to a **Step by step** list under the
+  drawing, at a pace you can read.
+- **Things move:** blood flows through the heart and it beats, the lungs breathe, light travels through the eye,
+  wheels turn, liquids flow.
+- **Exploring a model:** drag to turn it; pinch or scroll to zoom right where your fingers or pointer are; two
+  fingers move it; a double tap flies in close; tap a part or its name to pick it (with many parts, the view goes in
+  close); **Pull apart** separates the parts (a sandwich's layers, a toaster's case); **Hide labels** shows the
+  drawing on its own; **Machine view** draws the model as a clean technical illustration.
+- A pinch on a drawing zooms the drawing only: on a phone or tablet the rest of the app always holds still.
 
-This app is 100% client-side (no server) and uses two free providers:
+**Pictures**
+- Pictures of real people and characters are never made up: Cassie finds real pictures on the web (an
+  encyclopedia's own picture first, then free picture libraries) and says where each one comes from.
+- Other pictures she can make for you; they are kept on your device, so they are still there when you come back to
+  the chat.
 
-- **Groq** powers all text — chat, highlight → Explain/Answer/Code, and
-  "ask about this page". Groq's free tier is more generous (~30 requests per
-  minute), which keeps everyday studying from hitting limits.
-- **Google Gemini** is used only for **images** — generating pictures and
-  reading photos you attach. You can leave it blank if you don't need images.
+**Labs, games and the board**
+- Over seventy interactive labs across physics, chemistry, biology, earth and space science, math and more, with a
+  3D human body, 3D cells, a globe atlas and a museum.
+- Learning games and daily puzzles.
+- A drawing board for working out problems by hand, with graphs, shapes and Cassie's help.
 
-Setup:
+**Accessibility and comfort**
+- Light and dark themes, a Lite mode for slow connections and older phones, Reduce Motion respected everywhere,
+  large tap targets, readable contrast, and a design that works from a small phone to a wide screen.
 
-1. Get a **free** Groq key (no credit card) at
-   [console.groq.com/keys](https://console.groq.com/keys).
-2. (Optional, for images) get a **free** Gemini key at
-   [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey).
-3. Open Cassie → gear icon (top right) → paste the key(s) in → Done.
+## The browser extension
 
-Keys are stored only in your browser's `localStorage` on your device and are
-sent only to the provider they belong to when you ask something. Treat them
-like passwords.
+The extension brings Cassie to any page you read on a computer. Highlight words, an equation or a picture and she
+explains, answers or draws it right there; snip part of the page and she reads every word, number, symbol,
+equation, label and line of code in it first. Press Ctrl twice to ask about the page. Her drawings and 3D models
+float beside the page on a board you can move by its top bar and resize from any corner. It only acts when you ask,
+and it is meant for reading and homework, not for use during a test. See [extension/README.md](extension/README.md).
 
-**Cost note:** both free tiers are genuinely free (no billing), but
-rate-limited per minute/day. Groq's higher limit is why text runs on it.
+## Privacy
+
+Cassie only reacts to what you type, say, highlight or share with her. She does not watch your screen or run in the
+background. Your chats stay on your device unless you choose to sign in and sync them.
 
 ## Folders
 
 | Folder | What's in it |
 |---|---|
-| `web/` | The website and app: every page, script, stylesheet, icon, the labs, the 3D explorer and the landing page. `askcassie.study/app.html` is `web/app.html`. |
-| `extension/` | Cassie for Chrome (the browser extension). |
-| `server/` | Cassie's Cloudflare Worker (`worker.src.js`, built into `worker.js`). |
-| `docs/` | Notes and guides: store publishing (`STORES.md`), audits, plans, `founder/`, and `promo/` (ad videos and their sources). |
-| `scripts/` | The site build (`build-site.sh`), helper scripts, and the tests (`scripts/tests`). |
+| `web/` | The website and the app: every page, script, stylesheet and icon, the drawing kits and book (`livedraw.js`, `drawbook.js`), the labs, the 3D explorer and the landing page. |
+| `extension/` | The browser extension. Its `livedraw.js` and `drawbook.js` are copies of the app's (a test checks they match). |
+| `server/` | Cassie's server (`worker.src.js`, built into `worker.js` with `cd server && python3 build.py`). |
+| `docs/` | Notes and guides: publishing, audits, plans and promotional material. |
+| `scripts/` | The site build (`build-site.sh`), helper scripts (`typo-keep.mjs` refreshes the real words the typo reader leaves alone; run it after the kits or the book gain words), the 3D model sources, and the tests (`scripts/tests`). |
 
 ## Running it locally
 
-No build step or dependencies — it's plain HTML/CSS/JS. Serve the `web/`
-folder with any static file server, for example:
+There is no build step for the app: it is plain HTML, CSS and JavaScript. Serve the `web/` folder with any static
+file server, for example:
 
 ```bash
 cd web && python3 -m http.server 8000
 ```
 
-Then open `http://localhost:8000` in your browser.
+Then open `http://localhost:8000`. Installing the app and working offline need a real `http://` or `https://`
+address (not a file opened from disk).
 
-(Opening `index.html` directly via `file://` mostly works too, but the
-service worker — and therefore full offline caching of the app shell, and
-"Add to Home Screen" — requires a real `http://` or `https://` origin.
-Talking to the Gemini API always requires an internet connection.)
+## Installing
 
-## Installing on your phone
+- **On a phone or tablet:** open the site and use the browser's "Add to Home Screen" or "Install app".
+- **On a computer:** open the site and use the install button in the address bar or the browser menu. It then opens
+  in its own window, like any other app.
 
-1. Host the folder somewhere reachable over HTTPS (GitHub Pages, Netlify,
-   Vercel, or any static host all work — see below).
-2. **Android (Chrome):** open the site, tap the menu (⋮), then **"Add to
-   Home screen" / "Install app"**.
-3. **iPhone/iPad (Safari):** open the site, tap the **Share** icon, then
-   **"Add to Home Screen"**.
-   (Voice input via the mic button isn't supported in Safari; typing
-   always works. Voice *output* — read-aloud — works everywhere.)
+## Deploying
 
-## Installing on your computer
+Any static host works: point it at the `web/` folder, or run `bash scripts/build-site.sh` and serve `_site`. The build
+stamps every `?v=` and the offline cache's name with the commit, so there is nothing to bump by hand.
 
-1. Open the site in Chrome, Edge, or another Chromium-based browser.
-2. Click the **install icon** in the address bar (or the browser menu →
-   "Install Cassie…").
-3. It opens in its own window from then on, like a native app.
+## Tests
 
-## Deploying for free
+```bash
+cd scripts/tests && npm ci && npm test
+```
 
-The simplest option is **GitHub Pages**:
-
-1. Push this repo to GitHub.
-2. In the repo settings, enable **Pages**, serving from the `web/` folder
-   (or run `bash scripts/build-site.sh` and serve `_site`).
-3. Open the published URL on your phone and computer and install it as
-   described above.
-
-Any static host (Netlify, Vercel, Cloudflare Pages) works the same way —
-just point it at the `web/` folder.
-
-Cassie's own site is Cloudflare Pages with `bash scripts/build-site.sh` as the build command
-(output: `_site`). The build stamps every `?v=` and the offline cache's name with the commit,
-so there's nothing to bump by hand. `server/worker.js` is built from `server/worker.src.js` with
-`cd server && python3 build.py` (a test fails if you forget), and the extension's `board.js` and
-`sketch.js` are the app's own in `web/` (a test fails if the copies differ). The tests:
-`cd scripts/tests && npm ci && npm test`.
-
-## Browser extension (desktop only)
-
-There's also a [browser extension](extension/README.md) that brings the
-same highlight-to-explain behavior to any webpage, not just Cassie's own
-paste box — highlight text on an article, a PDF, a Google Doc, and a
-small "Cassie" popup explains it right there. It only works on desktop
-Chrome/Edge (browser extensions don't run on phones), and it's meant for
-reading and homework help, not for use during a test.
-
-## What Cassie is and isn't
-
-Cassie is inspired by desktop assistants like HeyClicky that place an AI
-next to your cursor — but it only "sees" and points within its own chat
-window (or, for the browser extension, the page you deliberately
-highlighted text on). It doesn't capture your screen, doesn't run
-silently in the background, and doesn't require any special OS-level
-permissions — everything it does is a direct, visible reaction to text
-you selected.
-
-## Website layout (in `web/`)
-
-- `index.html` — the landing page (marble hero, features, pricing, FAQ). Its moving background
-  is `gradient.js`.
-  Set `WAITLIST_URL` in `landing/landing.js` to turn the paid-plan buttons into a waitlist link.
-- `start.html` — the loading screen (cursor highlights “Cassie”, clicks) that opens the app.
-  The installed app (PWA) starts here.
-- `app.html` — the app itself.
-- `gradient.js` — the living marble behind the landing hero and the chat (one small WebGL
-  shader; it follows the student's colour). Lite mode keeps the plain background.
-- `cassie-bot.js` — Cursor Cassie, the mascot everywhere.
+A single test runs with `node smoke.cjs "<part of its name>"`.

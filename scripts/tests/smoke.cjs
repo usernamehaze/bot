@@ -1055,6 +1055,36 @@ test('v320 Blender models and real materials: the book’s airplane and bicycle 
   } finally { await ctx.close(); }
 });
 
+test('v340 a picture of a person or a character is real pictures from the web (never made up): Albert Einstein from the encyclopedia, a game character from the picture libraries, each saying where it is from; a picture she makes is kept on this device, so it is still there after leaving the chat and coming back', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'iPhone 13', server: false, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: async () => ({ text: 'Words.' }) });
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  const asked = [];
+  await ctx.route(/wikipedia\.org\/w\/api\.php/, (r) => { const u = decodeURIComponent(r.request().url()); asked.push('wiki'); const einstein = /einstein/i.test(u);
+    return r.fulfill({ json: { query: { pages: einstein ? { 1: { index: 1, title: 'Albert Einstein', description: 'German-born physicist (1879–1955)', thumbnail: { source: 'https://upload.wikimedia.org/einstein.jpg' }, fullurl: 'https://en.wikipedia.org/wiki/Albert_Einstein' } }
+      : /furina/i.test(u) ? { 1: { index: 1, title: 'Genshin Impact', description: '2020 video game', fullurl: 'https://en.wikipedia.org/wiki/Genshin_Impact' } } : { 1: { index: 1, title: 'Volcano', description: 'Rupture in the crust of a planet' } } } } }); });
+  await ctx.route(/commons\.wikimedia\.org\/w\/api\.php/, (r) => { asked.push('commons'); return r.fulfill({ json: { query: { pages: { 7: { index: 1, title: 'File:Furina cosplay.jpg', imageinfo: [{ thumburl: 'https://upload.wikimedia.org/furina.jpg', descriptionurl: 'https://commons.wikimedia.org/wiki/File:Furina_cosplay.jpg' }] } } } } }); });
+  await ctx.route(/api\.openverse\.org/, (r) => { asked.push('openverse'); return r.fulfill({ json: { results: [] } }); });
+  await ctx.route(/upload\.wikimedia\.org/, (r) => r.fulfill({ contentType: 'image/png', body: png }));
+  let made = 0;
+  await page.evaluate(() => { window.generateImage = async () => { window.__made = (window.__made || 0) + 1; const c = document.createElement('canvas'); c.width = 64; c.height = 64; const g = c.getContext('2d'); g.fillStyle = '#c33'; g.fillRect(0, 0, 64, 64); return { src: c.toDataURL('image/png'), keep: false, gemini: true }; }; });
+  const ask = async (q) => { const n = await page.evaluate(() => state.messages.filter((m) => m.role === 'assistant').length); await page.fill('#prompt-input', q); await page.click('#send-btn'); await page.waitForFunction((n) => state.messages.filter((m) => m.role === 'assistant').length > n, n, { timeout: 30000 }); await page.waitForTimeout(600); };
+  await ask('can you make me an image of albert einstein');
+  const ein = await page.evaluate(() => { const m = state.messages[state.messages.length - 1], b = [...document.querySelectorAll('#chat-log .bubble')].pop(); return { say: m.display, pics: (m.webPics || []).map((p) => p.src + '|' + p.from), shown: b.querySelectorAll('.web-pic img').length, credit: (b.querySelector('.web-pic figcaption a') || {}).href || '' }; });
+  expect(/pictures? of Albert Einstein from the web/.test(ein.say) && ein.pics[0] === 'https://upload.wikimedia.org/einstein.jpg|the encyclopedia' && ein.shown >= 1 && /wikipedia\.org\/wiki\/Albert_Einstein/.test(ein.credit), 'Albert Einstein: the encyclopedia’s picture, saying where it is from: ' + JSON.stringify(ein));
+  await ask('can you find me a picture of furina');
+  const fur = await page.evaluate(() => { const m = state.messages[state.messages.length - 1]; return { say: m.display, pics: (m.webPics || []).map((p) => p.from) }; });
+  expect(/furina from the web/i.test(fur.say) && fur.pics[0] === 'a free picture library', 'a game character: real pictures from a picture library: ' + JSON.stringify(fur));
+  expect(!(await page.evaluate(() => window.__made || 0)), 'neither was made up by her picture maker');
+  // not a person: her picture maker, and the picture stays after leaving the chat and coming back
+  await ask('make me an image of a volcano');
+  const id = await page.evaluate(() => state.messages[state.messages.length - 1].imageId || '');
+  expect(/^p/.test(id) && (await page.evaluate(() => window.__made)) === 1, 'a volcano is made by her picture maker and kept on this device: ' + id);
+  await page.evaluate(() => { const c = state.currentId; createNewChat(); selectChat(c); });
+  await page.waitForFunction(() => { const i = [...document.querySelectorAll('#chat-log .bubble img')].pop(); return i && /^(blob|data):/.test(i.src) && i.naturalWidth > 0; }, null, { timeout: 10000 });
+  expect(await page.evaluate(() => document.querySelectorAll('#chat-log .web-pic img').length >= 2), 'and the web pictures come back with the chat too');
+  expect(!errors.length, 'page errors: ' + errors.join(' | '));
+  await ctx.close();
+});
 test.slow('v339 a 3D model is built piece by piece from the ground up, and never shows whole (not even small) before it is made: the lion legs first, the heart part by part, with no frame of the finished thing first', async (b) => {
   const { ctx, page, errors } = await open(b, { device: 'iPhone 13', server: false, book: true, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: async () => ({ text: 'Words.' }) });
   // every frame: how much of the canvas is drawn, and how many names are showing
@@ -4563,7 +4593,7 @@ test('v251: live drawing: "draw me how a jet engine works" builds a 3D model par
   await page.waitForFunction(() => /Cassie built it in 3D/.test((document.querySelector('#chat-log .ld-state') || {}).textContent || ''), null, { timeout: 30000 });
   const j = await page.evaluate(() => ({ tags: [...document.querySelectorAll('#chat-log .ld-tag')].filter((t) => !t.hidden).map((t) => t.textContent), title: document.querySelector('#chat-log .ld-title').textContent, acts: [...document.querySelectorAll('#chat-log .ld-btn')].filter((x) => !x.hidden).map((x) => x.textContent), caseOpen: document.querySelector('#chat-log .ld-btn[aria-pressed]').getAttribute('aria-pressed') }));
   expect(n === 1 && !pics.length && j.title === 'How a jet engine works', '3D: one drawing call, no picture maker: ' + JSON.stringify([n, pics.length, j.title]));
-  expect(['2 Fan', '3 Compressor', '4 Combustor', '5 Turbine', '6 Nozzle'].every((x) => j.tags.includes(x)) && j.caseOpen === 'true' && j.acts.join() === 'Pause,Close the case,Pull apart,Draw again,Machine view,Show another way', '3D: every part named, the case open to see inside, and the actions: ' + JSON.stringify(j));
+  expect(['2 Fan', '3 Compressor', '4 Combustor', '5 Turbine', '6 Nozzle'].every((x) => j.tags.includes(x)) && j.caseOpen === 'true' && j.acts.join() === 'Pause,Close the case,Pull apart,Hide labels,Draw again,Machine view,Show another way' /* (v335: Hide labels) */, '3D: every part named, the case open to see inside, and the actions: ' + JSON.stringify(j));
   await page.click('#chat-log .ld-btn:has(span:text-is("Pull apart"))', { timeout: 8000 }); await page.waitForTimeout(600);
   expect(await page.getAttribute('.ld-btn:has(span:text-is("Put it back"))', 'aria-pressed') === 'true', '3D: Pull apart pulls it apart, and the button says Put it back');
   await page.click('#chat-log .ld-tag:text-is("4 Combustor")', { timeout: 8000 }); await page.waitForTimeout(300);
