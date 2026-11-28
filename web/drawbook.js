@@ -861,6 +861,8 @@ export function fromBookOrKit(question, want3d, m, loose = false) {
   return isOnly(question) ? kit() || book() : book() || kit();
 }
 export const bookKeys = () => BOOK.map((e) => e.key);
+// (v346) every Labs body structure the book's body systems are built from: Save for offline keeps their 3D files
+export const atlasOrgans = () => [...new Set(BOOK.flatMap((e) => (e['3d'] && e['3d'].atlas ? e['3d'].parts.flatMap((p) => p.of || []) : [])))];
 // (v316) the subject's own words, the way the book matches them: "how does a blender work?" is "blender",
 // "draw me a washing machine" is "machine washing" (sorted, so the order of the words never matters)
 export const subjectOf = (q) => [...new Set(words(fixTypos(q)).filter((w) => w.length > 2))].sort().join(' ');

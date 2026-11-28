@@ -161,7 +161,7 @@
     offline_waiting: 'Waiting for the internet. Cassie answers as soon as you’re back online.',
     offline_sent: 'Back online, so Cassie sent your question.',
     offline_quiz_none: 'No internet right now. A quiz from your flashcards needs a deck with at least 4 different answers. Make some cards, or connect and Cassie will quiz you.',
-    offline_saved: 'Saved on this device. Learn, your flashcards and your notes work with no internet now.',
+    offline_saved: 'Saved on this device. Learn, your flashcards, your notes and the 3D models work with no internet now.',
     offline_cant_save: 'This browser can’t keep Cassie for offline use. Open her as an app on your phone, then try again.',
     offline_save_failed: 'Some files didn’t save. Connect to Wi-Fi, then tap Save for offline again.',
     hw_scratch_empty: 'Jot down a formula, a quick sum or an idea before it slips away.',

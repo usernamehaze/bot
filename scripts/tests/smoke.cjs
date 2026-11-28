@@ -17834,6 +17834,36 @@ test('works offline after the first visit (app opens)', async (b) => {
   await ctx.close();
 });
 
+test('v346 Save for offline keeps every 3D drawing: the finished models (the heart, the lungs, the airplane...) and the Labs body files the body systems are cut from, so with no internet the heart in 3D and blood round the body in 3D still show; the list holds only the body files those systems need', async (b) => {
+  const list = JSON.parse(fs.readFileSync(fileAt('offline-files.json'), 'utf8'));
+  const body = list.files.filter((f) => f.startsWith('explore/body/'));
+  expect(['models/heart.glb', 'models/lungs.glb', 'models/airplane.glb', 'explore/body/index.json', 'explore/body/regions/root.glb', 'explore/body/visceral/digestive_system.glb', 'explore/body/nervous/central_nervous_system.glb', 'explore/body/cardiovascular/systemic_arteries.glb'].every((f) => list.files.includes(f)) && !body.some((f) => /muscular|skeletal|lymphoid/.test(f)), 'the models and only the body files the systems use: ' + body.join());
+  const ctx = await b.newContext({ ...devices['Pixel 7'] });
+  try {
+    await ctx.addInitScript(() => { window.CASSIE_SERVER = ''; window.CASSIE_BOOK_MS = 0; window.CASSIE_READ_SPEED = 0; });
+    await ctx.addInitScript((v) => { if (!localStorage.getItem('cassie.v2')) localStorage.setItem('cassie.v2', JSON.stringify({ profile: { name: 'T', role: 'student', grade: 'Grade 9', age: 14, at: 1 }, seenVersion: v, lite: 'off', tab: 'you' })); }, APP_VERSION);
+    const page = await ctx.newPage(); const errors = []; page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(APP);
+    expect(await page.evaluate(() => Promise.race([navigator.serviceWorker.ready.then(() => true), new Promise((r) => setTimeout(() => r(false), 8000))])), 'service worker ready');
+    await page.reload(); await page.waitForTimeout(800);
+    await page.waitForSelector('#off-go', { state: 'attached' });
+    await page.evaluate(() => document.getElementById('off-go').click());
+    await page.waitForFunction(() => /Saved on this device|didn’t save/.test(document.getElementById('off-status').textContent), null, { timeout: 120000 });
+    expect(/3D models work with no internet/.test(await page.textContent('#off-status')), 'saved: ' + await page.textContent('#off-status'));
+    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/v346-saved.png` });
+    await ctx.setOffline(true);
+    await page.reload({ timeout: 15000 }); await page.waitForTimeout(1000);
+    for (const [q, model] of [['show me the heart in 3d', 'blender'], ['show me how blood circulates in the body in 3d', 'atlas']]) {
+      await page.evaluate((q) => { const v = document.getElementById('chat-log'); v.innerHTML = ''; liveDrawReply(q, true); }, q);
+      await page.waitForFunction(() => { const s = document.querySelector('#chat-log .ld-stage'); return s && s.dataset.model; }, null, { timeout: 60000 });
+      const got = await page.evaluate(() => document.querySelector('#chat-log .ld-stage').dataset.model);
+      expect(got === model, q + ' offline: ' + got);
+      if (process.env.SHOTS) { await page.waitForSelector('#chat-log .ld .ld-live.off', { state: 'attached', timeout: 90000 }); await page.waitForTimeout(1500); await page.evaluate(() => document.querySelector('#chat-log .ld').scrollIntoView({ block: 'start' })); await page.screenshot({ path: `${process.env.SHOTS}/v346-offline-${model}.png` }); }
+    }
+    expect(!errors.length, 'page errors: ' + errors.join(' | '));
+  } finally { await ctx.close(); }
+});
+
 test('v345 added to a phone’s home screen, Cassie opens as an app (no address bar) from every page it can be added from: the app settings say standalone, and the home, start and app pages carry the iPhone web-app tags too, in case the app settings cannot be read', async () => {
   const man = JSON.parse(fs.readFileSync(fileAt('web/manifest.json'), 'utf8'));
   expect(man.display === 'standalone' && man.start_url && man.scope === './', 'the app settings: standalone, with a start page');

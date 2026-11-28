@@ -651,7 +651,7 @@ export async function render(host, rawSpec, opts = {}) {
   let mv = null; const mvHost = spec.mode === '3d' ? el('div', 'ld-mv') : null;
   const machineOn = async () => {
     if (mv) return mv;
-    let m = null; try { m = await import('./isoview.js?v=345'); } catch (e) { return null; }
+    let m = null; try { m = await import('./isoview.js?v=346'); } catch (e) { return null; }
     mv = m.machine(mvHost, spec, { dark: !lightPage() });
     if (mv) {
       const row = el('div', 'ld-mv-acts');
@@ -3400,7 +3400,7 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
   // (v343) a body system: its organs cut from the Labs' 3D body (explore/organs.js), each part's own organs, in their real places
   let atlas = null;
   if (spec.atlas) {
-    try { const om = await import('./explore/organs.js?v=345'); atlas = await om.organs(new URL('./explore/', import.meta.url).href, spec.parts.filter((p) => p.of).map((p) => ({ id: p.id, of: p.of, color: p.color, skin: p.outline, faint: p.faint }))); } catch (e) { atlas = null; }
+    try { const om = await import('./explore/organs.js?v=346'); atlas = await om.organs(new URL('./explore/', import.meta.url).href, spec.parts.filter((p) => p.of).map((p) => ({ id: p.id, of: p.of, color: p.color, skin: p.outline, faint: p.faint }))); } catch (e) { atlas = null; }
     if (!atlas) { renderer.dispose(); canvas.remove(); return null; }
     (spec.flows || []).forEach((f) => { if (f.via && !f.pts) f.pts = f.via.map((w) => atlas.at(w)).filter(Boolean).map((v) => [v.x, v.y, v.z]); });
     spec.flows = (spec.flows || []).filter((f) => f.pts && f.pts.length >= 2);
