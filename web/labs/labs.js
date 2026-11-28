@@ -29,11 +29,11 @@ import { PUZZLES } from './puzzles.js';
 import { space3dLab } from './space3d.js';
 import { atlasLab } from './atlas.js';
 import { TOOLS } from './tools.js';
-import { MUSEUM } from './museum.js?v=348';
+import { MUSEUM } from './museum.js?v=349';
 import { GAMES } from './games.js';
 import { GAMES2 } from './games2.js';
 import { KIDS } from './kids.js';
-import { LEVEL_LESSONS } from './level-lessons.js?v=348';
+import { LEVEL_LESSONS } from './level-lessons.js?v=349';
 
 // two shelves: things to learn with (simulations, 3D models, the atlas) and games (the daily puzzles)
 export const SUBJECTS = [['all', 'All'], ['3d', '3D'], ['biology', 'Biology'], ['chemistry', 'Chemistry'], ['physics', 'Physics'], ['space', 'Space'], ['math', 'Math'], ['geography', 'Geography'], ['history', 'History']];
@@ -386,8 +386,10 @@ function createView() {
     labs: { key: 'cassie.learnExploreLabs', title: 'Explore labs', sub: 'Simulations and study tools', ids: (d) => d ? 'lx-labs-d lx-labs-dt' : 'lx-labs' },
   };
   const exploreOpen = {};
-  for (const k in EXPLORE_PARTS) exploreOpen[k] = (() => { try { return sessionStorage.getItem(EXPLORE_PARTS[k].key) === '1'; } catch (e) { return false; } })();
-  const exploreShown = (k) => exploreOpen[k] || !levelNow();
+  // (v349) null: not chosen yet this visit. Then it opens with no level set, closed with one; once tapped, the tap wins
+  // (before, with no level it could never close: a student who skipped the first questions could not fold it away)
+  for (const k in EXPLORE_PARTS) exploreOpen[k] = (() => { try { const v = sessionStorage.getItem(EXPLORE_PARTS[k].key); return v === '1' ? true : v === '0' ? false : null; } catch (e) { return null; } })();
+  const exploreShown = (k) => (exploreOpen[k] === null ? !levelNow() : exploreOpen[k]);
   function exploreButton(part, desk) {
     const P = EXPLORE_PARTS[part];
     const b = el('button', 'lx-more'); b.type = 'button'; b.dataset.for = part; b.setAttribute('aria-controls', P.ids(desk));
@@ -631,11 +633,13 @@ function createView() {
       const b = board || { top: [], players: 0 };
       const podium = [1, 0, 2].map((i) => b.top[i] ? `<div class="pod p${i + 1}${b.top[i].me ? ' me' : ''}"><span class="pod-av">${esc((b.top[i].name || '?').slice(0, 2))}</span><b>${esc(b.top[i].name)}</b><small>${b.top[i].points} points</small><i>${i + 1}</i></div>` : `<div class="pod p${i + 1} empty"><span class="pod-av">·</span><b>-</b><small>open</small><i>${i + 1}</i></div>`).join('');
       const done = PUZZLES.filter((p) => progress(p).done).length;
-      box.innerHTML = `<div class="board-head"><div><h3>Score board</h3><p>Points for where you place in each of today’s ${PUZZLES.length} puzzles. ${b.offline || board === null ? '' : b.players ? `${b.players} playing today.` : 'Be the first today!'}</p></div>
+      const empty = board !== null && !b.offline && !(b.top || []).length && boardTab !== 'week';
+      box.innerHTML = `<div class="board-head"><div><h3>Score board</h3><p>Points for where you place in each of today’s ${PUZZLES.length} puzzles. ${b.offline || board === null ? '' : b.players ? `${b.players} playing today.` : 'No scores yet today. Be the first!'}</p></div>
         <button type="button" class="lab-btn board-go" data-subject-go="puzzles">${done ? `${done}/${PUZZLES.length} done` : 'Play today’s puzzles'}</button></div>
-        <div class="podium">${podium}</div>
+        ${empty ? '' : `<div class="podium">${podium}</div>`}
         ${b.me ? `<p class="board-me">You: <b>#${b.me.rank}</b> with <b>${b.me.points}</b> points</p>` : ''}
-        ${scoreTable(b)}`;
+        ${empty ? '' : scoreTable(b)}`;
+      box.classList.toggle('board-compact', empty); // (v349: nobody on it yet: just the line and the button, no empty podium)
       // (v282) still loading, or it couldn't be reached: say which, with Cassie busy or her oops, never an empty podium
       // (v288) on its way: a skeleton of the podium and the rows (after a second), not a spinner or words
       if (board === null) {

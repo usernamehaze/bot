@@ -803,6 +803,23 @@ html:not(.lite) .labs-shelf .labs-card, html:not(.lite) .labs-shelf .labs-featur
   --lf-art-2: radial-gradient(circle at 70% 35%, #ff8a4c 0%, #e2442b 22%, #9c1a1f 45%, #3a0d12 70%), linear-gradient(160deg, #ff5a36, #2a090c);
   --lf-art-3: conic-gradient(from 210deg at 55% 55%, #27624a, #d8c68e, #1c3a5e, #b8583a, #e6e1cf, #27624a);
 }
+/* (v349) the papers take Cassie's own colours, not red and blue: her palette's tones (Blush & Sage by default, sage
+   first for Sage, greys and white for Monochrome), soft streaks like ink on paper */
+:root {
+  --lf-art-1: linear-gradient(118deg, #f6d9de 0%, #fbf3f4 18%, #e8a6b4 34%, #f9eef0 50%, #cfe7de 66%, #f7f4f2 82%, #e3b3bf 100%);
+  --lf-art-2: radial-gradient(circle at 70% 35%, #f6c9d2 0%, #e48ea2 28%, #b4566e 58%, #5a2a37 90%), linear-gradient(160deg, #eaa3b3, #4a2230);
+  --lf-art-3: conic-gradient(from 210deg at 55% 55%, #7cc4ae, #e9f3ee, #4f8f7c, #f2c4cf, #f5f1ec, #7cc4ae);
+}
+:root[data-pal="sage"] {
+  --lf-art-1: linear-gradient(118deg, #d5ece4 0%, #f4faf7 18%, #8fcab7 34%, #eef7f3 50%, #f6d6de 66%, #f6f4f1 82%, #a7d5c6 100%);
+  --lf-art-2: radial-gradient(circle at 70% 35%, #bfe3d6 0%, #7cc4ae 28%, #3f7d6a 58%, #183a31 90%), linear-gradient(160deg, #8fcab7, #163029);
+  --lf-art-3: conic-gradient(from 210deg at 55% 55%, #f28fa5, #fbeef1, #7cc4ae, #e9f3ee, #c9e6dc, #f28fa5);
+}
+:root[data-pal="mono"] {
+  --lf-art-1: linear-gradient(118deg, #d9d9de 0%, #f7f7f9 18%, #a9a9b2 34%, #efeff2 50%, #c4c4cb 66%, #fafafb 82%, #b6b6be 100%);
+  --lf-art-2: radial-gradient(circle at 70% 35%, #e4e4e8 0%, #a4a4ad 28%, #55555d 58%, #1c1c20 90%), linear-gradient(160deg, #b9b9c0, #18181b);
+  --lf-art-3: conic-gradient(from 210deg at 55% 55%, #6e6e77, #f2f2f5, #3a3a40, #c8c8ce, #e9e9ec, #6e6e77);
+}
 /* (in dark, the folders are dark tinted glass: a faint rim and glow instead of the bright ones) */
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --lf-line: rgba(var(--hi-rgb), .22); --lf-edge: rgba(var(--hi-rgb), .12); --lf-hi: rgba(var(--hi-rgb), .3); --lf-glow: rgba(var(--hi-rgb), .05); --lf-shadow: 0, 0, 0; } }
 :root[data-theme="dark"] { --lf-line: rgba(var(--hi-rgb), .22); --lf-edge: rgba(var(--hi-rgb), .12); --lf-hi: rgba(var(--hi-rgb), .3); --lf-glow: rgba(var(--hi-rgb), .05); --lf-shadow: 0, 0, 0; }
@@ -1114,3 +1131,14 @@ html.lite .lf.lf-open .lf-paper:nth-child(n) { opacity: .85; }
 @keyframes hbFlap { from { transform: translateY(-6%) scaleY(.94); } to { transform: translateY(6%) scaleY(1.04); } }
 @keyframes hbHop { 0%, 100% { transform: translateY(0) scaleY(.92); } 45% { transform: translateY(-38%) scaleY(1.04); } }
 @keyframes hbSwing { from { transform: rotate(-12deg); } to { transform: rotate(12deg); } }
+
+/* (v349) the score board, smaller: a lower podium, and with nobody on it yet just its line and button */
+.labs-board.board-compact { padding: var(--sp-3, 12px) var(--sp-4, 16px); }
+.labs-board.board-compact .board-head { margin: 0; }
+.podium { max-width: 360px; margin-top: var(--sp-3, 12px); }
+.pod-av { width: 32px; height: 32px; font-size: .8rem; }
+.pod.p1 .pod-av { width: 38px; height: 38px; }
+.pod i { margin-top: var(--sp-1, 4px); padding-top: 4px; }
+.pod.p1 i { height: 40px !important; }
+.pod.p2 i { height: 30px !important; }
+.pod.p3 i { height: 24px !important; }

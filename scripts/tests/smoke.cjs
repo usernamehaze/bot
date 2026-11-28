@@ -17834,6 +17834,42 @@ test('works offline after the first visit (app opens)', async (b) => {
   await ctx.close();
 });
 
+test('v349 fixes: with no level set Explore other levels still closes; the profile form has Not now (and Escape) without filling it in; an empty score board is one line and a button; a podcast closed while playing keeps going in a small floating player (or stops, the student’s choice), opening Podcast again returns to it, and the page closing always stops it', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'iPhone 13', server: false, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark', profile: { name: 'T', role: 'student', grade: '', age: 19, at: 1 }, level: 'auto' } });
+  try {
+    await page.evaluate(() => openLabs()); await page.waitForTimeout(2000);
+    const btn = page.locator('.lx-more[data-for="levels"]:visible').first();
+    expect(await btn.getAttribute('aria-expanded') === 'true', 'no level: open at first');
+    await btn.click(); await page.waitForTimeout(300);
+    expect(await btn.getAttribute('aria-expanded') === 'false', 'no level: it closes when tapped');
+    await page.evaluate(() => { const c = document.querySelector('.labs-close, [data-labs-close]'); if (c) c.click(); });
+    await page.evaluate(() => openProfile(false)); await page.evaluate(() => document.querySelector('.pf-skip').click());
+    expect(!(await page.$('.profile-overlay')), 'Not now closes the profile form');
+    await page.evaluate(() => openProfile(false)); await page.keyboard.press('Escape');
+    expect(!(await page.$('.profile-overlay')), 'Escape closes it too');
+  } finally { await ctx.close(); }
+  const X = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 860 }, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark' } });
+  try {
+    const p = X.page;
+    await p.evaluate(() => { const a = document.createElement('audio'); HTMLMediaElement.prototype.play = function () { this.dispatchEvent(new Event('play')); return Promise.resolve(); }; });
+    await p.route(/\/speak/, (r) => r.fulfill({ body: Buffer.from('RIFF'), contentType: 'audio/wav' }));
+    await p.evaluate(() => { openPodcast('notes', 'Cells'); const w = document.querySelector('.pod-sheet'); window.__pp = podPlayer(w.querySelector('.pod-card'), [{ who: 'Jessica', say: 'Cells.' }, { who: 'Chris', say: 'Yes.' }], 'Cells', true); });
+    await p.evaluate(() => document.querySelector('.pod-sheet .pod-play').click()); await p.waitForTimeout(400);
+    expect(await p.evaluate(() => window.__pp.playing()), 'it plays');
+    await p.evaluate(() => document.querySelector('.pod-sheet .pod-x').click());
+    expect(await p.evaluate(() => document.querySelector('.pod-sheet').hidden && !!document.querySelector('.pod-float') && window.__pp.playing()), 'closed while playing: a floating player, still playing');
+    await p.evaluate(() => openPodcastSources());
+    expect(await p.evaluate(() => !document.querySelector('.pod-sheet').hidden && !document.querySelector('.pod-src-sheet') && !document.querySelector('.pod-float')), 'Podcast again: back to the same podcast');
+    await p.evaluate(() => document.querySelector('.pod-when [data-close="stop"]').click()); await p.evaluate(() => document.querySelector('.pod-sheet .pod-x').click());
+    expect(await p.evaluate(() => !window.__pp.playing() && !document.querySelector('.pod-sheet') && !document.querySelector('.pod-float') && state.podClose === 'stop'), 'Stop chosen: closing stops it, and the choice is kept');
+    await p.evaluate(() => { openPodcast('x', 'Atoms'); const w = document.querySelector('.pod-sheet'); window.__p2 = podPlayer(w.querySelector('.pod-card'), [{ who: 'Chris', say: 'Atoms.' }], 'Atoms', true); });
+    await p.evaluate(() => document.querySelector('.pod-sheet .pod-play').click()); await p.waitForTimeout(300);
+    await p.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide')));
+    expect(!(await p.evaluate(() => window.__p2.playing())), 'the page closing stops it');
+    expect(!X.errors.length, 'page errors: ' + X.errors.join(' | '));
+  } finally { await X.ctx.close(); }
+});
+
 test('v348 a body system drawn in the chat has "See the whole body": it opens Explore’s 3D body with that system alone on (Explore is Plus after 2 free views a week); other drawings have no such button', async (b) => {
   const { ctx, page, errors } = await open(b, { book: true, lite: 'off', device: 'Desktop Chrome', viewport: { width: 1280, height: 860 }, state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: () => ({ text: 'Words.' }) });
   try {

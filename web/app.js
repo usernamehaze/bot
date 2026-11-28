@@ -2878,7 +2878,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=348'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=349'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2900,7 +2900,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=348'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=349'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -3176,7 +3176,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=348').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=349').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -3378,6 +3378,7 @@ const podIsNotes = (c) => /^Summarize this into clean study notes/i.test(String(
 const podChatText = (c) => (c.messages || []).filter((m) => m.role === 'assistant').map((m) => String(m.content || '').trim()).filter(Boolean).join('\n\n');
 const podChats = () => (state.chats || []).filter((c) => podChatText(c)).sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
 function openPodcastSources() {
+  if (podKept && podKept.show()) return; // (v349: a podcast still loaded: back to it, not to picking notes again)
   document.querySelector('.pod-sheet')?.remove();
   const w = document.createElement('div');
   w.className = 'plus-sheet pod-sheet pod-src-sheet'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true'); w.setAttribute('aria-labelledby', 'pod-src-h');
@@ -3474,6 +3475,7 @@ function openPodcastSources() {
   w.querySelector('.pod-src-btn').focus({ preventScroll: true });
 }
 function openPodcast(text, title) {
+  if (podKept) podKept.end(); // (a new podcast: the old one stops)
   document.querySelector('.pod-sheet')?.remove();
   const CV = window.CassieVoice;
   // the studio voice state is cached from the last check; re-read it here, and (below) refresh it on open
@@ -3519,7 +3521,19 @@ function openPodcast(text, title) {
   w.querySelector('.pod-allow').textContent = `No daily limit: podcasts come out of your monthly voice${max ? ` (${max.toLocaleString('en-PH')} characters on your plan)` : ''}.`;
   const go = w.querySelector('.pod-go'), status = w.querySelector('.pod-status');
   let player = null;
-  const close = () => { if (player && !player.playing()) player.stop(); w.remove(); document.removeEventListener('keydown', onKey, true); }; // (v281: still playing, it goes on, and Now playing on Home controls it)
+  // (v349) closed while it plays: the student's choice (in the player): keep playing in a small floating player
+  // (the sheet is kept, so opening Podcast again comes back to it), or stop. Not playing: it stops as before.
+  const close = () => {
+    document.removeEventListener('keydown', onKey, true);
+    if (!player) player = w._player || null; // (the player made in this sheet)
+    if (player && player.playing() && state.podClose !== 'stop') {
+      w.hidden = true;
+      podKept = { el: w, show() { w.hidden = false; podFloat(null); document.addEventListener('keydown', onKey, true); return true; }, end() { player.stop(); w.remove(); podKept = null; podFloat(null); } };
+      podFloat(player, title); return;
+    }
+    if (player) player.stop();
+    w.remove(); if (podKept && podKept.el === w) podKept = null; podFloat(null);
+  };
   const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
   document.addEventListener('keydown', onKey, true);
   w.querySelector('.pod-x').addEventListener('click', close);
@@ -3548,6 +3562,12 @@ function podPlayer(card, lines, title, voiceOk) {
     <div class="pod-ctrl" role="group" aria-label="Podcast controls"><button type="button" data-p="back" aria-label="Back one line"><svg class="ic-line" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 5v14"/><path d="M18 6l-8 6 8 6z"/></svg></button><button type="button" class="pod-play" data-p="play" aria-label="Play"><svg class="ic-line" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 5l12 7-12 7z"/></svg></button><button type="button" data-p="skip" aria-label="Skip to the next line"><svg class="ic-line" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 5v14"/><path d="M6 6l8 6-8 6z"/></svg></button><button type="button" class="pod-speed" data-p="speed" aria-label="Speed 1x">1x</button><button type="button" class="pod-dl" data-p="dl">Download</button></div>
     <p class="pod-note" role="status"></p>`;
   const ol = box.querySelector('.pod-lines'), note = box.querySelector('.pod-note'), playBtn = box.querySelector('.pod-play');
+  // (v349) what closing does while it plays: the student picks, and it is kept for next time
+  const when = document.createElement('div'); when.className = 'pod-when'; when.setAttribute('role', 'group'); when.setAttribute('aria-label', 'When I close the podcast');
+  when.innerHTML = '<span>When I close it:</span><div class="appx-seg"><button type="button" data-close="float">Keep playing</button><button type="button" data-close="stop">Stop</button></div>';
+  const paintWhen = () => when.querySelectorAll('[data-close]').forEach((b) => { const on = (state.podClose === 'stop' ? 'stop' : 'float') === b.dataset.close; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+  when.addEventListener('click', (e) => { const b = e.target.closest('[data-close]'); if (!b) return; state.podClose = b.dataset.close; save(); paintWhen(); });
+  paintWhen(); note.before(when);
   lines.forEach((l, i) => { const li = document.createElement('li'); li.dataset.i = i; li.className = 'pod-line pod-' + l.who.toLowerCase(); li.innerHTML = '<b></b><span></span>'; li.querySelector('b').textContent = l.who; li.querySelector('span').textContent = l.say; li.tabIndex = 0; ol.appendChild(li); });
   card.insertBefore(box, card.querySelector('.plus-actions'));
   const audio = new Audio(), clips = new Map(), urls = [];
@@ -3611,7 +3631,30 @@ function podPlayer(card, lines, title, voiceOk) {
   ol.addEventListener('keydown', (e) => { const li = e.target.closest('.pod-line'); if (li && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); play(+li.dataset.i); } });
   mark();
   if (!voiceOk) rest(null);
-  return { playing: () => playing && !stopped, stop() { stopped = true; audio.pause(); urls.forEach((u) => URL.revokeObjectURL(u)); nowPlaying.clear(np); } };
+  const self = { playing: () => playing && !stopped, toggle: () => box.querySelector('[data-p="play"]').click(), stop() { stopped = true; audio.pause(); audio.removeAttribute('src'); urls.forEach((u) => URL.revokeObjectURL(u)); nowPlaying.clear(np); } };
+  // (v349) the page closing (the tab, the window, the app) always stops it: no voice left talking with no page
+  const bye = () => self.stop(); window.addEventListener('pagehide', bye, { once: true });
+  const sheet = card.closest('.pod-sheet'); if (sheet) sheet._player = self;
+  ['play', 'pause'].forEach((ev) => audio.addEventListener(ev, () => document.dispatchEvent(new CustomEvent('cassie-podfloat'))));
+  return self;
+}
+// (v349) the podcast kept after its sheet was closed (podKept), and its small floating player: the title, Play or
+// Pause, Open (back to the full player) and Stop
+let podKept = null;
+function podFloat(player, title) {
+  let el = document.querySelector('.pod-float');
+  if (!player) { if (el) el.remove(); document.removeEventListener('cassie-podfloat', podFloat.paint || (() => {})); return; }
+  if (!el) {
+    el = document.createElement('div'); el.className = 'pod-float'; el.setAttribute('role', 'region'); el.setAttribute('aria-label', 'Podcast player');
+    el.innerHTML = '<span class="pf-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/></svg></span><button type="button" class="pf-open"><b></b><small>Tap to open</small></button><button type="button" class="pf-play"></button><button type="button" class="pf-stop" aria-label="Stop the podcast"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>';
+    document.body.appendChild(el);
+  }
+  el.querySelector('b').textContent = title || 'Podcast';
+  const paint = () => { const on = player.playing(); const b = el.querySelector('.pf-play'); b.innerHTML = on ? '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg>' : '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>'; b.setAttribute('aria-label', on ? 'Pause' : 'Play'); };
+  podFloat.paint = paint; document.addEventListener('cassie-podfloat', paint); paint();
+  el.querySelector('.pf-play').onclick = () => { player.toggle(); setTimeout(paint, 50); };
+  el.querySelector('.pf-open').onclick = () => { if (podKept) podKept.show(); };
+  el.querySelector('.pf-stop').onclick = () => { if (podKept) podKept.end(); else { player.stop(); podFloat(null); } };
 }
 
 /* ---------- Home on a computer: a study dashboard ----------
@@ -7753,11 +7796,11 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=348')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=349')));
 // (v310) Cassie's drawing book: a checked drawing of a common subject (a bicycle, the heart, the solar system...) shows
 // at once, right every time, with no AI and no question used (offline too). Anything else is drawn by the AI.
 let liveBookLib = null;
-const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=348').then((bk) => { liveBookNow = bk; return bk; }).catch(() => null)));
+const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=349').then((bk) => { liveBookNow = bk; return bk; }).catch(() => null)));
 // (v332) a typo never hides a drawing: "shoe me how the heart works", "drw the water cycle" are read as meant (drawbook.js
 // fixTypos, which knows the asking words, the book's subjects and the kits' names); loaded once she is idle
 let liveBookNow = null;
@@ -9457,7 +9500,7 @@ async function openExplore(cell, ret, system = null) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=348');
+      exploreMod = await import('./explore/cell3d.js?v=349');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -9517,7 +9560,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=348');
+      labsMod = await import('./labs/labs.js?v=349');
       islandRest();
     }
     labsMod.open({
@@ -11381,6 +11424,7 @@ function openProfile(first) {
     <label class="pf-field"><span>Level</span><select name="grade"><option value="">Choose your level…</option>${GRADE_GROUPS.map(([g, , list]) => `<optgroup label="${g}">${list.map((x) => `<option>${x}</option>`).join('')}</optgroup>`).join('')}</select></label>
     <div class="pf-field"><span>Gender</span><div class="pf-seg pf-seg3"><button type="button" data-gender="female">Female</button><button type="button" data-gender="male">Male</button><button type="button" data-gender="none">Prefer not to say</button></div><input type="hidden" name="gender"></div>
     <button type="submit" class="pf-go">${first ? 'Start studying' : 'Save profile'}</button>
+    <button type="button" class="pf-skip">${first ? 'Skip for now' : 'Not now'}</button>
   </form>`;
   document.body.appendChild(wrap);
   const f = wrap.querySelector('form');
@@ -11396,11 +11440,18 @@ function openProfile(first) {
   const sync = () => { f.gender.value = gender; f.querySelectorAll('[data-gender]').forEach((b) => { b.classList.toggle('on', b.dataset.gender === gender); b.setAttribute('aria-pressed', String(b.dataset.gender === gender)); }); };
   f.querySelectorAll('[data-gender]').forEach((b) => b.addEventListener('click', () => { gender = b.dataset.gender; sync(); f.gender.dispatchEvent(new Event('change')); }));
   sync();
+  // (v349) a way out without filling it in: Not now, Escape or a tap outside the card. Nothing is saved, and
+  // Cassie keeps explaining at a general level until a profile is set (Settings, Your profile)
+  const leave = () => { wrap.remove(); document.removeEventListener('keydown', onKey, true); };
+  const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); leave(); } };
+  document.addEventListener('keydown', onKey, true);
+  f.querySelector('.pf-skip').addEventListener('click', leave);
+  wrap.addEventListener('click', (e) => { if (e.target === wrap) leave(); });
   f.addEventListener('submit', (e) => {
     e.preventDefault();
     const name = f.name.value.trim(), age = Math.round(+f.age.value), grade = f.grade.value;
     if (!check.check()) return;
-    wrap.remove();
+    leave();
     saveProfile({ name, age, grade, gender }, first, p);
   });
   // the name box gets the focus, unless you're already typing in another box (it took the
@@ -11490,10 +11541,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=348').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=349').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=348', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=349', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
