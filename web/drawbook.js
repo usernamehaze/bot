@@ -816,6 +816,7 @@ const words = (q) => String(q || '').toLowerCase().replace(/[^a-z0-9\s-]/g, ' ')
 
 // the book's drawing for a question, or null. want3d: the student asked for 3D (a 3D model when the book has one,
 // else its flat drawing); otherwise a flat drawing, or the model when the book only has the model.
+const NO_ATLAS = /^(chrome|moz|safari-web)-extension:/.test(import.meta.url); // (v343: the extension has no Labs body)
 export function fromBook(question, want3d = false, loose = false) { // (loose, v333: when every AI failed, the book's drawing of a subject the question names, even with more asked)
   const q = fixTypos(question);
   if (q.length > 160) return null;
@@ -823,8 +824,11 @@ export function fromBook(question, want3d = false, loose = false) { // (loose, v
     if (!e.is.test(q) || (e.not && e.not.test(q))) continue;
     const left = words(q.replace(new RegExp(e.is.source, 'gi'), ' ').replace(e.ok ? new RegExp(e.ok.source, 'gi') : /$^/, ' ')).filter((w) => w.length > 2); // (e.ok: more words that still ask for this very subject)
     if (left.length && !loose) return null; // (a narrow question, about one part or for a project: the AI's, which can focus on it)
-    const spec = (want3d && e['3d']) || e['2d'] || e['3d'];
-    if (!spec) return null;
+    // (v343) the body systems are cut from the Labs' 3D body, which the browser extension does not carry: there, the
+    // book's flat drawing of it, or (with none) the next of the book's or the kits' drawings that fit
+    const noAtlas = NO_ATLAS || globalThis.CASSIE_NO_ATLAS, d3 = want3d && e['3d'] && !(noAtlas && e['3d'].atlas) ? e['3d'] : null;
+    const spec = d3 || e['2d'] || (noAtlas && e['3d'] && e['3d'].atlas ? null : e['3d']);
+    if (!spec) continue;
     const out = JSON.parse(JSON.stringify({ ...spec, book: e.key }));
     const mo = MOTION[e.key + ':' + out.mode]; // (v314) and what moves in it
     if (mo) {
