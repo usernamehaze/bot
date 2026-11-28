@@ -2878,7 +2878,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=347'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=348'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2900,7 +2900,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=347'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=348'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -3176,7 +3176,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=347').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=348').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -7753,11 +7753,11 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=347')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=348')));
 // (v310) Cassie's drawing book: a checked drawing of a common subject (a bicycle, the heart, the solar system...) shows
 // at once, right every time, with no AI and no question used (offline too). Anything else is drawn by the AI.
 let liveBookLib = null;
-const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=347').then((bk) => { liveBookNow = bk; return bk; }).catch(() => null)));
+const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=348').then((bk) => { liveBookNow = bk; return bk; }).catch(() => null)));
 // (v332) a typo never hides a drawing: "shoe me how the heart works", "drw the water cycle" are read as meant (drawbook.js
 // fixTypos, which knows the asking words, the book's subjects and the kits' names); loaded once she is idle
 let liveBookNow = null;
@@ -7838,6 +7838,7 @@ function liveDrawInto(container, body) {
     onChange: (spec) => liveShowAsk(spec.q || spec.title),
     onNext: animate && !isOffline() ? (q) => handleSend(q) : null, // (v347: not offline, where it could only wait) (v307: "Ask next" under a drawing just made)
     // (v314) a machine or a thing: see it both ways, flat and in 3D (something soft or living, or a process, stays flat)
+    onExplore: (sys) => openExplore('body', null, sys), // (v348: from a body system drawing to the whole 3D body, that system on)
     flat: async (spec) => { const r = await liveDrawBook(spec.q || spec.title, false); return r ? JSON.parse(r.text) : null; }, // (v347: 3D not loadable offline: the same thing flat)
     canOther: (spec) => spec.mode !== '3d', // (v315: a flat drawing can be built in 3D; a 3D model has no "See it flat")
     onOther: (spec) => liveDrawReply(spec.mode === '3d' ? 'Show it flat' : 'Show it in 3D', spec.mode !== '3d', null, { subject: spec.q || spec.title, other: true }),
@@ -9447,7 +9448,7 @@ async function teach3d(view) {
 }
 // the cells and the body are separate views: 'cells' opens the cells on the one last looked at
 let lastCell = 'animal';
-async function openExplore(cell, ret) {
+async function openExplore(cell, ret, system = null) {
   track('feature', 'explore');
   // free: 2 views a week of each (the body, the animal cell, the plant cell); Plus has them always
   const want = cell === 'cells' ? lastCell : ['plant', 'animal', 'body'].includes(cell) ? cell : 'body', seen = new Set();
@@ -9456,7 +9457,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=347');
+      exploreMod = await import('./explore/cell3d.js?v=348');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -9486,6 +9487,16 @@ async function openExplore(cell, ret) {
     });
     if (ret && ret.opened) ret.opened(); // Labs stayed on screen until now (no flash of the chat)
     if (typeof first === 'string' && view.toast) view.toast(first);
+    // (v348) from a body system drawing in the chat: that system alone, the others a tap away
+    if (system) (async () => {
+      for (let i = 0; i < 60 && !(view.body && view.body.setSystem); i++) await new Promise((r) => setTimeout(r, 250));
+      const b = view.body; if (!b || !b.setSystem) return;
+      const NAMES = { circulatory: 'circulatory', digestive: 'digestive', nervous: 'nervous', urinary: 'urinary' };
+      const chips = [...view.root.querySelectorAll('.x3d-sys')];
+      chips.forEach((chip) => chip.setAttribute('aria-pressed', String(chip.dataset.sys === system)));
+      chips.forEach((chip) => { const on = chip.dataset.sys === system; if (b.isOn(chip.dataset.sys) !== on) b.setSystem(chip.dataset.sys, on).catch(() => {}); }); // (all at once: a slow one never holds up the rest)
+      if (view.toast) view.toast(`The ${NAMES[system] || system} system. Turn the others on with the buttons below.${typeof first === 'string' ? ' ' + first : ''}`);
+    })();
   } catch (e) {
     if (ret) ret.back();
     islandShow('oops', 'Couldn’t open 3D', 2600);
@@ -9506,7 +9517,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=347');
+      labsMod = await import('./labs/labs.js?v=348');
       islandRest();
     }
     labsMod.open({
@@ -11479,10 +11490,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=347').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=348').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=347', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=348', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.

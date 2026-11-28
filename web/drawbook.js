@@ -166,7 +166,7 @@ const BOOK = [
     key: 'circulation', is: /\b(blood (flows?|flowing|circulation|circulates?|travels?|moves?|goes|vessels?)|circulat(ion|ory system)|(flow|path|journey) of (the )?blood|double circulation|daloy ng dugo|sirkulasyon)\b/i,
     ok: /\b(heart|hearts|body|lungs?|from|to|through|around|whole|human|blood|flows?|goes|travels|circulates?|pumped|pumps?|into|out|back|and|then|our|your|video|moving|animation|animated|illustrations?|diagrams?)\b/gi,
     // (v343) in 3D: the real heart and vessels of the Labs' body, the blood's own path through them
-    '3d': { title: 'How blood flows round the body', mode: '3d', axis: 'y', atlas: true,
+    '3d': { title: 'How blood flows round the body', mode: '3d', axis: 'y', atlas: true, explore: 'circulatory',
       intro: 'The real heart and blood vessels of a human body: blue blood comes back to the heart, goes to the lungs for oxygen, comes back red and is pumped out to every part.',
       summary: 'Body (blue) → vena cava → right atrium → right ventricle → pulmonary artery → lungs (picks up oxygen) → pulmonary veins (red) → left atrium → left ventricle → aorta → arteries → every part of the body → veins → back to the heart.',
       photo: 'a diagram of the human circulatory system', next: ['Why is the left side of the heart stronger?', 'What happens in the lungs?'],
@@ -370,7 +370,7 @@ const BOOK = [
   },
   {
     key: 'digestion', is: /\b(digestive (system|tract)|digestion|digest(s|ing)? (food|our food)|alimentary canal|(path|journey|trip) of (the )?food|how (is )?food (is )?digested|where does (the )?food go|sistema ng pagtunaw|panunaw)\b/i, ok: /\b(human|body|food|work|works|our|we|parts?)\b/i,
-    '3d': { title: 'How food is digested', mode: '3d', axis: 'y', atlas: true,
+    '3d': { title: 'How food is digested', mode: '3d', axis: 'y', atlas: true, explore: 'digestive',
       intro: 'The real digestive organs of a human body, and the path food takes through them.',
       summary: 'Mouth (chewed, mixed with saliva) → pharynx → oesophagus → stomach (churned with acid) → small intestine (digested, nutrients taken into the blood; bile from the liver and juice from the pancreas help) → large intestine (water taken back) → out as waste.',
       photo: 'a diagram of the human digestive system', next: ['What does the liver do?', 'Why is the small intestine so long?'],
@@ -395,7 +395,7 @@ const BOOK = [
   },
   {
     key: 'nervous', is: /\b(nervous system|nerves? (work|carry|send)|how (do |does )?(the )?(nerves?|brain) (work|send|tell|control)|brain and (the )?nerves|sistema ng nerbiyos)\b/i, ok: /\b(human|body|work|works|our|we|parts?|signals?|messages?)\b/i,
-    '3d': { title: 'How the nervous system works', mode: '3d', axis: 'y', atlas: true,
+    '3d': { title: 'How the nervous system works', mode: '3d', axis: 'y', atlas: true, explore: 'nervous',
       intro: 'The real brain, spinal cord and nerves of a human body, and the way signals travel along them.',
       summary: 'Sense (touch on the hand) → sensory nerve → spinal cord → brain (decides) → spinal cord → motor nerve → muscle (the leg moves). Signals travel as tiny electrical impulses.',
       photo: 'a diagram of the human nervous system', next: ['What is a reflex?', 'How fast do nerve signals travel?'],
@@ -413,7 +413,7 @@ const BOOK = [
   },
   {
     key: 'urinary', is: /\b(urinary system|excretory system|how (do |does )?(the )?kidneys? (work|filter|clean)|how (is )?urine (is )?made|sistema ng pag-ihi)\b/i, ok: /\b(human|body|work|works|our|we|parts?)\b/i,
-    '3d': { title: 'How the kidneys clean the blood', mode: '3d', axis: 'y', atlas: true,
+    '3d': { title: 'How the kidneys clean the blood', mode: '3d', axis: 'y', atlas: true, explore: 'urinary',
       intro: 'The real kidneys, ureters and bladder of a human body: blood is cleaned and the waste leaves as urine.',
       summary: 'Blood (aorta) → kidneys (filter out waste and extra water) → urine → ureters → bladder (stores it) → urethra → out. The cleaned blood goes back through the vena cava.',
       photo: 'a diagram of the human urinary system', next: ['How much blood do the kidneys clean each day?', 'Why is drinking water important?'],

@@ -17834,6 +17834,22 @@ test('works offline after the first visit (app opens)', async (b) => {
   await ctx.close();
 });
 
+test('v348 a body system drawn in the chat has "See the whole body": it opens Explore’s 3D body with that system alone on (Explore is Plus after 2 free views a week); other drawings have no such button', async (b) => {
+  const { ctx, page, errors } = await open(b, { book: true, lite: 'off', device: 'Desktop Chrome', viewport: { width: 1280, height: 860 }, state: { groqKey: 'gsk_test', theme: 'dark' }, fakeGroq: () => ({ text: 'Words.' }) });
+  try {
+    await page.evaluate(() => { chatLog.innerHTML = ''; state.messages = []; liveDrawReply('how does digestion work in 3d', true); });
+    await page.waitForSelector('#chat-log .ld .ld-live.off', { state: 'attached', timeout: 120000 });
+    expect(/See the whole body/.test(await page.textContent('#chat-log .ld .ld-explore')), 'the body system has the button');
+    await page.click('#chat-log .ld .ld-explore');
+    await page.waitForFunction(() => { const on = [...document.querySelectorAll('.x3d-sys[aria-pressed="true"]')].map((c) => c.dataset.sys); return on.length === 1 && on[0] === 'digestive'; }, null, { timeout: 60000 });
+    await page.evaluate(() => { const c = document.querySelector('.x3d-close'); if (c) c.click(); });
+    await page.evaluate(() => { chatLog.innerHTML = ''; state.messages = []; liveDrawReply('show me the heart in 3d', true); });
+    await page.waitForSelector('#chat-log .ld .ld-live.off', { state: 'attached', timeout: 90000 });
+    expect(!(await page.$('#chat-log .ld .ld-explore')), 'the heart model has no Explore button');
+    expect(!errors.length, 'page errors: ' + errors.join(' | '));
+  } finally { await ctx.close(); }
+});
+
 test('v347 offline from the first visit: Learn and 3D drawings open with no internet before any Save for offline; a thing the kit knows, named on its own ("sandwich"), is drawn, not left waiting; where 3D can’t load it is drawn flat with a note, never left "drawing"; no Ask next offline; Learn offline never fills the chat with errors; the offline note shrinks to a pill and says when the internet is back; once, Cassie offers Save for offline', async (b) => {
   const http = require('http'), WEB = fileAt('web');
   const TY = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json', '.png': 'image/png', '.webp': 'image/webp', '.glb': 'model/gltf-binary' };

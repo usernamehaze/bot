@@ -161,7 +161,7 @@ export function clean(raw) {
     return pts.length >= 2 ? { ...base, pts } : via.length >= 2 ? { ...base, via } : null;
   }).filter(Boolean);
   const glb = mode === '3d' && typeof s.glb === 'string' && /^models\/[\w-]{1,40}\.glb$/.test(s.glb) ? s.glb : null; // (v320: a Blender model from the drawing book, only from Cassie's own folder)
-  return { ...(glb ? { glb } : {}), ...(mode === '3d' && s.atlas === true ? { atlas: true } : {}), ...(next.length ? { next } : {}), ...(flows.length ? { flows } : {}), title: words(s.title, 90) || 'How it works', mode, intro: words(s.intro, 300), summary: words(s.summary, 300), photo: words(s.photo, 300), simple: !!s.simple, axis: ['x', 'y', 'z'].includes(s.axis) ? s.axis : 'x', parts, ref, ...(fresh ? { fresh } : {}), ...(focus ? { focus } : {}) };
+  return { ...(glb ? { glb } : {}), ...(mode === '3d' && s.atlas === true ? { atlas: true, ...(/^[a-z]{3,20}$/.test(s.explore || '') ? { explore: s.explore } : {}) } : {}), ...(next.length ? { next } : {}), ...(flows.length ? { flows } : {}), title: words(s.title, 90) || 'How it works', mode, intro: words(s.intro, 300), summary: words(s.summary, 300), photo: words(s.photo, 300), simple: !!s.simple, axis: ['x', 'y', 'z'].includes(s.axis) ? s.axis : 'x', parts, ref, ...(fresh ? { fresh } : {}), ...(focus ? { focus } : {}) };
 }
 
 // ---------- is it a good drawing? (2d) the points every shape reaches, and what is wrong ----------
@@ -652,7 +652,7 @@ export async function render(host, rawSpec, opts = {}) {
   let mv = null; const mvHost = spec.mode === '3d' ? el('div', 'ld-mv') : null;
   const machineOn = async () => {
     if (mv) return mv;
-    let m = null; try { m = await import('./isoview.js?v=347'); } catch (e) { return null; }
+    let m = null; try { m = await import('./isoview.js?v=348'); } catch (e) { return null; }
     mv = m.machine(mvHost, spec, { dark: !lightPage() });
     if (mv) {
       const row = el('div', 'ld-mv-acts');
@@ -684,6 +684,8 @@ export async function render(host, rawSpec, opts = {}) {
     // (v335) the names can be hidden, to see the drawing itself, and shown again
     const lb = btn('Hide labels', () => { const off = host.classList.toggle('ld-nolabels'); setLabel(lb, off ? 'Show labels' : 'Hide labels'); lb.setAttribute('aria-pressed', String(off)); }, 'ld-labels-btn', 'open'); lb.setAttribute('aria-pressed', 'false');
     btn('Draw again', async () => { stepsList.replaceChildren(); await view.play(true); done(); if (view.move) view.move(); }, '', 'redo');
+    // (v348) a body system: the whole body, every system, in Explore (the Labs' 3D body)
+    if (spec.explore && opts.onExplore) btn('See the whole body', () => opts.onExplore(spec.explore), 'ld-explore', 'cube');
     if (mvHost) { // (v319) the 3D model, or the same model as an Anatomy machine drawing
       const mb = btn('Machine view', async () => { const on = mvHost.hidden; if (on && !(await machineOn())) return; mvHost.hidden = !on; stage.hidden = on; setLabel(mb, on ? '3D view' : 'Machine view'); mb.setAttribute('aria-pressed', String(on)); }, 'ld-mv-btn', 'cube');
       mb.setAttribute('aria-pressed', 'false');
@@ -3406,7 +3408,7 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
   // (v343) a body system: its organs cut from the Labs' 3D body (explore/organs.js), each part's own organs, in their real places
   let atlas = null;
   if (spec.atlas) {
-    try { const om = await import('./explore/organs.js?v=347'); atlas = await om.organs(new URL('./explore/', import.meta.url).href, spec.parts.filter((p) => p.of).map((p) => ({ id: p.id, of: p.of, color: p.color, skin: p.outline, faint: p.faint }))); } catch (e) { atlas = null; }
+    try { const om = await import('./explore/organs.js?v=348'); atlas = await om.organs(new URL('./explore/', import.meta.url).href, spec.parts.filter((p) => p.of).map((p) => ({ id: p.id, of: p.of, color: p.color, skin: p.outline, faint: p.faint }))); } catch (e) { atlas = null; }
     if (!atlas) { renderer.dispose(); canvas.remove(); return null; }
     (spec.flows || []).forEach((f) => { if (f.via && !f.pts) f.pts = f.via.map((w) => atlas.at(w)).filter(Boolean).map((v) => [v.x, v.y, v.z]); });
     spec.flows = (spec.flows || []).filter((f) => f.pts && f.pts.length >= 2);
