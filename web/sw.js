@@ -1,4 +1,4 @@
-const CACHE_NAME = 'cassie-v346';
+const CACHE_NAME = 'cassie-v347';
 const ASSETS = [
   './',
   'index.html',
@@ -53,7 +53,13 @@ const kept = (req, ...more) => [req, ...more].reduce((p, k) => p.then((c) => c |
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => Promise.all(ASSETS.map((a) => fetch(a, { cache: 'no-cache' }).then(clean).then((r) => r.ok ? cache.put(a, r) : null).catch(() => null))))
+    caches.open(CACHE_NAME).then((cache) => {
+      const keep = (a) => fetch(a, { cache: 'no-cache' }).then(clean).then((r) => r.ok ? cache.put(a, r) : null).catch(() => null);
+      // (v347) and the core (Learn's code and the 3D engine, about 2 MB), listed in offline-files.json, so Learn and 3D
+      // drawings open with no internet from the first visit, before any Save for offline
+      const core = fetch('offline-files.json', { cache: 'no-cache' }).then((r) => r.json()).then((l) => Promise.all((l.core || []).map(keep))).catch(() => null);
+      return Promise.all([...ASSETS.map(keep), core]);
+    })
   );
   self.skipWaiting();
 });
@@ -119,7 +125,7 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(caches.open(CACHE_NAME).then((cache) => cache.match(event.request).then((hit) => hit || fetch(event.request).then((response) => {
       if (response.ok && !response.redirected) cache.put(event.request, response.clone());
       return response;
-    }).catch(() => kept(event.request).then((c) => c || Response.error()))))); // (v344: offline, the copy kept at install, app.js for app.js?v=346)
+    }).catch(() => kept(event.request).then((c) => c || Response.error()))))); // (v344: offline, the copy kept at install, app.js for app.js?v=347)
     return;
   }
 

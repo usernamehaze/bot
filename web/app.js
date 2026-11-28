@@ -981,7 +981,7 @@ function paintOffline() {
   const s = state.offlineSaved;
   go.textContent = s ? 'Save again' : 'Save for offline';
   go.disabled = isOffline();
-  if (size) size.textContent = isOffline() ? 'Connect to save' : s ? '' : 'About 9 MB';
+  if (size) size.textContent = isOffline() ? 'Connect to save' : s ? '' : 'About 20 MB';
   if (!done) return;
   done.hidden = !s; if (!s) return;
   const cards = (state.cards || []).length, decks = new Set((state.cards || []).map((c) => c.deck)).size, chats = (state.chats || []).filter((c) => c.messages && c.messages.length).length;
@@ -989,10 +989,10 @@ function paintOffline() {
   done.innerHTML = '<div class="off-when"><b>Saved on this device</b><span></span></div><ul><li></li><li></li><li></li><li class="off-not"></li></ul>';
   done.querySelector('span').textContent = when;
   const li = done.querySelectorAll('li');
-  li[0].textContent = 'Learn: every lab, game and study tool';
+  li[0].textContent = 'Learn: every lab, game and study tool, and Cassie’s 3D models';
   li[1].textContent = `Flashcards: ${cards} ${cards === 1 ? 'card' : 'cards'}${decks ? ` in ${decks} ${decks === 1 ? 'deck' : 'decks'}` : ''}`;
   li[2].textContent = `Chats and notes: ${chats}`;
-  li[3].textContent = 'Not saved: the 3D human body (too big), and anything that asks Cassie';
+  li[3].textContent = 'Not saved: the whole 3D human body (too big; the body systems are saved), and anything that asks Cassie';
 }
 // (v288) "About 20 seconds left", "About 2 minutes left", "Almost done": for a wait that shows its progress
 function timeLeft(sec) {
@@ -1029,6 +1029,29 @@ async function saveOffline() {
   paintOffline();
 }
 { const go = document.getElementById('off-go'); if (go) go.addEventListener('click', saveOffline); }
+// (v347) once, on a good connection: Cassie offers to save herself for days with no internet (Save for offline, about
+// 20 MB), so a student finds Learn and the 3D models there when the internet is gone; Not now never asks again
+function offerOffline() {
+  if (state.offlineSaved || state.offlineOffered || isOffline() || document.querySelector('.off-offer')) return;
+  if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) return;
+  if (navigator.webdriver && !window.CASSIE_OFFER) return; // (not in the automated tests, unless one asks for it)
+  const c = navigator.connection; if (c && (c.saveData || /(^|-)2g$/.test(c.effectiveType || '') || (c.type && c.type !== 'wifi' && c.type !== 'ethernet' && c.type !== 'unknown'))) return; // (not on mobile data or a slow line)
+  if (!state.profile) return; // (not over the first-run Welcome)
+  state.offlineOffered = Date.now(); save();
+  const card = document.createElement('div'); card.className = 'off-offer'; card.setAttribute('role', 'dialog'); card.setAttribute('aria-label', 'Save Cassie for offline');
+  card.innerHTML = '<p class="off-offer-t"><b>Study with no internet?</b> <span>Save Learn and Cassie’s 3D models on this phone, about 20 MB. Best on Wi-Fi.</span></p><div class="off-offer-row"><button type="button" class="btn off-offer-go">Save</button><button type="button" class="btn secondary off-offer-no">Not now</button></div>';
+  document.body.appendChild(card);
+  const close = () => card.remove();
+  card.querySelector('.off-offer-no').addEventListener('click', close);
+  card.querySelector('.off-offer-go').addEventListener('click', async () => {
+    card.querySelector('.off-offer-row').remove(); card.querySelector('span').textContent = 'Saving… you can keep studying.';
+    await saveOffline().catch(() => {});
+    const st = document.getElementById('off-status'); card.querySelector('span').textContent = (st && st.textContent) || '';
+    card.querySelector('b').textContent = state.offlineSaved ? 'Saved for offline.' : 'Not saved yet.';
+    setTimeout(close, 4000);
+  });
+}
+setTimeout(offerOffline, window.CASSIE_OFFER_MS ?? 25000);
 ['online', 'offline'].forEach((ev) => window.addEventListener(ev, paintOffline));
 setTimeout(() => { paintOffline(); paintOutfits(); }, 0);
 function dressCassie() {
@@ -1786,7 +1809,21 @@ function scrollToBottom() {
 }
 // Offline: a calm note at the top that says what still works (it goes away when the internet is back)
 const offlineNote = document.getElementById('offline-note');
-function showOnline() { if (offlineNote) offlineNote.hidden = navigator.onLine !== false; }
+// (v347) the whole note for a few seconds, then a small "You're offline" pill that keeps out of the way (a tap opens it
+// again); back online, a short note says so, and that any questions that waited are being sent now
+let offMini = 0;
+function showOnline() {
+  if (!offlineNote) return;
+  const off = navigator.onLine === false, was = !offlineNote.hidden && !offlineNote.classList.contains('back');
+  clearTimeout(offMini);
+  if (off) { offlineNote.hidden = false; offlineNote.classList.remove('mini', 'back'); offlineNote.querySelector('b').textContent = 'You’re offline.'; offMini = setTimeout(() => offlineNote.classList.add('mini'), 5000); return; }
+  if (!was) { offlineNote.hidden = true; return; }
+  const waiting = (state.offlineQueue || []).filter((q) => q.chatId === state.currentId).length; // (this chat's: sent now)
+  offlineNote.classList.remove('mini'); offlineNote.classList.add('back');
+  offlineNote.querySelector('b').textContent = waiting ? `You’re back online. Sending ${waiting === 1 ? 'the question that waited' : `${waiting} questions that waited`}.` : 'You’re back online.';
+  offMini = setTimeout(() => { offlineNote.hidden = true; offlineNote.classList.remove('back'); }, 3500);
+}
+if (offlineNote) offlineNote.addEventListener('click', () => { if (offlineNote.classList.contains('mini')) { offlineNote.classList.remove('mini'); clearTimeout(offMini); offMini = setTimeout(() => offlineNote.classList.add('mini'), 6000); } });
 window.addEventListener('online', showOnline);
 window.addEventListener('offline', showOnline);
 showOnline();
@@ -2841,7 +2878,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=346'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=347'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2863,7 +2900,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=346'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=347'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -3139,7 +3176,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=346').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=347').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -7047,7 +7084,8 @@ async function handleSend(text, opts = {}) {
   if (isOffline() && !images.length && !docs.length && text.trim() && !(window.CassieCare && window.CassieCare.check(text))) {
     if (quizMode || /^\s*(quiz me|quiz)\b/i.test(text)) { resetQuizUi(); promptInput.value = ''; autoGrow(); offlineQuiz(); return; }
     // (v310) a drawing from her book needs no internet: it is drawn now
-    if ((liveDrawRequest(text) || liveHowRequest(text)) && !opts.noDraw && await liveDrawBook(text.trim(), LIVE_3D_RE.test(text)).catch(() => null)) { liveShowClose(false); return liveDrawReply(text, LIVE_3D_RE.test(text)); }
+    // (v347) and a thing her kit or book knows, named on its own ("sandwich", "a lion", "photosynthesis"): drawn too
+    if ((liveDrawRequest(text) || liveHowRequest(text) || text.trim().length <= 40) && !opts.noDraw && await liveDrawBook(text.trim(), LIVE_3D_RE.test(text)).catch(() => null)) { liveShowClose(false); return liveDrawReply(text, LIVE_3D_RE.test(text)); }
     queueOffline(text.trim()); return;
   }
   const image = !many && images.length ? images[0] : null;
@@ -7715,11 +7753,11 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=346')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=347')));
 // (v310) Cassie's drawing book: a checked drawing of a common subject (a bicycle, the heart, the solar system...) shows
 // at once, right every time, with no AI and no question used (offline too). Anything else is drawn by the AI.
 let liveBookLib = null;
-const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=346').then((bk) => { liveBookNow = bk; return bk; }).catch(() => null)));
+const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=347').then((bk) => { liveBookNow = bk; return bk; }).catch(() => null)));
 // (v332) a typo never hides a drawing: "shoe me how the heart works", "drw the water cycle" are read as meant (drawbook.js
 // fixTypos, which knows the asking words, the book's subjects and the kits' names); loaded once she is idle
 let liveBookNow = null;
@@ -7798,8 +7836,9 @@ function liveDrawInto(container, body) {
     simpleNote: 'A simpler drawing: Cassie’s best drawing brain wasn’t free for this one (busy, or today’s share is used up).',
     onAsk: (p, spec) => { promptInput.value = `Tell me more about the ${p.label} in ${spec.title}`; promptInput.dispatchEvent(new Event('input')); promptInput.focus(); },
     onChange: (spec) => liveShowAsk(spec.q || spec.title),
-    onNext: animate ? (q) => handleSend(q) : null, // (v307: "Ask next" under a drawing just made)
+    onNext: animate && !isOffline() ? (q) => handleSend(q) : null, // (v347: not offline, where it could only wait) (v307: "Ask next" under a drawing just made)
     // (v314) a machine or a thing: see it both ways, flat and in 3D (something soft or living, or a process, stays flat)
+    flat: async (spec) => { const r = await liveDrawBook(spec.q || spec.title, false); return r ? JSON.parse(r.text) : null; }, // (v347: 3D not loadable offline: the same thing flat)
     canOther: (spec) => spec.mode !== '3d', // (v315: a flat drawing can be built in 3D; a 3D model has no "See it flat")
     onOther: (spec) => liveDrawReply(spec.mode === '3d' ? 'Show it flat' : 'Show it in 3D', spec.mode !== '3d', null, { subject: spec.q || spec.title, other: true }),
   })).then((ok) => { box.classList.remove('ld-loading'); if (!ok) box.innerHTML = '<p class="ld-say">This drawing could not be shown.</p>'; liveDrawListen(box); scrollToBottom(); setTimeout(keepMascotClear, 300); })
@@ -9417,7 +9456,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=346');
+      exploreMod = await import('./explore/cell3d.js?v=347');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -9467,7 +9506,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=346');
+      labsMod = await import('./labs/labs.js?v=347');
       islandRest();
     }
     labsMod.open({
@@ -9499,8 +9538,11 @@ async function openLabs(lab, more = {}) {
       onClose: () => { try { labsBtn && labsBtn.focus(); } catch (e) { /* ignore */ } },
     });
   } catch (e) {
-    islandShow('oops', 'Couldn’t open Learn', 2600);
-    renderMessage('assistant', CassieErrors.say('open_labs_failed'));
+    // (v347) offline: one calm note, not a new error in the chat on every tap
+    const off = isOffline(), say = CassieErrors.say(off ? 'open_labs_offline' : 'open_labs_failed');
+    islandShow('oops', off ? 'Learn needs one visit with internet' : 'Couldn’t open Learn', 3200);
+    const last = [...chatLog.querySelectorAll('.bubble')].pop();
+    if (!last || !last.textContent.includes(say.slice(0, 40))) renderMessage('assistant', say);
   }
 }
 if (labsBtn) labsBtn.addEventListener('click', () => openLabs(undefined, { section: 'learn' }));
@@ -11437,10 +11479,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=346').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=347').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=346', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=347', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.

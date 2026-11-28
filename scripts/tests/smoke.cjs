@@ -14103,7 +14103,7 @@ test('v283: Settings: Save for offline saves Learn’s files for no internet (th
   // pretend the files were saved: what is on the phone
   await page.evaluate(() => { state.offlineSaved = { at: Date.now(), files: 400 }; paintOffline(); });
   const saved = await page.evaluate(() => document.getElementById('off-saved').innerText.replace(/\s+/g, ' '));
-  expect(/Saved on this device/.test(saved) && /Learn: every lab, game and study tool/.test(saved) && /Not saved: the 3D human body/.test(saved), 'what is saved, and what isn’t: ' + saved);
+  expect(/Saved on this device/.test(saved) && /Learn: every lab, game and study tool/.test(saved) && /Not saved: the whole 3D human body/.test(saved), 'what is saved, and what isn’t: ' + saved);
   // the outfit
   const of = await page.evaluate(() => [...document.querySelectorAll('#of-grid .of-opt')].map((o) => o.dataset.of + ':' + o.getAttribute('aria-checked')));
   expect(of.join() === 'auto:true,scarf:false,headphones:false,bow:false,beanie:false,sampaguita:false,cap:false,glasses:false,sunglasses:false,bowtie:false,star:false,crown:false,salakot:false,party:false,pencil:false,none:false', 'sixteen choices (v295: nine more accessories), Auto picked: ' + of.join());
@@ -17789,7 +17789,7 @@ test('the other screens in Liquid Glass: Plus sheet, offline note, board, flashc
   // offline: a calm note says what still works, and goes away when the internet is back
   await ctx.setOffline(true);
   await seen(page, '#offline-note', 'still work', 5000);
-  expect(/Questions to Cassie need the internet/.test(await page.locator('#offline-note').innerText()), 'the offline note says what needs the internet');
+  expect(/New questions wait and go when you’re back online/.test(await page.locator('#offline-note').innerText()), 'the offline note says what needs the internet (v347: new questions wait)');
   await ctx.setOffline(false);
   await page.waitForFunction(() => document.getElementById('offline-note').hidden, null, { timeout: 5000, polling: 100 });
   // flashcards with none yet: why, and one next step
@@ -17832,6 +17832,53 @@ test('works offline after the first visit (app opens)', async (b) => {
   await page.reload({ timeout: 10000 });
   await page.waitForSelector('#prompt-input:visible, #home:not([hidden])', { timeout: 5000 }); // the chat, or Home on a phone
   await ctx.close();
+});
+
+test('v347 offline from the first visit: Learn and 3D drawings open with no internet before any Save for offline; a thing the kit knows, named on its own ("sandwich"), is drawn, not left waiting; where 3D can’t load it is drawn flat with a note, never left "drawing"; no Ask next offline; Learn offline never fills the chat with errors; the offline note shrinks to a pill and says when the internet is back; once, Cassie offers Save for offline', async (b) => {
+  const http = require('http'), WEB = fileAt('web');
+  const TY = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json', '.png': 'image/png', '.webp': 'image/webp', '.glb': 'model/gltf-binary' };
+  const srv = http.createServer((q, s) => { let u = decodeURIComponent(q.url.split('?')[0]);
+    const m = u.match(/^\/(.*)\.html$/); if (m) { s.writeHead(308, { location: m[1] === 'index' ? '/' : '/' + m[1] }); return s.end(); }
+    if (u === '/') u = '/index.html'; else if (/^\/app(\/|$)/.test(u)) u = '/app.html';
+    const f = path.join(WEB, u); if (!fs.existsSync(f) || fs.statSync(f).isDirectory()) { s.writeHead(404); return s.end(); }
+    s.writeHead(200, { 'content-type': TY[path.extname(f)] || 'application/octet-stream' }); fs.createReadStream(f).pipe(s); });
+  await new Promise((r) => srv.listen(0, r)); const base = 'http://localhost:' + srv.address().port;
+  const ctx = await b.newContext({ ...devices['iPhone 13'] });
+  try {
+    await ctx.route(/^(?!http:\/\/localhost)/, (r) => r.abort());
+    await ctx.addInitScript((v) => { window.CASSIE_SERVER = ''; window.CASSIE_BOOK_MS = 0; window.CASSIE_READ_SPEED = 0; window.CASSIE_OFFER = 1; window.CASSIE_OFFER_MS = 1500;
+      if (!localStorage.getItem('cassie.v2')) localStorage.setItem('cassie.v2', JSON.stringify({ profile: { name: 'T', role: 'student', grade: 'Grade 10', age: 16, at: 1 }, seenVersion: v, lite: 'off', groqKey: 'gsk_test', theme: 'dark' })); }, APP_VERSION);
+    const page = await ctx.newPage(); const errors = []; page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(base + '/app/chat'); await page.evaluate(() => navigator.serviceWorker.ready); await page.waitForTimeout(4000);
+    expect(await page.$('.off-offer') !== null, 'once online, Cassie offers Save for offline');
+    await page.click('.off-offer-no'); expect(await page.$('.off-offer') === null, 'Not now closes it');
+    const core = await page.evaluate(async () => { const out = {}; for (const f of ['labs/labs.js', 'labs/physics.js', 'explore/three.module.min.js', 'explore/OrbitControls.js']) out[f] = !!(await caches.match(f, { ignoreSearch: true })); return out; });
+    expect(Object.values(core).every(Boolean), 'the first visit keeps Learn’s code and the 3D engine: ' + JSON.stringify(core));
+    await ctx.setOffline(true); await page.reload(); await page.waitForTimeout(800);
+    expect(!(await page.$eval('#offline-note', (n) => n.hidden)), 'the offline note shows');
+    await page.waitForFunction(() => document.getElementById('offline-note').classList.contains('mini'), null, { timeout: 9000 });
+    // a kit name on its own: drawn now, with no Ask next
+    await page.fill('#prompt-input', 'sandwich'); await page.keyboard.press('Enter');
+    await page.waitForSelector('#chat-log .ld .ld-live.off', { state: 'attached', timeout: 60000 });
+    expect(await page.evaluate(() => !document.querySelector('.q-wait') && !!document.querySelector('#chat-log .ld svg') && !document.querySelector('#chat-log .ld-next')), '"sandwich" offline: drawn from the kit, not waiting, no Ask next');
+    // 3D from the engine kept on the first visit
+    await page.evaluate(() => { chatLog.innerHTML = ''; liveDrawReply('show me a sandwich in 3d', true); });
+    await page.waitForFunction(() => { const s = document.querySelector('#chat-log .ld-stage'); return s && s.dataset.model; }, null, { timeout: 60000 });
+    // where 3D can't load (its engine not on this phone): the same thing flat, with a note, and finished
+    await page.evaluate(async () => { (await liveDrawLoad()).useThree(() => Promise.reject(new Error('not on this phone'))); chatLog.innerHTML = ''; liveDrawReply('show me a sandwich in 3d', true); });
+    await page.waitForSelector('#chat-log .ld .ld-note', { timeout: 60000 });
+    const flat = await page.evaluate(() => ({ svg: !!document.querySelector('#chat-log .ld svg.ld-svg'), note: document.querySelector('#chat-log .ld .ld-note').textContent, state: [...document.querySelectorAll('#chat-log .ld-state')].pop().textContent }));
+    expect(flat.svg && /3D needs one visit with internet/.test(flat.note), 'drawn flat, with a note: ' + JSON.stringify(flat));
+    await page.waitForFunction(() => /Cassie drew it/.test([...document.querySelectorAll('#chat-log .ld-state')].pop().textContent), null, { timeout: 30000 });
+    // Learn opens offline; and a Learn that cannot open never adds a second error to the chat
+    await page.evaluate(() => openLabs()); await page.waitForTimeout(2500);
+    expect(!(await page.evaluate(() => [...document.querySelectorAll('#chat-log .bubble')].some((x) => /open Learn|isn’t saved/.test(x.textContent)))), 'Learn opens offline');
+    // back online: the short note
+    await page.evaluate(() => { const l = document.querySelector('.labs-close, [data-labs-close]'); if (l) l.click(); });
+    await ctx.setOffline(false); await page.waitForTimeout(500);
+    expect(/You’re back online/.test(await page.textContent('#offline-note')), 'back online, it says so');
+    expect(!errors.length, 'page errors: ' + errors.join(' | '));
+  } finally { await ctx.close(); srv.close(); }
 });
 
 test('v346 Save for offline keeps every 3D drawing: the finished models (the heart, the lungs, the airplane...) and the Labs body files the body systems are cut from, so with no internet the heart in 3D and blood round the body in 3D still show; the list holds only the body files those systems need', async (b) => {

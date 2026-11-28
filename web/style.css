@@ -2318,6 +2318,11 @@ input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="
 /* Offline: a glass note across the top */
 .offline-note { position: fixed; z-index: 2147483000; left: 50%; top: calc(var(--safe-top) + 8px); transform: translateX(-50%); width: min(560px, calc(100% - 24px)); box-sizing: border-box; padding: var(--sp-3) var(--sp-4); border-radius: var(--r-lg); background: var(--lg-fill-thick); border: 1px solid var(--lg-line); -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); box-shadow: var(--lg-edge), var(--lg-lift); color: var(--text); font-size: var(--fs-sm); line-height: 1.4; }
 .offline-note[hidden] { display: none; }
+/* (v347) after a few seconds: a small pill at the top; back online: the short note alone */
+.offline-note { transition: width .25s ease, padding .25s ease; }
+.offline-note.mini, .offline-note.back { width: auto; max-width: calc(100% - 24px); padding: 6px 14px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
+.offline-note.mini .off-more, .offline-note.back .off-more { display: none; }
+@media (prefers-reduced-motion: reduce) { .offline-note { transition: none; } }
 /* Cassie types instead of speaking (voice.js): one plain line, said once, never waits for a tap */
 .cv-note { position: fixed; z-index: 2147483001; left: 50%; bottom: calc(var(--safe-bottom) + 16px); transform: translateX(-50%); width: min(480px, calc(100% - 32px)); box-sizing: border-box; margin: 0; padding: var(--sp-3) var(--sp-4); border-radius: var(--r-lg); background: var(--lg-fill-thick); border: 1px solid var(--lg-line); -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); box-shadow: var(--lg-edge), var(--lg-lift); color: var(--text); font-size: var(--fs-sm); line-height: 1.45; pointer-events: none; }
 
@@ -4644,3 +4649,9 @@ html.lite .ld-anim { animation: none !important; }
 .web-pic img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 12px; background: var(--surface-2); }
 .web-pic figcaption { font-size: .78rem; color: var(--muted); }
 .web-pic figcaption a { color: inherit; display: inline-flex; min-height: 32px; align-items: center; }
+
+/* (v347) the one-time offer to save Cassie for offline: a small card over the ask box */
+.off-offer { position: fixed; z-index: 2147482000; left: 50%; bottom: calc(var(--safe-bottom, 0px) + 150px); transform: translateX(-50%); width: min(440px, calc(100% - 32px)); box-sizing: border-box; padding: var(--sp-3) var(--sp-4); border-radius: var(--r-lg); background: var(--lg-fill-thick); border: 1px solid var(--lg-line); -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); box-shadow: var(--lg-edge), var(--lg-lift); color: var(--text); font-size: var(--fs-sm); line-height: 1.4; }
+.off-offer-t { margin: 0 0 var(--sp-2); }
+.off-offer-row { display: flex; gap: var(--sp-2); justify-content: flex-end; }
+.off-offer-row .btn { min-height: 44px; }

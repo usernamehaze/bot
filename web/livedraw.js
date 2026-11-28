@@ -617,6 +617,7 @@ export async function render(host, rawSpec, opts = {}) {
   const acts = el('div', 'ld-acts');
   host.append(head, stage, hint, say);
   if (spec.simple && opts.simpleNote) host.appendChild(el('p', 'ld-note', opts.simpleNote));
+  if (opts.flatNote && spec.mode !== '3d') host.appendChild(el('p', 'ld-note', opts.flatNote)); // (v347)
   if (spec.ref) { // (v305) drawn from a reference picture: where it came from (its licence asks for the credit)
     const r = el('p', 'ld-ref', 'Drawn from a reference: '), a = el('a', null, spec.ref.text);
     a.href = spec.ref.url; a.target = '_blank'; a.rel = 'noopener';
@@ -651,7 +652,7 @@ export async function render(host, rawSpec, opts = {}) {
   let mv = null; const mvHost = spec.mode === '3d' ? el('div', 'ld-mv') : null;
   const machineOn = async () => {
     if (mv) return mv;
-    let m = null; try { m = await import('./isoview.js?v=346'); } catch (e) { return null; }
+    let m = null; try { m = await import('./isoview.js?v=347'); } catch (e) { return null; }
     mv = m.machine(mvHost, spec, { dark: !lightPage() });
     if (mv) {
       const row = el('div', 'ld-mv-acts');
@@ -662,10 +663,15 @@ export async function render(host, rawSpec, opts = {}) {
     return mv;
   };
   if (mvHost) { mvHost.hidden = true; stage.after(mvHost); }
+  if (!view && spec.mode === '3d' && opts.flat) { // (v347) 3D can't load here (offline before its first online visit): the same thing drawn flat
+    let flat = null; try { flat = await opts.flat(spec); } catch (e) { flat = null; }
+    if (flat) { const ok = await render(host, flat, { ...opts, flat: null, flatNote: opts.flatNote || '3D needs one visit with internet first, so here it is drawn flat. It works in 3D after that, with no internet too.' }); if (ok) return ok; }
+  }
   if (!view) { // no 3D on this phone: the machine view instead (or, if even that cannot draw, what it would have shown)
     stage.remove();
     if (mvHost && await machineOn()) mvHost.hidden = false;
     else say.textContent = `${spec.intro ? spec.intro + ' ' : ''}${spec.parts.map((p, i) => `${i + 1}. ${p.label}: ${p.say}`).join(' ')}`;
+    acts.hidden = false; dot.classList.add('off'); state.textContent = 'Cassie drew it'; // (v347: never left at "Cassie is drawing")
   }
   // (v253) a compact row: a small icon and a short word each, muted; the tap area stays 48px
   const ICON = { cube: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/>', flat: '<path d="M4 20l4-1 11-11-3-3L5 16z"/>', pause: '<path d="M8 5v14M16 5v14"/>', play: '<path d="M7 5l12 7-12 7z"/>', next: '<path d="M5 12h12M13 7l5 5-5 5"/>', redo: '<path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4"/>', quiz: '<path d="M9 9a3 3 0 1 1 4 2.8c-.7.3-1 .8-1 1.5V14M12 17.5h.01"/><circle cx="12" cy="12" r="9"/>', photo: '<path d="M4 7.5h3l1.6-2.5h6.8L17 7.5h3a1 1 0 0 1 1 1V18a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8.5a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/>', ask: '<path d="M4 5h16v11H9l-5 4z"/>', change: '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>', open: '<path d="M4 12h16M12 4v16"/>', apart: '<path d="M4 12h5M15 12h5M7 9l-3 3 3 3M17 9l3 3-3 3"/>' };
@@ -3310,7 +3316,7 @@ let three = null;
 let threeFrom = () => Promise.all([import('./explore/three.module.min.js'), import('./explore/OrbitControls.js'), import('./explore/RoundedBoxGeometry.js').catch(() => null), import('./explore/GLTFLoader.js').catch(() => null),
   import('./explore/meshopt_decoder.module.js').catch(() => null), import('./explore/tissue.js').catch(() => null)])
   .then(([T, oc, rb, gl, mo, ti]) => ({ T: Object.assign(Object.create(null), T, rb ? { RoundedBox: rb.RoundedBoxGeometry } : {}, gl ? { GLTFLoader: gl.GLTFLoader } : {}, mo ? { MeshoptDecoder: mo.MeshoptDecoder } : {}, ti ? { tissueMaterial: ti.tissueMaterial } : {}), OrbitControls: oc.OrbitControls }));
-const loadThree = () => (three || (three = threeFrom()));
+const loadThree = () => (three || (three = threeFrom().catch((e) => { three = null; throw e; }))); // (v347: a failed load offline is tried again later)
 // (the Chrome extension keeps its own copy of three.js: it says where) useThree(() => Promise<{ T, OrbitControls }>)
 export function useThree(from) { threeFrom = from; three = null; }
 // A 3D model on a stage of the caller's own, with no frame and no buttons, for a player that sets its own pace
@@ -3400,7 +3406,7 @@ async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom =
   // (v343) a body system: its organs cut from the Labs' 3D body (explore/organs.js), each part's own organs, in their real places
   let atlas = null;
   if (spec.atlas) {
-    try { const om = await import('./explore/organs.js?v=346'); atlas = await om.organs(new URL('./explore/', import.meta.url).href, spec.parts.filter((p) => p.of).map((p) => ({ id: p.id, of: p.of, color: p.color, skin: p.outline, faint: p.faint }))); } catch (e) { atlas = null; }
+    try { const om = await import('./explore/organs.js?v=347'); atlas = await om.organs(new URL('./explore/', import.meta.url).href, spec.parts.filter((p) => p.of).map((p) => ({ id: p.id, of: p.of, color: p.color, skin: p.outline, faint: p.faint }))); } catch (e) { atlas = null; }
     if (!atlas) { renderer.dispose(); canvas.remove(); return null; }
     (spec.flows || []).forEach((f) => { if (f.via && !f.pts) f.pts = f.via.map((w) => atlas.at(w)).filter(Boolean).map((v) => [v.x, v.y, v.z]); });
     spec.flows = (spec.flows || []).filter((f) => f.pts && f.pts.length >= 2);
