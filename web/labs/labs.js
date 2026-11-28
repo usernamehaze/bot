@@ -29,11 +29,11 @@ import { PUZZLES } from './puzzles.js';
 import { space3dLab } from './space3d.js';
 import { atlasLab } from './atlas.js';
 import { TOOLS } from './tools.js';
-import { MUSEUM } from './museum.js?v=349';
+import { MUSEUM } from './museum.js?v=350';
 import { GAMES } from './games.js';
 import { GAMES2 } from './games2.js';
 import { KIDS } from './kids.js';
-import { LEVEL_LESSONS } from './level-lessons.js?v=349';
+import { LEVEL_LESSONS } from './level-lessons.js?v=350';
 
 // two shelves: things to learn with (simulations, 3D models, the atlas) and games (the daily puzzles)
 export const SUBJECTS = [['all', 'All'], ['3d', '3D'], ['biology', 'Biology'], ['chemistry', 'Chemistry'], ['physics', 'Physics'], ['space', 'Space'], ['math', 'Math'], ['geography', 'Geography'], ['history', 'History']];
@@ -344,10 +344,33 @@ function createView() {
     const all = { level: LEVELS, subject: [...SUBJECT_FOLDERS, ['3d', '3D']], tools: [...TOOL_FOLDERS, ['all', 'Study tools']] }[kind] || [];
     return (all.find((x) => x[0] === k) || [])[1] || '';
   }
+  // (v350) index cards: each group has its own small icon that moves (a heart beats, an atom spins, a wave flows...);
+  // still with Reduce Motion or in Lite mode (labs.css). The cards take turns between the theme's two colours.
+  const AI = {
+    heart: '<g class="ai-beat"><path d="M12 21s-7-4.5-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 5.5-7 10-7 10z"/></g>',
+    atom: '<circle cx="12" cy="12" r="1.8" fill="currentColor"/><g class="ai-spin"><ellipse cx="12" cy="12" rx="9" ry="3.5"/><ellipse cx="12" cy="12" rx="9" ry="3.5" transform="rotate(60 12 12)"/><ellipse cx="12" cy="12" rx="9" ry="3.5" transform="rotate(120 12 12)"/></g>',
+    wave: '<g class="ai-slide"><path d="M-12 12c3-6 6-6 9 0s6 6 9 0 6-6 9 0 6 6 9 0 6-6 9 0"/></g>',
+    globe: '<circle cx="12" cy="12" r="9"/><g class="ai-squash"><ellipse cx="12" cy="12" rx="4" ry="9"/></g><path d="M3 12h18"/>',
+    sum: '<path class="ai-draw" d="M18 5H6l6 7-6 7h12"/>',
+    map: '<path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><circle class="ai-pin" cx="12" cy="10" r="1.8" fill="currentColor"/>',
+    book: '<path d="M12 6v14M12 6c-2-2-6-2-8-1v14c2-1 6-1 8 1M12 6c2-2 6-2 8-1v14c-2-1-6-1-8 1"/><path class="ai-flip" d="M12 6c2-2 6-2 8-1v14c-2-1-6-1-8 1z" fill="currentColor" fill-opacity=".22"/>',
+    cube: '<g class="ai-bob"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></g>',
+    cap: '<g class="ai-bob"><path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2 9 2 12 0v-5"/></g>',
+    note: '<path d="M6 3h9l4 4v14H6z"/><path class="ai-write" d="M9 12h7M9 16h5"/>',
+    cards: '<rect x="7" y="4" width="13" height="13" rx="2" stroke-opacity=".5"/><g class="ai-tip"><rect x="4" y="7" width="13" height="13" rx="2"/></g>',
+    pen: '<g class="ai-scribble"><path d="M4 20l4-1 11-11-3-3L5 16z"/></g>',
+    time: '<path d="M3 12h18"/><circle class="ai-d1" cx="6" cy="12" r="1.8" fill="currentColor"/><circle class="ai-d2" cx="12" cy="12" r="1.8" fill="currentColor"/><circle class="ai-d3" cx="18" cy="12" r="1.8" fill="currentColor"/>',
+    folder: '<g class="ai-bob"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></g>',
+    flask: '<path d="M9 3v6L4 19a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3L15 9V3M8 3h8"/><circle class="ai-bubble" cx="11" cy="17" r="1.2" fill="currentColor"/><circle class="ai-bubble ai-b2" cx="14" cy="18" r="1" fill="currentColor"/>',
+  };
+  const AI_FOR = { 'subject:biology': 'heart', 'subject:chemistry': 'atom', 'subject:physics': 'wave', 'subject:space': 'globe', 'subject:math': 'sum', 'subject:geography': 'map', 'subject:history': 'book', 'subject:3d': 'cube',
+    'tools:notes': 'note', 'tools:cards': 'cards', 'tools:writing': 'pen', 'tools:time': 'time', 'tools:all': 'cards', 'visual:all': 'wave', 'subjects:home': 'folder', 'level:board': 'cap', 'lessons:board': 'book', 'levelsims:board': 'flask' };
+  const aiIcon = (key) => { const k = AI_FOR[key] || (key.startsWith('level:') ? 'cap' : key.startsWith('tools:') ? 'cards' : key.startsWith('bexam') || key.startsWith('bsim') ? 'book' : 'flask');
+    return `<i class="lf-ai" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${AI[k]}</svg></i>`; };
   // a row of glass folders: [{ key, name, own }], each with up to 3 of its labs as papers
   function folderGrid(groups, cls = '') {
     const grid = el('div', 'lf-grid' + (cls ? ' ' + cls : '')); grid.setAttribute('role', 'list');
-    grid.innerHTML = groups.map(({ key, name, own, sub }) => {
+    grid.innerHTML = groups.map(({ key, name, own, sub }, gi) => {
       const labs = groupLabs(key), level = key.startsWith('level:') ? ` data-level="${key.slice(6)}"` : '';
       const papers = key === 'subjects:home' ? `<i class="lf-paper"><i class="lf-ico">${iconSvg('<path d="M6 12a2 2 0 0 1 2-2h11l4 5h13a2 2 0 0 1 2 2v17a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2z"/><path d="M24 22v9M20 26l4-4 4 4"/>')}</i><i class="lf-cap">Your files</i></i>`
         : key === 'level:board' ? ['LET', 'CPALE', 'NCLEX-RN'].map((x) => `<i class="lf-paper"><i class="lf-ico">${iconSvg('<path d="M10 10h12a4 4 0 0 1 4 4v24a3 3 0 0 0-3-3H10z"/><path d="M38 10H26a4 4 0 0 0-4 4v24a3 3 0 0 1 3-3h13z"/>')}</i><i class="lf-cap">${x} · Board exam</i></i>`).join('') : labs.slice(0, 3).map((l) => {
@@ -355,7 +378,7 @@ function createView() {
         return `<i class="lf-paper">${previewIds.has(pid) ? `<canvas class="lf-pv" data-pv="${pid}" aria-hidden="true"></canvas>` : `<i class="lf-ico">${iconSvg(l.icon)}</i>`}<i class="lf-cap">${esc(l.name)} · ${esc(NAMES[l.subject] || '')}</i></i>`;
       }).join('');
       const n = sub || `${labs.length} ${labs.length === 1 ? (key.startsWith('tools:') ? 'tool' : 'lab') : (key.startsWith('tools:') ? 'tools' : 'labs')}`;
-      return `<button type="button" class="lf${own ? ' lf-mine' : ''}" data-group="${key}"${level} role="listitem" aria-label="${esc(name)}, ${esc(n)}${own ? ', your level' : ''}">
+      return `<button type="button" class="lf${own ? ' lf-mine' : ''}" data-group="${key}" data-tone="${gi % 4 === 0 || gi % 4 === 3 ? 'a' : 'b'}"${level} role="listitem" aria-label="${esc(name)}, ${esc(n)}${own ? ', your level' : ''}">${aiIcon(key)}
         <i class="lf-tab" aria-hidden="true"></i><i class="lf-back" aria-hidden="true"></i>
         <i class="lf-papers" aria-hidden="true">${papers}</i>
         <span class="lf-front">${own ? '<span class="lf-yours">Your level</span>' : ''}<span class="lf-txt"><b>${esc(name)}</b><small>${esc(n)}</small></span>
@@ -371,7 +394,7 @@ function createView() {
     const head = (t) => { const h = el('h3', desk ? 'lf-h' : 'lp-h'); h.textContent = t; return h; };
     const box = el('div', 'lf-box');
     if (own.length) box.append(head('Your level'), folderGrid(own.map(spec), 'lf-levels lf-yourlevel'));
-    const hint = el('p', 'lf-hint'); hint.textContent = desk ? 'Hover to peek, click to open' : 'Tap a folder to open';
+    const hint = el('p', 'lf-hint'); hint.textContent = desk ? 'Click a card to open' : 'Tap a card to open';
     const more = el('div', 'lx-part'); more.dataset.explore = 'levels'; more.id = desk ? 'lx-levels-d' : 'lx-levels';
     more.append(head('Explore other levels'), folderGrid(others.map(spec), 'lf-levels lf-otherlevels'), hint);
     // (the labs open just under their button: the simulations and study tools come right after this box)

@@ -4678,3 +4678,26 @@ html.lite .ld-anim { animation: none !important; }
 .pod-sheet[hidden] { display: none !important; }
 .pod-when .appx-seg button { white-space: nowrap; padding: 0 14px; }
 .pod-when .appx-seg button.on { background: var(--primary); color: var(--on-primary, #111); }
+
+/* ---------- (v350) colour pairs ----------
+   Light mode with a pair is softer and a little darker: a warm grey page, panes less white, so it never glares */
+:root[data-theme="light"][data-pal="mono"]:not([data-pair=""]):not([data-pair="mono"]) { --bg: #e2ded8; --surface: #eeebe6; --surface-2: #e4e0da; --border: #cfc9c1; --muted: #4b4650; --bubble-assistant: #f1eee9; --glass-rgb: 238, 235, 230; }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"])[data-pal="mono"]:not([data-pair=""]):not([data-pair="mono"]) { --bg: #e2ded8; --surface: #eeebe6; --surface-2: #e4e0da; --border: #cfc9c1; --muted: #4b4650; --bubble-assistant: #f1eee9; --glass-rgb: 238, 235, 230; }
+}
+/* dark mode with a pair: a little deeper */
+:root[data-theme="dark"][data-pal="mono"]:not([data-pair=""]):not([data-pair="mono"]) { --bg: #08080a; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"])[data-pal="mono"]:not([data-pair=""]):not([data-pair="mono"]) { --bg: #08080a; } }
+
+/* Appearance > Theme color: a list of pairs */
+.appx-colors.appx-pairs { display: flex; flex-direction: column; flex-wrap: nowrap; gap: 0; padding: 2px var(--sp-3, 12px); border-radius: 20px; background: var(--lg-fill-card, var(--surface)); border: 1px solid var(--lg-line, var(--border)); max-height: 430px; overflow-y: auto; }
+.appx-pair { display: flex; align-items: center; gap: var(--sp-3, 12px); width: 100%; min-height: 56px; padding: 8px 2px; border: 0; border-bottom: 1px solid var(--lg-line, var(--border)); background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.appx-pair:last-child { border-bottom: 0; }
+.appx-pair .ap-sw { position: relative; flex: none; width: 46px; height: 30px; }
+.appx-pair .ap-sw i { position: absolute; top: 0; width: 30px; height: 30px; border-radius: 50%; box-shadow: 0 0 0 2px var(--surface), inset 0 0 0 1px rgba(var(--ink-rgb), .12); }
+.appx-pair .ap-sw i:first-child { left: 0; z-index: 1; } .appx-pair .ap-sw i:last-child { left: 16px; }
+.appx-pair .ap-t { flex: 1; min-width: 0; } .appx-pair b { display: block; font-size: .95rem; } .appx-pair small { color: var(--muted); font-size: .8rem; }
+.appx-pair .ap-ok { width: 20px; height: 20px; fill: none; stroke: var(--primary-ink, var(--text)); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; visibility: hidden; }
+.appx-pair[aria-pressed="true"] .ap-ok { visibility: visible; }
+.appx-pair[aria-pressed="true"] b { color: var(--primary-ink, var(--text)); }
+.appx-pair:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 12px; }

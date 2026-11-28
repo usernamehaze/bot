@@ -1142,3 +1142,51 @@ html.lite .lf.lf-open .lf-paper:nth-child(n) { opacity: .85; }
 .pod.p1 i { height: 40px !important; }
 .pod.p2 i { height: 30px !important; }
 .pod.p3 i { height: 24px !important; }
+
+/* ---------- (v350) index cards: the folders become frosted glass cards in the theme's two colours (taking turns),
+   each with its own small icon that moves; the name and the count at the foot ---------- */
+.labs .lf { --tone: var(--primary); aspect-ratio: auto; min-height: 128px; border-radius: 20px; overflow: hidden; perspective: none;
+  background: linear-gradient(155deg, color-mix(in srgb, var(--tone) 22%, rgba(var(--lf-glass), .6)), color-mix(in srgb, var(--tone) 9%, rgba(var(--lf-glass), .38)));
+  border: 1px solid color-mix(in srgb, var(--tone) 22%, rgba(var(--hi-rgb, 255, 255, 255), .1));
+  -webkit-backdrop-filter: blur(18px) saturate(1.8); backdrop-filter: blur(18px) saturate(1.8);
+  box-shadow: inset 0 1px 0 rgba(var(--hi-rgb, 255, 255, 255), .16), 0 10px 26px rgba(var(--lf-shadow), .22); }
+.labs .lf[data-tone="b"] { --tone: var(--secondary); }
+.labs .lf:before { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(120% 85% at 0% 0%, rgba(var(--hi-rgb, 255, 255, 255), .1), transparent 52%); }
+.labs .lf .lf-tab, .labs .lf .lf-back, .labs .lf .lf-papers { display: none; }
+.labs .lf .lf-front { position: absolute; inset: auto 0 0 0; min-height: 0; border: 0; border-radius: 0; background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; transform: none !important; }
+.labs .lf .lf-go { width: 44px; height: 44px; background: rgba(var(--lf-glass), .5); }
+.labs .lf .lf-go svg { width: 18px; height: 18px; }
+.labs .lf .lf-yours { position: absolute; top: 14px; right: 14px; }
+.labs .lf-ai { position: absolute; top: 14px; left: 14px; width: 36px; height: 36px; color: color-mix(in srgb, var(--tone) 82%, var(--lf-ink)); }
+.labs .lf-ai svg { width: 100%; height: 100%; overflow: visible; }
+.labs .lf[data-group="subject:physics"] .lf-ai svg, .labs .lf[data-group="visual:all"] .lf-ai svg { overflow: hidden; }
+.labs .lf:hover, .labs .lf:focus-visible { box-shadow: inset 0 1px 0 rgba(var(--hi-rgb, 255, 255, 255), .2), 0 14px 32px rgba(var(--lf-shadow), .28); }
+.labs .lf:active { transform: scale(.98); }
+.labs .lf-yourlevel { grid-template-columns: 1fr; }
+.labs .lf-yourlevel .lf { min-height: 150px; }
+/* the icons' moves */
+.lf-ai .ai-beat { animation: aiBeat 1.2s ease-in-out infinite; transform-origin: 12px 12px; }
+@keyframes aiBeat { 0%, 100% { transform: scale(1); } 15% { transform: scale(1.15); } 30% { transform: scale(1); } 45% { transform: scale(1.1); } }
+.lf-ai .ai-spin { animation: aiSpin 6s linear infinite; transform-origin: 12px 12px; } @keyframes aiSpin { to { transform: rotate(360deg); } }
+.lf-ai .ai-slide { animation: aiSlide 1.6s linear infinite; } @keyframes aiSlide { to { transform: translateX(12px); } }
+.lf-ai .ai-squash { animation: aiSquash 3s ease-in-out infinite; transform-origin: 12px 12px; } @keyframes aiSquash { 0%, 100% { transform: scaleX(1); } 50% { transform: scaleX(.1); } }
+.lf-ai .ai-draw { stroke-dasharray: 40; animation: aiDraw 2.6s ease-in-out infinite; } @keyframes aiDraw { 0% { stroke-dashoffset: 40; } 60%, 100% { stroke-dashoffset: 0; } }
+.lf-ai .ai-pin { animation: aiPin 1.4s ease-in-out infinite; } @keyframes aiPin { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2.5px); } }
+.lf-ai .ai-flip { animation: aiFlip 2.4s ease-in-out infinite; transform-origin: 12px 12px; } @keyframes aiFlip { 0%, 40% { transform: scaleX(1); } 70%, 100% { transform: scaleX(-1); } }
+.lf-ai .ai-bob { animation: aiBob 2s ease-in-out infinite; } @keyframes aiBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+.lf-ai .ai-write { stroke-dasharray: 8; animation: aiDraw 2.2s ease-in-out infinite; }
+.lf-ai .ai-tip { animation: aiTip 2.6s ease-in-out infinite; transform-origin: 10px 20px; } @keyframes aiTip { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-10deg); } }
+.lf-ai .ai-scribble { animation: aiScr 1.4s ease-in-out infinite; transform-origin: 4px 20px; } @keyframes aiScr { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-8deg); } }
+.lf-ai .ai-d1, .lf-ai .ai-d2, .lf-ai .ai-d3 { animation: aiPop 1.8s ease-in-out infinite; } .lf-ai .ai-d2 { animation-delay: .3s; } .lf-ai .ai-d3 { animation-delay: .6s; }
+@keyframes aiPop { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
+.lf-ai .ai-bubble { animation: aiBub 2s ease-in infinite; } .lf-ai .ai-b2 { animation-delay: .9s; } @keyframes aiBub { 0% { transform: translateY(0); opacity: 0; } 20% { opacity: 1; } 100% { transform: translateY(-9px); opacity: 0; } }
+/* still: Reduce Motion, Lite mode */
+@media (prefers-reduced-motion: reduce) { .lf-ai * { animation: none !important; } }
+html.lite .lf-ai * { animation: none !important; }
+.labs .lf .lf-yours { display: none; } /* (the heading above already says Your level) */
+.labs .lf .lf-front { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; padding: 12px 12px 12px 14px; }
+.labs .lf .lf-txt b { color: var(--lf-ink); }
+.labs .lf .lf-front:before, .labs .lf .lf-front:after { display: none !important; } /* (no glass pane of its own inside the card) */
+.labs .lf { min-height: 150px; }
+.labs .lf .lf-txt small { color: var(--muted); }
+.labs .lf .lf-go { color: var(--text); }

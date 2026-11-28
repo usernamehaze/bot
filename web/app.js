@@ -21,7 +21,7 @@ function loadState() {
     podMinutes: 3,          // Podcast length in minutes (3 | 5 | 10)
     lang: 'auto',           // Appearance: the language Cassie replies in — auto | en | fil | tl
     theme: 'auto',          // Appearance: auto (follows the device) | light | dark
-    accent: '',             // Appearance: '' or 'mono' = Monochrome (the main colours), 'cassie' = Blush & Sage, or a colour (hex)
+    accent: '',             // Appearance: '' = Cassie (Black & Burgundy), 'pair:<key>' a colour pair, 'mono' Monochrome, 'cassie' Blush & Sage (before v350), or a colour
     audience: 'student',    // student | pro (from the profile: Working professional is pro)
     messages: [], // { role: 'user' | 'assistant', content: '...' }
   };
@@ -373,7 +373,70 @@ function applyUiStyle() { document.documentElement.setAttribute('data-uistyle', 
 function palette() { return state.profile && state.profile.gender === 'male' ? 'sage' : 'blush'; }
 // what's picked in Appearance (saved in state.accent): nothing or 'mono' = Monochrome, Cassie's main
 // colours; 'cassie' = Blush & Sage; or a colour. Returns 'mono', '' (Blush & Sage) or the colour.
-function accentChoice() { const a = String(state.accent || '').trim().toLowerCase(); return a === 'cassie' ? '' : /^#[0-9a-f]{6}$/.test(a) ? a : 'mono'; }
+// (v350) colour pairs: two colours each (Appearance > Theme color). Cassie's own is Black & Burgundy, and it is what a
+// student has until they pick another. Each pair adapts to the mode: black can't glow on a dark page, so there it is
+// a warm white; white can't show on a light page, so there it is ink; a deep colour stays deep on dark (burgundy is not
+// lightened into pink); and the more colourful of the two leads the buttons.
+const COLOR_PAIRS = [
+  ['cassie', 'Cassie', 'Black & Burgundy', '#141414', '#6b1420'],
+  ['mono', 'Monochrome', 'White & Grey', '#ededf0', '#8e8e96'],
+  ['blushsage', 'Blush & Sage', 'Cassie’s first colours', '#e48ea1', '#7cc4ae'],
+  ['blushblack', 'Blush & Black', 'Soft pink', '#e7a3ae', '#141414'],
+  ['pinkcharcoal', 'Soft Pink & Charcoal', 'Pink and grey', '#e9afc0', '#3e3d42'],
+  ['rosemint', 'Rose & Mint', 'Pink and green', '#e48fa0', '#8fd1b0'],
+  ['roseplum', 'Dusty Rose & Plum', 'Muted and warm', '#c9787a', '#4a2440'],
+  ['pinknavy', 'Pink & Navy', 'Pink and blue', '#e98aa6', '#1f3a63'],
+  ['oceanteal', 'Ocean', 'Blue & Teal', '#3b6fd8', '#2fb5c9'],
+  ['mustardnavy', 'Mustard & Navy', 'Bold', '#e0b13c', '#1f3a63'],
+  ['olivebeige', 'Olive & Beige', 'Earthy', '#5e6b3a', '#d9c9ae'],
+  ['sagecream', 'Sage & Cream', 'Calm', '#93a889', '#f3eedc'],
+  ['burgundybeige', 'Burgundy & Beige', 'Classic', '#6e1a2a', '#d9c9ae'],
+  ['terracottaolive', 'Terracotta & Olive', 'Warm', '#c25a34', '#5e6b3a'],
+  ['tealsand', 'Teal & Sand', 'Fresh', '#15706c', '#d8c4a5'],
+  ['emeraldgold', 'Emerald & Gold', 'Rich', '#1e6e45', '#e0b23a'],
+  ['lilacplum', 'Lilac & Deep Plum', 'Soft purple', '#a49ac9', '#4a1f3c'],
+  ['peachchoc', 'Peach & Chocolate', 'Sweet', '#f2b184', '#5a3421'],
+  ['denimwhite', 'Denim & Off White', 'Easy', '#4c6e9e', '#f2eee6'],
+  ['redblack', 'Red & Black', 'Strong', '#b3242c', '#141414'],
+];
+const pairOf = (k) => COLOR_PAIRS.find((x) => x[0] === k) || null;
+// what's picked (state.accent): '' = Cassie's pair; 'pair:<key>'; 'mono'; 'cassie' (before v350: Blush & Sage); or a colour
+function pairChoice() {
+  const a = String(state.accent || '').trim().toLowerCase();
+  if (!a) return 'cassie';
+  if (a === 'cassie') return 'blushsage';
+  if (a === 'mono') return 'mono';
+  if (a.startsWith('pair:') && pairOf(a.slice(5))) return a.slice(5);
+  return '';
+}
+const hexHsl = (h) => { const [r, g, b] = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255), mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+  if (!d) return [0, 0, l]; const s = d / (1 - Math.abs(2 * l - 1)); const hh = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; return [(hh * 60 + 360) % 360, s, l]; };
+const hslHex = (h, s, l) => { const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = l - c / 2;
+  const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return '#' + [r, g, b].map((v) => Math.round(Math.max(0, Math.min(1, v + m)) * 255).toString(16).padStart(2, '0')).join(''); };
+// a pair's two colours in this mode: [leads the buttons, the second]
+function pairColors(k, dark = isDark()) {
+  const p = pairOf(k); if (!p) return null;
+  const fix = (c) => {
+    const [h, s, l] = hexHsl(c);
+    if (dark) {
+      if (colorLum(c) < 0.02) return '#d9d5cf';
+      if (l < 0.3) return hslHex(h, s * 0.9, Math.min(0.4, Math.max(l, 0.36)));
+      let x = c, L = l; while (contrastOf(x, '#16161a') < 2.6 && L < 0.95) { L += 0.02; x = hslHex(h, s, L); } return x;
+    }
+    if (colorLum(c) > 0.8) return '#1b1a1f';
+    let x = c, L = l; while (contrastOf(x, '#e2ded8') < 3 && L > 0.05) { L -= 0.02; x = hslHex(h, s, L); } return x;
+  };
+  const a = fix(p[3]), b = fix(p[4]);
+  const chroma = (c) => { const [, s, l] = hexHsl(c); return l < 0.08 || l > 0.92 ? -1 : s * (1 - Math.abs(2 * l - 1)); };
+  return chroma(b) > chroma(a) ? [b, a] : [a, b];
+}
+function accentChoice() {
+  const k = pairChoice();
+  if (k === 'mono') return 'mono';
+  if (k) return pairColors(k)[0];
+  const a = String(state.accent || '').trim().toLowerCase(); return /^#[0-9a-f]{6}$/.test(a) ? a : 'mono';
+}
 const accentHex = () => (accentChoice().startsWith('#') ? accentChoice() : '');
 function colorLum(hex) { return [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)).reduce((t, v, i) => t + v * [0.2126, 0.7152, 0.0722][i], 0); }
 function contrastOf(a, b) { const x = colorLum(a), y = colorLum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
@@ -424,6 +487,11 @@ function applyAccent() {
     const set = { '--primary': pick, '--primary-dark': mixHex(pick, '#000000', 0.18), '--on-primary': ink, '--primary-ink': words, '--accent': pick, '--accent-ink': ink, '--lab-accent': pick, '--lab-on-accent': ink };
     Object.entries(set).forEach(([k, v]) => root.style.setProperty(k, v));
   }
+  // (v350) a pair: its second colour too (the glass glows, the second wave, the cards that take turns with the first)
+  root.style.removeProperty('--secondary'); root.style.removeProperty('--on-secondary');
+  const pk = pairChoice(), two = pk && pk !== 'mono' ? pairColors(pk) : null;
+  root.dataset.pair = pk || '';
+  if (two) { root.style.setProperty('--secondary', two[1]); root.style.setProperty('--on-secondary', contrastOf(two[1], '#ffffff') >= contrastOf(two[1], '#111111') ? '#ffffff' : '#111111'); }
   updateBackdrop();
 }
 // (light and dark mode differ in the shade that reads as words)
@@ -449,8 +517,9 @@ function backdropColors() {
     return dark ? { color1: '#120f0e', color2: sage ? '#24413a' : '#4a2530', color3: sage ? '#4a2530' : '#24413a', brightness: 0.95 }
       : { color1: sage ? '#e3efe9' : '#f8e3e8', color2: '#fbf6ee', color3: sage ? '#f6e5e9' : '#e2efe9', brightness: 1.2 };
   }
-  return dark ? { color1: '#0c0c0f', color2: mixHex(c, '#000000', 0.55), color3: mixHex(c, '#000000', 0.78), brightness: 0.95 }
-    : { color1: mixHex(c, '#ffffff', 0.6), color2: mixHex(c, '#ffffff', 0.25), color3: '#fbf8f3', brightness: 1.15 };
+  const pk = pairChoice(), two = pk && pk !== 'mono' ? pairColors(pk) : null, c2 = two ? two[1] : c; // (v350: a pair glows in both its colours)
+  return dark ? { color1: '#08080a', color2: mixHex(c, '#000000', 0.55), color3: mixHex(c2, '#000000', 0.7), brightness: 0.9 }
+    : { color1: mixHex(c, '#e2ded8', 0.78), color2: mixHex(c2, '#e2ded8', 0.72), color3: '#e2ded8', brightness: 1.0 };
 }
 let backdrop = null;
 function startBackdrop() {
@@ -2878,7 +2947,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=349'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=350'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2900,7 +2969,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=349'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=350'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -3176,7 +3245,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=349').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=350').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -7796,11 +7865,11 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=349')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=350')));
 // (v310) Cassie's drawing book: a checked drawing of a common subject (a bicycle, the heart, the solar system...) shows
 // at once, right every time, with no AI and no question used (offline too). Anything else is drawn by the AI.
 let liveBookLib = null;
-const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=349').then((bk) => { liveBookNow = bk; return bk; }).catch(() => null)));
+const liveBookLoad = () => (liveBookLib || (liveBookLib = import('./drawbook.js?v=350').then((bk) => { liveBookNow = bk; return bk; }).catch(() => null)));
 // (v332) a typo never hides a drawing: "shoe me how the heart works", "drw the water cycle" are read as meant (drawbook.js
 // fixTypos, which knows the asking words, the book's subjects and the kits' names); loaded once she is idle
 let liveBookNow = null;
@@ -9500,7 +9569,7 @@ async function openExplore(cell, ret, system = null) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=349');
+      exploreMod = await import('./explore/cell3d.js?v=350');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -9560,7 +9629,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=349');
+      labsMod = await import('./labs/labs.js?v=350');
       islandRest();
     }
     labsMod.open({
@@ -9769,10 +9838,12 @@ let appxEntry = null; // the committed values when the Appearance page opened
 const appxSnap = () => ({ theme: state.theme, accent: state.accent, textSize: state.textSize, uiStyle: state.uiStyle });
 // the named palette shown as swatches: Cassie's own, Monochrome, then a few colours
 const APPX_COLORS = [['cassie', 'Blush and Sage', 'var(--sw-blush)'], ['mono', 'Monochrome', 'var(--sw-ink)'], ['#7e22ce', 'Plum', '#7e22ce'], ['#1d4ed8', 'Ocean', '#1d4ed8'], ['#0f766e', 'Teal', '#0f766e'], ['#15803d', 'Forest', '#15803d'], ['#c2410c', 'Ember', '#c2410c'], ['#be185d', 'Rose', '#be185d']];
+// (v350) a list of colour pairs, each with its two colours as overlapping circles, its name and a check on the one picked
 function appxBuildColors() {
   const wrap = document.getElementById('appx-colors');
   if (!wrap || wrap.children.length) return;
-  wrap.innerHTML = APPX_COLORS.map(([v, label, sw]) => `<button type="button" class="appx-sw" data-accent="${v}" style="--sw:${sw}" aria-label="${label}" aria-pressed="false"></button>`).join('');
+  wrap.classList.add('appx-pairs');
+  wrap.innerHTML = COLOR_PAIRS.map(([k, name, sub, a, b]) => `<button type="button" class="appx-pair" data-accent="${k === 'mono' ? 'mono' : 'pair:' + k}" aria-pressed="false"><span class="ap-sw" aria-hidden="true"><i style="background:${a}"></i><i style="background:${b}"></i></span><span class="ap-t"><b>${name}</b><small>${sub}</small></span><svg class="ap-ok" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></button>`).join('');
 }
 function appxApplyLive() { // show the previewed choices without saving them
   applyTheme(); // (also applies the accent)
@@ -9781,8 +9852,8 @@ function appxApplyLive() { // show the previewed choices without saving them
   if (islandBot) islandBot.setAccent(accentHex() || '#d8343c');
 }
 function appxSyncControls() {
-  const pick = accentChoice(), curAcc = pick === 'mono' ? 'mono' : pick || 'cassie';
-  document.querySelectorAll('#appx-colors .appx-sw').forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.accent || '').toLowerCase() === curAcc)));
+  const pk = pairChoice(), curAcc = pk === 'mono' ? 'mono' : pk ? 'pair:' + pk : accentChoice();
+  document.querySelectorAll('#appx-colors .appx-pair, #appx-colors .appx-sw').forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.accent || '').toLowerCase() === curAcc)));
   document.querySelectorAll('#appx-textsize button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.size === (state.textSize || 'normal'))));
   document.querySelectorAll('#appx-uistyle .appx-style').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.style === uiStyleChoice())));
   const curTheme = (state.theme === 'light' || state.theme === 'dark') ? state.theme : 'auto';
@@ -9834,7 +9905,7 @@ function appxLeave() {
   askSure({ title: n === 1 ? 'Apply your change?' : `Apply your ${n} changes?`, text: 'You changed how Cassie looks. Apply keeps it everywhere; Discard puts it back.', yes: 'Apply', no: 'Discard', danger: false })
     .then((ok) => { appxAsking = false; if (ok) appxReview(); else appxRevert(); appxEntry = null; });
 }
-document.getElementById('appx-colors')?.addEventListener('click', (e) => { const b = e.target.closest('.appx-sw'); if (b) appxPreview('accent', b.dataset.accent); });
+document.getElementById('appx-colors')?.addEventListener('click', (e) => { const b = e.target.closest('.appx-pair, .appx-sw'); if (b) appxPreview('accent', b.dataset.accent); });
 document.getElementById('appx-textsize')?.addEventListener('click', (e) => { const b = e.target.closest('button[data-size]'); if (b) appxPreview('textSize', b.dataset.size); });
 document.getElementById('appx-uistyle')?.addEventListener('click', (e) => { const b = e.target.closest('.appx-style'); if (b) appxPreview('uiStyle', b.dataset.style); });
 document.getElementById('appx-theme')?.addEventListener('click', (e) => { const b = e.target.closest('button[data-theme]'); if (b) appxPreview('theme', b.dataset.theme); });
@@ -11541,10 +11612,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=349').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=350').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=349', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=350', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.

@@ -2648,15 +2648,15 @@ test('computer Settings is a page: its parts listed on the left (You, Account, S
       await page.click(`.set-nav [data-go="${go}"]`);
       expect(await page.locator('#set-title').innerText() === title && await page.locator(inside).isVisible() && await page.locator(`.set-nav [data-go="${go}"]`).getAttribute('aria-current') === 'page', `${go} opens on the right`);
     }
-    const names = await page.evaluate(() => [...document.querySelectorAll('#appx-colors .appx-sw')].map((x) => x.getAttribute('aria-label')));
-    expect(['Blush and Sage', 'Monochrome', 'Ocean', 'Forest', 'Ember'].every((n) => names.includes(n)), 'theme colours by name: ' + names.join());
-    await page.click('#appx-colors .appx-sw[data-accent="#1d4ed8"]');
-    expect(await page.evaluate(() => accentChoice()) === '#1d4ed8' && await page.locator('#appx-colors .appx-sw[data-accent="#1d4ed8"]').getAttribute('aria-pressed') === 'true', 'Ocean previews blue');
+    const names = await page.evaluate(() => [...document.querySelectorAll('#appx-colors .appx-pair b')].map((x) => x.textContent));
+    expect(['Cassie', 'Monochrome', 'Blush & Sage', 'Ocean', 'Rose & Mint'].every((n) => names.includes(n)), 'theme colour pairs by name (v350): ' + names.join());
+    await page.click('#appx-colors .appx-pair[data-accent="pair:oceanteal"]');
+    expect(await page.evaluate(() => state.accent) === 'pair:oceanteal' && await page.locator('#appx-colors .appx-pair[data-accent="pair:oceanteal"]').getAttribute('aria-pressed') === 'true', 'Ocean previews blue');
     await page.click('#appx-review');
     if (process.env.SHOTS) { await page.waitForTimeout(500); await page.screenshot({ path: `${process.env.SHOTS}/desk-settings-${viewport.width}-${scheme}.png` }); }
     const { bad } = await require('./ui-checks.cjs').contrastIssues(page, '#settings-panel');
     expect(!bad.length, `${scheme}: every word readable: ` + bad.join(' | '));
-    await page.click('#appx-colors .appx-sw[data-accent="cassie"]'); await page.click('#appx-review');
+    await page.click('#appx-colors .appx-pair[data-accent="pair:cassie"]'); await page.click('#appx-review');
     await page.click('#settings-x');
     expect(!errors.length, 'page errors: ' + errors.join('; '));
     await ctx.close();
@@ -4251,8 +4251,8 @@ test('v255: "Make it yours" personalization. Appearance previews a color, text s
   const { ctx, page, errors } = await open(b, { server: false, device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off', fakeGroq: () => ({ text: 'ok' }), state: { groqKey: 'gsk_test', tab: 'chat' } });
   // 1. Appearance previews live but does not persist until Review
   await page.evaluate(() => openSettings('appearance'));
-  await page.waitForSelector('#appx-colors .appx-sw', { timeout: 8000 });
-  await page.click('#appx-colors .appx-sw[data-accent="#7e22ce"]');
+  await page.waitForSelector('#appx-colors .appx-pair', { timeout: 8000 });
+  await page.click('#appx-colors .appx-pair[data-accent="pair:lilacplum"]');
   await page.click('#appx-textsize button[data-size="larger"]');
   await page.click('#appx-uistyle .appx-style[data-style="crisp"]');
   await page.waitForTimeout(150);
@@ -4260,7 +4260,7 @@ test('v255: "Make it yours" personalization. Appearance previews a color, text s
   const grow = await page.evaluate(() => ({ root: getComputedStyle(document.documentElement).fontSize, title: parseFloat(getComputedStyle(document.getElementById('set-title')).fontSize) }));
   expect(grow.root === '20px' && grow.title > 19, 'Text size: Extra large grows the whole app at once, Settings included: ' + JSON.stringify(grow));
   const mid = await page.evaluate(() => ({ bar: !!document.getElementById('appx-bar').offsetParent, n: document.getElementById('appx-bar-n').textContent, accent: state.accent, textSize: state.textSize, uiStyle: state.uiStyle, uiAttr: document.documentElement.getAttribute('data-uistyle'), savedUi: (JSON.parse(localStorage.getItem('cassie.v2') || '{}')).uiStyle }));
-  expect(mid.bar && mid.n === '3 changes to apply' && mid.accent === '#7e22ce' && mid.textSize === 'larger' && mid.uiStyle === 'crisp' && mid.uiAttr === 'crisp' && mid.savedUi !== 'crisp', '1. three choices preview live (state + data-uistyle) and the bar says "3 changes", but nothing is saved yet: ' + JSON.stringify(mid));
+  expect(mid.bar && mid.n === '3 changes to apply' && mid.accent === 'pair:lilacplum' && mid.textSize === 'larger' && mid.uiStyle === 'crisp' && mid.uiAttr === 'crisp' && mid.savedUi !== 'crisp', '1. three choices preview live (state + data-uistyle) and the bar says "3 changes", but nothing is saved yet: ' + JSON.stringify(mid));
   // Discard puts everything back
   await page.click('#appx-discard'); await page.waitForTimeout(150);
   const dis = await page.evaluate(() => ({ bar: !!document.getElementById('appx-bar').offsetParent, accent: state.accent, uiStyle: state.uiStyle, uiAttr: document.documentElement.getAttribute('data-uistyle') }));
@@ -13577,11 +13577,10 @@ test('Learn (was Labs) follows the student’s level: For you is a glass folder 
       await page.waitForSelector('.labs-foryou .lf'); await exploreLearn(page);
       const df = await forYou(page, '.labs-foryou');
       expect(df.length === 6 && df.filter((x) => x.k !== 'board').every((x) => x.papers === 3 && x.go[0] >= 44), 'a computer’s For you has the 6 folders (v241: Board and Licensure exams too): ' + JSON.stringify(df));
-      const front = () => page.$eval('.labs-foryou .lf[data-level="elem"] .lf-front', (x) => getComputedStyle(x).transform);
-      expect(['none', 'matrix(1, 0, 0, 1, 0, 0)'].includes(await front()), 'at rest the pocket stands straight');
-      await page.hover('.labs-foryou .lf[data-level="elem"]'); await page.waitForTimeout(400);
-      const leaned = await front();
-      expect(!['none', 'matrix(1, 0, 0, 1, 0, 0)'].includes(leaned), 'hover leans the pocket back: ' + leaned);
+      // (v350) the folders are index cards: at rest a card, and the pointer over it deepens its shadow
+      const shade = () => page.$eval('.labs-foryou .lf[data-level="elem"]', (x) => getComputedStyle(x).boxShadow);
+      const rest = await shade(); await page.hover('.labs-foryou .lf[data-level="elem"]'); await page.waitForTimeout(400);
+      expect((await shade()) !== rest, 'hover lifts the card');
       if (SHOTS) await page.screenshot({ path: SHOTS + '/learn-desk-hover.png' });
       await page.click('.labs-foryou .lf[data-level="elem"]');
       await page.waitForSelector('.labs-foryou .lf[data-group="levelsims:elem"]', { timeout: 4000 }); await page.click('.labs-foryou .lf[data-group="levelsims:elem"]');
@@ -13603,48 +13602,21 @@ test('Learn (was Labs) follows the student’s level: For you is a glass folder 
   }
 });
 
-test('Learn’s level folders move like the recording on a computer (1280x800): the pointer over a folder tips its pocket forward at least 15deg and lifts the papers at least 20% of the folder, whatever the browser says about hover; a click fans them out before the level opens; Reduce Motion keeps a gentle lift with no turn', async (b) => {
-  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, lite: 'off', state: { tab: 'home' } });
-  await page.click('#labs-btn'); await page.waitForSelector('.labs-foryou .lf', { timeout: 15000 }); await exploreLearn(page, 'levels'); // (v269: Elementary is under Explore other levels)
-  await page.waitForTimeout(400);
-  const F = '.labs-foryou .lf[data-level="elem"]';
-  const look = () => page.$eval(F, (f) => {
-    const fr = f.getBoundingClientRect(), mid = f.querySelectorAll('.lf-paper')[1].getBoundingClientRect(), m = getComputedStyle(f.querySelector('.lf-front')).transform;
-    const v = (m.match(/matrix3d\(([^)]+)\)/) || [])[1]; const n = v ? v.split(',').map(Number) : null;
-    return { h: fr.height, top: mid.top, turn: n ? Math.abs(Math.atan2(n[6], n[5]) * 180 / Math.PI) : 0, open: f.classList.contains('lf-open'), fan: getComputedStyle(f.querySelector('.lf-paper')).transform };
-  });
-  // (measured once the folder has stopped moving: a slow machine is still finishing the page's own entrance)
-  const still = async () => { let a = await look(); for (let k = 0; k < 12; k++) { await page.waitForTimeout(150); const b2 = await look(); if (Math.abs(b2.top - a.top) < 0.5 && Math.abs(b2.turn - a.turn) < 0.5) return b2; a = b2; } return a; };
-  const rest = await still();
-  await page.hover(F); await page.waitForTimeout(450);
-  const lean = await still();
-  const rise = (rest.top - lean.top) / rest.h;
-  expect(rise >= 0.2 && lean.turn >= 15, 'the pointer over a folder: papers rise ≥20% and the pocket tips ≥15deg: ' + JSON.stringify({ rise, turn: lean.turn }));
-  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/folders-lean.png', clip: { x: 0, y: 150, width: 1280, height: 330 } });
-  // (the fan takes 380ms, then the level opens: the page itself notes the folder 250ms into the fan, so a slow
-  // machine's round trips can't land after the level has opened)
-  await page.evaluate((sel) => {
-    const f = document.querySelector(sel); window.__fan = null;
-    new MutationObserver((ms, ob) => { if (!f.classList.contains('lf-open')) return; ob.disconnect(); setTimeout(() => {
-      const fr = f.getBoundingClientRect(), mid = f.querySelectorAll('.lf-paper')[1].getBoundingClientRect();
-      window.__fan = { h: fr.height, top: mid.top, open: f.classList.contains('lf-open'), fan: getComputedStyle(f.querySelector('.lf-paper')).transform };
-    }, 250); }).observe(f, { attributes: true, attributeFilter: ['class'] });
-  }, F);
-  await page.click(F);
-  await page.waitForFunction(() => window.__fan, null, { timeout: 3000 });
-  const fanned = await page.evaluate(() => window.__fan);
-  expect(fanned.open && (rest.top - fanned.top) / rest.h > rise, 'a click: the papers fly up and fan out first: ' + JSON.stringify(fanned));
-  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/folders-open.png', clip: { x: 0, y: 100, width: 1280, height: 380 } });
-  await page.waitForSelector('.labs-foryou .lf-back-btn', { timeout: 3000 });
-  await page.click('.labs-foryou .lf-back-btn'); await page.waitForSelector(F);
-  // Reduce Motion: a gentle lift, no turn
-  await page.emulateMedia({ reducedMotion: 'reduce' }); await page.mouse.move(5, 790); await page.waitForTimeout(300);
-  const rest2 = await look();
-  await page.hover(F); await page.waitForTimeout(300);
-  const soft = await look();
-  expect((rest2.top - soft.top) / rest2.h >= 0.05 && soft.turn < 1, 'Reduce Motion: still a gentle lift, no turn: ' + JSON.stringify({ rise: (rest2.top - soft.top) / rest2.h, turn: soft.turn }));
-  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
-  await ctx.close();
+test('v350 Learn’s levels are index cards (1280x800): frosted cards in the theme’s two colours taking turns, each with its own small icon that moves (an atom spins, a heart beats...); with Reduce Motion the icons are still; a tap still opens the level', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, lite: 'off', state: { groqKey: 'gsk_test', theme: 'dark', profile: { name: 'T', role: 'student', grade: 'College', age: 19, at: 1 } } });
+  try {
+    await page.evaluate(() => openLabs()); await page.waitForTimeout(1500);
+    const cards = await page.evaluate(() => [...document.querySelectorAll('.lf')].filter((f) => f.getClientRects().length).map((f) => ({ k: f.dataset.group, tone: f.dataset.tone, icon: !!f.querySelector('.lf-ai svg'), moving: [...f.querySelectorAll('.lf-ai *')].some((x) => getComputedStyle(x).animationName !== 'none'), papers: getComputedStyle(f.querySelector('.lf-papers')).display })));
+    expect(cards.length && cards.every((c) => c.icon && c.papers === 'none' && (c.tone === 'a' || c.tone === 'b')), 'every card: an icon, no folder papers, one of the two tones: ' + JSON.stringify(cards.slice(0, 4)));
+    expect(cards.some((c) => c.moving), 'the icons move: ' + JSON.stringify(cards.map((c) => c.moving)));
+    const tones = await page.evaluate(() => { const f = document.querySelector('.lf[data-tone="a"]'), g = document.querySelector('.lf[data-tone="b"]'); return f && g ? [getComputedStyle(f).backgroundImage, getComputedStyle(g).backgroundImage] : []; });
+    expect(tones.length === 2 && tones[0] !== tones[1], 'the two tones look different');
+    await page.emulateMedia({ reducedMotion: 'reduce' }); await page.waitForTimeout(200);
+    expect(!(await page.evaluate(() => [...document.querySelectorAll('.lf-ai *')].some((x) => getComputedStyle(x).animationName !== 'none'))), 'Reduce Motion: the icons are still');
+    await page.evaluate(() => { const f = [...document.querySelectorAll('.lf[data-group^="level:"]')].find((x) => x.getClientRects().length); f.click(); }); await page.waitForTimeout(1200);
+    expect(await page.evaluate(() => !!document.querySelector('.labs [data-group^="lessons:"], .labs .lf-inlevel, .labs .lp-back, .labs .lf-open, .labs .lx-crumb')), 'a tap still opens the level');
+    expect(!errors.length, 'page errors: ' + errors.join(' | '));
+  } finally { await ctx.close(); }
 });
 
 test('Learn’s levels are where the topic is really taught (docs/learn-levels.md): no lab in more than 2 levels, every level has at least 4, the table lists every lab with its sources, and the computer’s Today’s Lab comes from the student’s level (Kindergarten, Grade 5, Grade 11, College)', async (b) => {
@@ -17832,6 +17804,27 @@ test('works offline after the first visit (app opens)', async (b) => {
   await page.reload({ timeout: 10000 });
   await page.waitForSelector('#prompt-input:visible, #home:not([hidden])', { timeout: 5000 }); // the chat, or Home on a phone
   await ctx.close();
+});
+
+test('v350 colour pairs: Cassie is Black & Burgundy until another pair is picked; burgundy stays burgundy on dark (not lightened into pink), black becomes a warm white on dark and white becomes ink on light, the more colourful colour leads the buttons, and the second colour is set too', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'iPhone 13', server: false, lite: 'off', state: { theme: 'dark' } });
+  try {
+    const r = await page.evaluate(() => {
+      const css = (k) => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
+      const out = { pick: pairChoice(), dark: [css('--primary'), css('--secondary')] };
+      const [h, , l] = hexHsl(css('--primary')); out.hue = Math.round(h); out.l = +l.toFixed(2);
+      state.theme = 'light'; applyTheme(); out.light = [css('--primary'), css('--secondary')];
+      state.accent = 'pair:sagecream'; applyTheme(); out.sage = [css('--primary'), css('--secondary')];
+      state.theme = 'dark'; applyTheme(); out.sageDark = [css('--primary'), css('--secondary')];
+      state.accent = 'mono'; applyTheme(); out.mono = document.documentElement.dataset.pair;
+      return out;
+    });
+    expect(r.pick === 'cassie' && (r.hue >= 340 || r.hue <= 10) && r.l <= 0.42, 'Cassie is Black & Burgundy and stays a deep burgundy on dark: ' + JSON.stringify(r));
+    expect(r.dark[1] === '#d9d5cf' && r.light[1] === '#141414', 'black: a warm white on dark, black on light: ' + JSON.stringify(r));
+    expect(r.sage[1] === '#1b1a1f' && /^#[0-9a-f]{6}$/.test(r.sage[0]) && r.sage[0] !== '#1b1a1f', 'Sage & Cream on light: sage leads the buttons, cream becomes ink: ' + JSON.stringify(r));
+    expect(r.mono === 'mono', 'Monochrome is still there');
+    expect(!errors.length, 'page errors: ' + errors.join(' | '));
+  } finally { await ctx.close(); }
 });
 
 test('v349 fixes: with no level set Explore other levels still closes; the profile form has Not now (and Escape) without filling it in; an empty score board is one line and a button; a podcast closed while playing keeps going in a small floating player (or stops, the student’s choice), opening Podcast again returns to it, and the page closing always stops it', async (b) => {
