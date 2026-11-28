@@ -1,4 +1,4 @@
-const CACHE_NAME = 'cassie-v344';
+const CACHE_NAME = 'cassie-v345';
 const ASSETS = [
   './',
   'index.html',
@@ -119,7 +119,7 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(caches.open(CACHE_NAME).then((cache) => cache.match(event.request).then((hit) => hit || fetch(event.request).then((response) => {
       if (response.ok && !response.redirected) cache.put(event.request, response.clone());
       return response;
-    }).catch(() => kept(event.request).then((c) => c || Response.error()))))); // (v344: offline, the copy kept at install, app.js for app.js?v=344)
+    }).catch(() => kept(event.request).then((c) => c || Response.error()))))); // (v344: offline, the copy kept at install, app.js for app.js?v=345)
     return;
   }
 

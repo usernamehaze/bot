@@ -17834,6 +17834,13 @@ test('works offline after the first visit (app opens)', async (b) => {
   await ctx.close();
 });
 
+test('v345 added to a phone’s home screen, Cassie opens as an app (no address bar) from every page it can be added from: the app settings say standalone, and the home, start and app pages carry the iPhone web-app tags too, in case the app settings cannot be read', async () => {
+  const man = JSON.parse(fs.readFileSync(fileAt('web/manifest.json'), 'utf8'));
+  expect(man.display === 'standalone' && man.start_url && man.scope === './', 'the app settings: standalone, with a start page');
+  for (const f of ['index.html', 'start.html', 'app.html']) { const h = fs.readFileSync(fileAt('web/' + f), 'utf8');
+    expect(/<link rel="manifest" href="manifest\.json">/.test(h) && /<meta name="apple-mobile-web-app-capable" content="yes">/.test(h) && /<meta name="apple-mobile-web-app-title" content="Cassie">/.test(h), f + ': the app settings and the iPhone web-app tags'); }
+});
+
 test('v344 opens with no internet or on slow data where the host redirects its pages (app.html to /app): the offline copy of every page is a plain page (Safari refuses a redirected one from the service worker), the app, its own addresses and the home page open offline, and on very slow data the kept app opens within seconds', async (b) => {
   const http = require('http'), WEB = fileAt('web'); let slow = 0;
   const TY = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json', '.png': 'image/png' };
