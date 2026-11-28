@@ -17834,6 +17834,37 @@ test('works offline after the first visit (app opens)', async (b) => {
   await ctx.close();
 });
 
+test('v344 opens with no internet or on slow data where the host redirects its pages (app.html to /app): the offline copy of every page is a plain page (Safari refuses a redirected one from the service worker), the app, its own addresses and the home page open offline, and on very slow data the kept app opens within seconds', async (b) => {
+  const http = require('http'), WEB = fileAt('web'); let slow = 0;
+  const TY = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json', '.png': 'image/png' };
+  const srv = http.createServer((q, s) => { let u = decodeURIComponent(q.url.split('?')[0]);
+    const go = () => { const m = u.match(/^\/(.*)\.html$/); if (m) { s.writeHead(308, { location: m[1] === 'index' ? '/' : '/' + m[1] }); return s.end(); }
+      if (u === '/') u = '/index.html'; else if (/^\/app(\/|$)/.test(u)) u = '/app.html'; else if (/^\/[\w-]+$/.test(u) && fs.existsSync(WEB + u + '.html')) u += '.html';
+      const f = path.join(WEB, u); if (!fs.existsSync(f) || fs.statSync(f).isDirectory()) { s.writeHead(404); return s.end(); }
+      s.writeHead(200, { 'content-type': TY[path.extname(f)] || 'application/octet-stream' }); fs.createReadStream(f).pipe(s); };
+    slow ? setTimeout(go, slow) : go(); });
+  await new Promise((r) => srv.listen(0, r)); const base = 'http://localhost:' + srv.address().port;
+  const ctx = await b.newContext({ ...devices['iPhone 13'] });
+  try {
+    await ctx.route(/^(?!http:\/\/localhost)/, (r) => r.abort());
+    await ctx.addInitScript(() => { window.CASSIE_SERVER = ''; });
+    const page = await ctx.newPage();
+    await page.goto(base + '/start.html'); await page.waitForTimeout(1500); await page.goto(base + '/app');
+    expect(await page.evaluate(() => Promise.race([navigator.serviceWorker.ready.then(() => true), new Promise((r) => setTimeout(() => r(false), 10000))])), 'the service worker is ready');
+    await page.waitForTimeout(2500); await page.goto(base + '/app'); await page.waitForTimeout(3000);
+    const redirected = await page.evaluate(async () => { const out = []; for (const n of await caches.keys()) { const c = await caches.open(n); for (const r of await c.keys()) if ((await c.match(r)).redirected) out.push(r.url); } return out; });
+    expect(!redirected.length, 'no page is kept as a redirect: ' + redirected.join());
+    await ctx.setOffline(true);
+    for (const [u, app] of [['/start.html', true], ['/app', true], ['/app/chats', true], ['/', false]]) {
+      await page.goto(base + u, { timeout: 15000 });
+      await page.waitForFunction((app) => app ? !!document.querySelector('#prompt-input, #home') : document.body.innerText.trim().length > 20, app, { timeout: 8000 });
+    }
+    await ctx.setOffline(false); slow = 30000;
+    const t0 = Date.now(); await page.goto(base + '/app', { timeout: 20000 }); await page.waitForSelector('#prompt-input, #home', { state: 'attached', timeout: 8000 });
+    expect(Date.now() - t0 < 12000, 'on very slow data the kept app opens in seconds: ' + (Date.now() - t0) + ' ms');
+  } finally { slow = 0; await ctx.close(); srv.close(); }
+});
+
 test('extension: highlights, snips and pastes show up as chats in the Cassie app', async () => {
   const ext = fileAt('extension');
   const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));

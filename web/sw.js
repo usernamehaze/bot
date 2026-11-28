@@ -1,4 +1,4 @@
-const CACHE_NAME = 'cassie-v343';
+const CACHE_NAME = 'cassie-v344';
 const ASSETS = [
   './',
   'index.html',
@@ -43,9 +43,17 @@ const ASSETS = [
   'icons/icon-512.png',
 ];
 
+// (v344) a page the host redirected (app.html -> /app) is kept and served as a plain answer: Safari refuses a
+// redirected answer from here ("Response served by service worker has redirections"), so offline the app would not open
+const clean = (r) => (r && r.redirected ? r.clone().blob().then((body) => new Response(body, { status: r.status, statusText: r.statusText, headers: r.headers })) : Promise.resolve(r));
+// (v344) on slow mobile data the network is given a few seconds, then this device's copy is used
+const timed = (p, ms) => new Promise((ok, no) => { const t = setTimeout(() => no(new Error('slow')), ms); p.then((r) => { clearTimeout(t); ok(r); }, (e) => { clearTimeout(t); no(e); }); });
+// the copy kept on this device, clean, whatever address it was asked by
+const kept = (req, ...more) => [req, ...more].reduce((p, k) => p.then((c) => c || (k && caches.match(k, { ignoreSearch: true }))), Promise.resolve(null)).then((c) => c && clean(c));
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
+    caches.open(CACHE_NAME).then((cache) => Promise.all(ASSETS.map((a) => fetch(a, { cache: 'no-cache' }).then(clean).then((r) => r.ok ? cache.put(a, r) : null).catch(() => null))))
   );
   self.skipWaiting();
 });
@@ -93,29 +101,15 @@ self.addEventListener('fetch', (event) => {
   // from a service worker for a navigation (ERR_FAILED). So follow the
   // redirect ourselves and hand back a fresh, non-redirected response.
   if (event.request.mode === 'navigate') {
-    // cache: 'no-cache' makes the browser re-check the page with the server,
-    // so a phone never keeps showing yesterday's app.html (and its old scripts).
-    event.respondWith(
-      fetch(event.request.url, { cache: 'no-cache', credentials: 'same-origin' })
-        .then((response) => {
-          if (response.redirected) {
-            return response.clone().blob().then((body) =>
-              new Response(body, {
-                status: response.status,
-                statusText: response.statusText,
-                headers: response.headers,
-              })
-            );
-          }
-          return response;
-        })
-        .catch(() =>
-          caches.match(event.request, { ignoreSearch: true }).then((c) => c
-            // (v322) offline at a page's own address (/app/chats, /app/draw/<id> ...): it is the app
-            || (/^\/app(\/|$)/.test(url.pathname) ? caches.match('app.html') : null)
-            || caches.match('start.html'))
-        )
-    );
+    // cache: 'no-cache' makes the browser re-check the page with the server, so a phone never keeps showing yesterday's
+    // app.html. (v344) The fresh page is kept for offline, and with no internet or slow data (4 seconds) the kept one opens.
+    const keyOf = /^\/app(\/|$)/.test(url.pathname) ? 'app.html' : /^\/[\w-]+$/.test(url.pathname) ? url.pathname.slice(1) + '.html' : null; // (/start is start.html)
+    const net = fetch(event.request.url, { cache: 'no-cache', credentials: 'same-origin' }).then(clean).then((r) => {
+      if (r.ok) { const copy = r.clone(); caches.open(CACHE_NAME).then((c) => c.put(keyOf || event.request.url, copy)).catch(() => {}); }
+      return r;
+    });
+    const fallback = () => kept(event.request, keyOf, 'start.html', 'app.html');
+    event.respondWith(timed(net, 4000).catch(() => fallback().then((c) => c || net)));
     return;
   }
 
@@ -125,24 +119,22 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(caches.open(CACHE_NAME).then((cache) => cache.match(event.request).then((hit) => hit || fetch(event.request).then((response) => {
       if (response.ok && !response.redirected) cache.put(event.request, response.clone());
       return response;
-    }))));
+    }).catch(() => kept(event.request).then((c) => c || Response.error()))))); // (v344: offline, the copy kept at install, app.js for app.js?v=344)
     return;
   }
 
   // Other same-origin GETs: network-first with a runtime cache. Never cache a
   // redirected response (Cache.put rejects those).
   const fresh = new Request(event.request.url, { cache: 'no-cache' });
-  event.respondWith(
-    fetch(fresh)
-      .then((response) => {
-        if (!response.redirected) {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-        }
-        return response;
-      })
-      .catch(() => caches.match(event.request).then((c) => c || caches.match(event.request, { ignoreSearch: true })))
-  );
+  const net = fetch(fresh).then((response) => {
+    if (!response.redirected) {
+      const copy = response.clone();
+      caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+    }
+    return response;
+  });
+  // (v344) offline, or 8 seconds on slow data: the copy kept on this device, else keep waiting for the network
+  event.respondWith(timed(net, 8000).catch(() => kept(event.request).then((c) => c || net)));
 });
 
 // Study reminders: the server only sends an empty nudge at the time you picked.
